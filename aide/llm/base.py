@@ -12,10 +12,22 @@ Role = Literal["system", "user", "assistant", "tool"]
 @dataclass
 class Message:
     role: Role
-    content: str
+    content: str = ""
+    # preenchido quando o assistente pede uma tool
+    tool_calls: list[dict[str, Any]] = field(default_factory=list)
+    # preenchido quando a mensagem é o resultado de uma tool
+    tool_call_id: str | None = None
 
     def to_api(self) -> dict[str, Any]:
-        return {"role": self.role, "content": self.content}
+        payload: dict[str, Any] = {"role": self.role}
+        if self.role == "tool":
+            payload["tool_call_id"] = self.tool_call_id
+            payload["content"] = self.content
+            return payload
+        payload["content"] = self.content or None
+        if self.tool_calls:
+            payload["tool_calls"] = self.tool_calls
+        return payload
 
 
 @dataclass
