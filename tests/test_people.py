@@ -81,3 +81,23 @@ def test_remover(ctx, registry):
     registry.call("people.add", {"name": "Ana"}, ctx)
     assert registry.call("people.remove", {"name": "Ana"}, ctx).ok
     assert registry.call("people.list", {}, ctx).data == []
+
+
+def test_busca_unificada_acha_nota_e_historico(ctx, registry, tmp_path):
+    """Separados, o modelo tem de adivinhar onde o fato ficou — e erra."""
+    object.__setattr__(ctx.config, "vault_dir", tmp_path / "v")
+    registry.call("notes.create", {"title": "Mudança", "body": "pesquisar imóveis"}, ctx)
+    registry.call("people.add", {"name": "Pedro"}, ctx)
+    registry.call("people.touch", {"name": "Pedro", "note": "vai se mudar pro Porto"}, ctx)
+
+    achados = registry.call("notes.search", {"query": "Pedro mudar Porto"}, ctx).data
+    tipos = {a["tipo"] for a in achados}
+    assert "histórico" in tipos
+    assert any("Porto" in (a.get("trecho") or "") for a in achados)
+
+
+def test_busca_unificada_nao_vaza_privado(ctx, registry):
+    registry.call("memory.save", {"kind": "episodic", "key": "sigilo",
+                                  "value": "segredo do cofre", "private": True}, ctx)
+    achados = registry.call("notes.search", {"query": "segredo cofre"}, ctx).data
+    assert achados == []

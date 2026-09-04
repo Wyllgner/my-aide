@@ -160,6 +160,30 @@ def forget(ctx: ToolContext, key: str, kind: str = "profile") -> dict:
     return {"kind": kind, "key": key, "esquecidos": apagados}
 
 
+def buscar_episodios(conn, query: str, limite: int = 5) -> list[dict]:
+    """Memória episódica no formato que notes.search devolve.
+
+    Privadas ficam de fora, como em todo caminho que alimenta o modelo.
+    """
+    termos = [t for t in query.lower().split() if len(t) > 2]
+    if not termos:
+        return []
+
+    achados = []
+    for row in _vigentes(conn, "episodic", incluir_privadas=False):
+        alvo = f"{row['key']} {row['value']}".lower()
+        pontos = sum(1 for t in termos if t in alvo)
+        if pontos:
+            achados.append((pontos, {
+                "id": row["id"],
+                "title": row["key"].replace("_", " "),
+                "trecho": row["value"],
+                "tipo": "histórico",
+            }))
+    achados.sort(key=lambda par: par[0], reverse=True)
+    return [item for _, item in achados[:limite]]
+
+
 # ---------- usado pelo contexto, não é tool ----------
 
 def perfil_para_prompt(conn, config) -> str:

@@ -163,8 +163,10 @@ def list_notes(ctx: ToolContext, limit: int = 20, tag: str | None = None) -> lis
 @registry.register(
     name="notes.search",
     description=(
-        "Procura nas notas por significado e por palavra-chave. Use quando a "
-        "pessoa perguntar o que já foi anotado ou dito sobre algum assunto."
+        "Procura em tudo que já foi registrado: notas do vault e histórico "
+        "(o que aconteceu, o que alguém contou). É a tool para qualquer "
+        "pergunta do tipo 'o que eu anotei / o que fulano me disse / o que "
+        "ficou decidido sobre X'."
     ),
     parameters={
         "type": "object",
@@ -176,11 +178,21 @@ def list_notes(ctx: ToolContext, limit: int = 20, tag: str | None = None) -> lis
     },
 )
 def search(ctx: ToolContext, query: str, limit: int = 5) -> list[dict]:
-    from aide.storage.search import buscar
+    """Notas e memória episódica no mesmo resultado.
 
-    achados = buscar(ctx.conn, query, embedder=getattr(ctx, "embedder", None),
-                     limite=limit, incluir_privadas=False)
-    return [{k: v for k, v in a.items() if k != "score"} for a in achados]
+    Separadas, o modelo precisa adivinhar onde o fato foi parar — e erra. Uma
+    pergunta, um lugar para procurar.
+    """
+    from aide.storage.search import buscar
+    from aide.tools.memory import buscar_episodios
+
+    achados = [
+        {**{k: v for k, v in a.items() if k != "score"}, "tipo": "nota"}
+        for a in buscar(ctx.conn, query, embedder=getattr(ctx, "embedder", None),
+                        limite=limit, incluir_privadas=False)
+    ]
+    achados.extend(buscar_episodios(ctx.conn, query, limite=limit))
+    return achados[: limit * 2]
 
 
 @registry.register(
