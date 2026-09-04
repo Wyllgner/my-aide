@@ -34,14 +34,18 @@ def _open_db() -> tuple[object, sqlite3.Connection]:
     return config, conn
 
 
-def _embedder(config, conn):
-    """Sem chave ou sem rede o assessor segue funcionando, só sem semântica."""
+def _embedder(config, conn_or_factory):
+    """Sem chave ou sem rede o assessor segue funcionando, só sem semântica.
+
+    Aceita fábrica de conexão: no daemon o embedder é usado de outra thread, e
+    uma conexão da thread principal faz o registro de uso explodir.
+    """
     from aide.llm.embeddings import Embedder
 
     if not config.llm.api_key:
         return None
     try:
-        return Embedder(config, usage_sink=record_usage(conn))
+        return Embedder(config, usage_sink=record_usage(conn_or_factory))
     except Exception:  # noqa: BLE001
         return None
 
@@ -365,8 +369,9 @@ def _start_bot(config, deps):
 
     from aide.channels.telegram_bot import TelegramBot
 
+    # deps.db (sem parênteses): a conexão é resolvida na thread que usar
     bot = TelegramBot(config, deps.conn_factory, deps.llm, registry,
-                      embedder=_embedder(config, deps.db()))
+                      embedder=_embedder(config, deps.db))
     bot.start()
     console.print(f"[green]telegram no ar[/] [dim]chats {list(config.telegram.allowed_chat_ids)}[/]")
     return bot

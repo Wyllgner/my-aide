@@ -109,3 +109,30 @@ def test_agendamento_semanal_invalido_falha(ctx):
 def test_agendamento_semanal_traduz_o_dia():
     assert jobs._semanal("domingo 19:00") == ("sun", 19, 0)
     assert jobs._semanal("terça 08:30") == ("tue", 8, 30)
+
+
+def test_usage_sink_do_embedder_funciona_em_outra_thread(tmp_path, ctx):
+    """O bot roda em thread própria; sink com conexão fixa derruba a busca semântica."""
+    from aide.core.orchestrator import record_usage
+
+    caminho = tmp_path / "e.db"
+    migrate(connect(caminho))
+    deps = jobs.JobDeps(config=ctx.config, llm=FakeLLM(), notifier=FakeNotifier(),
+                        conn_factory=lambda: connect(caminho))
+    sink = record_usage(deps.db)
+
+    erros = []
+
+    def de_outra_thread():
+        try:
+            sink("text-embedding-3-small", "embedding", 10, 0, 5)
+        except Exception as exc:  # noqa: BLE001
+            erros.append(exc)
+
+    t = threading.Thread(target=de_outra_thread)
+    t.start()
+    t.join()
+
+    assert erros == []
+    total = deps.db().execute("SELECT COUNT(*) c FROM llm_usage").fetchone()["c"]
+    assert total == 1
