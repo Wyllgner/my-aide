@@ -1,0 +1,50 @@
+# my-aide
+
+Assessor pessoal local: lembra, organiza e cobra. Roda na sua máquina, guarda
+tudo em SQLite e usa a API da OpenAI só para interpretar e redigir.
+
+## Instalar
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -e ".[dev]"
+cp .env.example .env      # preencha OPENAI_API_KEY
+.venv/bin/aide init
+.venv/bin/aide doctor     # tudo verde?
+```
+
+## Usar
+
+```bash
+aide hoje                          # o que precisa de você
+aide add "Pagar boleto" -d 2026-09-05T09:00
+aide done 3
+aide ls overdue                    # today | overdue | week | inbox | done | all
+aide chat                          # conversa; ele cria e altera tarefas sozinho
+aide checar                        # o que as regras de condição estão vendo
+aide usage                         # quanto de LLM foi consumido
+```
+
+## O daemon
+
+É o que faz dele um assessor e não um chatbot: lembretes, cobrança de atrasos e
+briefings acontecem sem você abrir nada.
+
+```bash
+aide serve                         # em primeiro plano
+aide job briefing_manha            # roda um job agora, para testar
+```
+
+Para rodar sempre, veja `deploy/my-aide.service`.
+
+## Configuração
+
+`config.yaml` (versionado) define modelo, horários e canais de notificação.
+`config.local.yaml` sobrepõe e é ignorado pelo git — use para o que é só seu.
+
+## Desenvolvimento
+
+```bash
+.venv/bin/pytest tests/ -q
+.venv/bin/ruff check aide/ tests/
+```

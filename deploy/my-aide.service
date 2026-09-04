@@ -1,0 +1,26 @@
+# Daemon do my-aide como serviço de usuário.
+#
+#   mkdir -p ~/.config/systemd/user
+#   cp deploy/my-aide.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now my-aide
+#   journalctl --user -u my-aide -f
+#
+# Para os briefings chegarem mesmo com você deslogado:
+#   loginctl enable-linger $USER
+
+[Unit]
+Description=my-aide - assessor pessoal
+After=graphical-session.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Documentos/acessor
+ExecStart=%h/Documentos/acessor/.venv/bin/aide serve
+Restart=on-failure
+RestartSec=10
+# notify-send precisa alcançar a sessão gráfica
+Environment=DISPLAY=:0
+
+[Install]
+WantedBy=default.target
