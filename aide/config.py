@@ -66,6 +66,8 @@ class Config:
     data_dir: Path = ROOT / "data"
     vault_dir: Path = ROOT / "vault"
     notify_channels: tuple[str, ...] = ("desktop",)
+    calendar_url: str | None = None
+    calendar_sync_hours: int = 6
     telegram: TelegramConfig = field(default_factory=TelegramConfig)
     schedule: ScheduleConfig = field(default_factory=ScheduleConfig)
 
@@ -92,6 +94,7 @@ def load_config(root: Path | None = None) -> Config:
     notify_raw = raw.get("notify", {})
     sched_raw = raw.get("schedule", {})
     tg_raw = raw.get("telegram", {})
+    cal_raw = raw.get("calendar", {})
 
     llm = LLMConfig(
         provider=llm_raw.get("provider", "openai"),
@@ -118,6 +121,8 @@ def load_config(root: Path | None = None) -> Config:
         data_dir=_dir("data_dir", "data"),
         vault_dir=_dir("vault_dir", "vault"),
         notify_channels=tuple(notify_raw.get("channels", ["desktop"])),
+        calendar_url=cal_raw.get("ics_url") or None,
+        calendar_sync_hours=int(cal_raw.get("sincronizar_a_cada_horas", 6)),
         telegram=TelegramConfig(
             enabled=bool(tg_raw.get("enabled", False)),
             allowed_chat_ids=tuple(int(x) for x in tg_raw.get("allowed_chat_ids", [])),

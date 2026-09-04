@@ -317,6 +317,42 @@ def reindexar() -> None:
 
 
 @app.command()
+def agenda(dias: int = typer.Option(7, "--dias", "-d"),
+           sincronizar: bool = typer.Option(False, "--sync", "-s")) -> None:
+    """Compromissos do calendário assinado."""
+    config, conn, ctx = _ctx()
+
+    if sincronizar:
+        from aide.tools.events import sincronizar as puxar
+
+        try:
+            resultado = puxar(conn, config)
+        except ValueError as exc:
+            console.print(f"[red]{exc}[/]")
+            raise typer.Exit(1) from exc
+        console.print(f"[dim]{resultado['importados']} evento(s) importado(s)[/]")
+
+    eventos = registry.call("events.list", {"dias": dias}, ctx).data
+    if not eventos:
+        console.print("[dim]Nada na agenda.[/]"
+                      + ("" if config.calendar_url else "  (nenhum calendário configurado)"))
+        return
+
+    table = Table(box=None)
+    table.add_column("quando")
+    table.add_column("compromisso")
+    table.add_column("onde", style="dim")
+    for e in eventos:
+        dia, _, hora = e["start_at"].partition("T")
+        table.add_row(f"{dia[8:10]}/{dia[5:7]} {hora[:5]}", e["title"], e["location"] or "")
+    console.print(table)
+
+    conflitos = registry.call("events.conflicts", {"dias": dias}, ctx).data
+    for c in conflitos:
+        console.print(f"[red]conflito:[/] {c['a']}  ×  {c['b']}")
+
+
+@app.command()
 def pessoas(atrasados: bool = typer.Option(False, "--atrasados", "-a")) -> None:
     """Com quem você combinou de manter contato."""
     _, _, ctx = _ctx()

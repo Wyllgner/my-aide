@@ -196,6 +196,22 @@ def reindex_vault(deps: JobDeps) -> int:
     return reindexadas
 
 
+def sync_calendar(deps: JobDeps) -> int:
+    """Baixa o calendário assinado. Sem URL configurada, não faz nada."""
+    from aide.tools.events import sincronizar
+
+    if not getattr(deps.config, "calendar_url", None):
+        return 0
+    try:
+        resultado = sincronizar(deps.db(), deps.config)
+    except Exception:
+        # feed fora do ar não pode derrubar o daemon nem calar os outros jobs
+        log.warning("sincronização do calendário falhou", exc_info=True)
+        return 0
+    log.info("%s evento(s) importado(s) do calendário", resultado["importados"])
+    return resultado["importados"]
+
+
 JOBS = {
     "tick_reminders": tick_reminders,
     "eval_conditions": eval_conditions,
@@ -204,6 +220,7 @@ JOBS = {
     "revisao_semanal": revisao_semanal,
     "queue_work": queue_work,
     "reindex_vault": reindex_vault,
+    "sync_calendar": sync_calendar,
 }
 
 
@@ -249,6 +266,9 @@ def build_scheduler(deps: JobDeps):
         hours=cfg.regras_a_cada_horas)
     add(queue_work, "queue_work", trigger="interval", hours=cfg.regras_a_cada_horas)
     add(reindex_vault, "reindex_vault", trigger="interval", minutes=15)
+    if getattr(deps.config, "calendar_url", None):
+        add(sync_calendar, "sync_calendar", trigger="interval",
+            hours=deps.config.calendar_sync_hours)
 
     manha_h, manha_m = _hora(cfg.briefing_manha)
     add(briefing_manha, "briefing_manha", trigger="cron", hour=manha_h, minute=manha_m)

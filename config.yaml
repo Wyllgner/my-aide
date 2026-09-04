@@ -41,3 +41,9 @@ schedule:
 telegram:
   enabled: true
   allowed_chat_ids: [6391052199]
+
+calendar:
+  # endereço iCal secreto da sua agenda (só leitura).
+  # Google: Configurações da agenda > Integrar agenda > Endereço secreto em iCal
+  ics_url: null
+  sincronizar_a_cada_horas: 6

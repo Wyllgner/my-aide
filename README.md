@@ -81,6 +81,26 @@ telegram:
 O bot sobe junto com `aide serve`. Só os chats da lista são atendidos — qualquer
 outro recebe só o próprio id, nunca os seus dados.
 
+## Agenda (opcional)
+
+Leitura de um calendário assinado — sem OAuth, sem app registrado.
+
+No Google Agenda: **Configurações da agenda > Integrar agenda > Endereço
+secreto no formato iCal**. Cole em `config.yaml`:
+
+```yaml
+calendar:
+  ics_url: "https://calendar.google.com/calendar/ical/.../basic.ics"
+```
+
+```bash
+aide agenda --sync        # baixa e mostra
+aide agenda -d 14         # próximas duas semanas, com conflitos de horário
+```
+
+O daemon re-sincroniza sozinho a cada 6h. É só leitura: o my-aide não cria nem
+altera nada na sua agenda.
+
 ## MCP: plugar um executor externo
 
 O assessor expõe suas tools por MCP, então um agente de propósito geral
