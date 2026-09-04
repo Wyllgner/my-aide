@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -20,6 +21,7 @@ log = logging.getLogger(__name__)
 
 API = "https://api.telegram.org/bot{token}/{method}"
 LIMITE_MENSAGEM = 4096
+TENTATIVAS_REDE = 3
 
 
 class TelegramError(RuntimeError):
@@ -34,24 +36,41 @@ class TelegramClient:
         self.timeout = timeout
 
     def call(self, method: str, params: dict[str, Any] | None = None,
-             timeout: int | None = None) -> Any:
+             timeout: int | None = None, tentativas: int = TENTATIVAS_REDE) -> Any:
+        """Chama a Bot API.
+
+        Falha de rede é passageira e sem retry come a resposta em silêncio — o
+        usuário manda mensagem e o bot simplesmente não responde. Erro HTTP não
+        é reenviado: 409 e 400 não melhoram na segunda tentativa.
+        """
         url = API.format(token=self.token, method=method)
         corpo = json.dumps(params or {}).encode()
-        req = urllib.request.Request(
-            url, data=corpo, headers={"Content-Type": "application/json"}
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=timeout or self.timeout) as resp:
-                payload = json.loads(resp.read())
-        except urllib.error.HTTPError as exc:
-            detalhe = exc.read().decode(errors="replace")[:200]
-            raise TelegramError(f"{method} falhou ({exc.code}): {detalhe}") from exc
-        except (urllib.error.URLError, TimeoutError) as exc:
-            raise TelegramError(f"{method} não completou: {exc}") from exc
+        ultima: Exception | None = None
 
-        if not payload.get("ok"):
-            raise TelegramError(f"{method} recusado: {payload.get('description')}")
-        return payload.get("result")
+        for tentativa in range(1, tentativas + 1):
+            req = urllib.request.Request(
+                url, data=corpo, headers={"Content-Type": "application/json"}
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=timeout or self.timeout) as resp:
+                    payload = json.loads(resp.read())
+            except urllib.error.HTTPError as exc:
+                detalhe = exc.read().decode(errors="replace")[:200]
+                raise TelegramError(f"{method} falhou ({exc.code}): {detalhe}") from exc
+            except (urllib.error.URLError, TimeoutError, OSError) as exc:
+                ultima = exc
+                if tentativa < tentativas:
+                    espera = 2 ** (tentativa - 1)
+                    log.warning("%s falhou (%s); tentativa %s em %ss",
+                                method, exc, tentativa + 1, espera)
+                    time.sleep(espera)
+                continue
+
+            if not payload.get("ok"):
+                raise TelegramError(f"{method} recusado: {payload.get('description')}")
+            return payload.get("result")
+
+        raise TelegramError(f"{method} não completou: {ultima}")
 
     def me(self) -> dict:
         return self.call("getMe")
