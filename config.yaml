@@ -25,3 +25,14 @@ context:
 paths:
   data_dir: data
   vault_dir: vault
+
+notify:
+  # canais usados pelo scheduler: desktop, console
+  channels: [desktop]
+
+schedule:
+  briefing_manha: "07:30"
+  briefing_noite: "21:30"
+  revisao_semanal: "domingo 19:00"
+  # de quanto em quanto tempo as regras de condição rodam
+  regras_a_cada_horas: 12

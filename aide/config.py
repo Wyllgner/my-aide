@@ -36,6 +36,14 @@ class LLMConfig:
 
 
 @dataclass(frozen=True)
+class ScheduleConfig:
+    briefing_manha: str = "07:30"
+    briefing_noite: str = "21:30"
+    revisao_semanal: str = "domingo 19:00"
+    regras_a_cada_horas: int = 12
+
+
+@dataclass(frozen=True)
 class Config:
     timezone: str = "America/Sao_Paulo"
     locale: str = "pt-BR"
@@ -45,6 +53,8 @@ class Config:
     history_messages: int = 12
     data_dir: Path = ROOT / "data"
     vault_dir: Path = ROOT / "vault"
+    notify_channels: tuple[str, ...] = ("desktop",)
+    schedule: ScheduleConfig = field(default_factory=ScheduleConfig)
 
     @property
     def db_path(self) -> Path:
@@ -63,6 +73,8 @@ def load_config(root: Path = ROOT) -> Config:
     llm_raw = raw.get("llm", {})
     ctx_raw = raw.get("context", {})
     paths_raw = raw.get("paths", {})
+    notify_raw = raw.get("notify", {})
+    sched_raw = raw.get("schedule", {})
 
     llm = LLMConfig(
         provider=llm_raw.get("provider", "openai"),
@@ -88,4 +100,11 @@ def load_config(root: Path = ROOT) -> Config:
         history_messages=int(ctx_raw.get("history_messages", 12)),
         data_dir=_dir("data_dir", "data"),
         vault_dir=_dir("vault_dir", "vault"),
+        notify_channels=tuple(notify_raw.get("channels", ["desktop"])),
+        schedule=ScheduleConfig(
+            briefing_manha=sched_raw.get("briefing_manha", "07:30"),
+            briefing_noite=sched_raw.get("briefing_noite", "21:30"),
+            revisao_semanal=sched_raw.get("revisao_semanal", "domingo 19:00"),
+            regras_a_cada_horas=int(sched_raw.get("regras_a_cada_horas", 12)),
+        ),
     )

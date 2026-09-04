@@ -17,3 +17,12 @@ def ctx(tmp_path):
 @pytest.fixture
 def registry():
     return tool_registry
+
+
+@pytest.fixture
+def config_fake(tmp_path):
+    from aide.config import load_config
+
+    config = load_config()
+    object.__setattr__(config, "notify_channels", ("console", "xpto"))
+    return config
