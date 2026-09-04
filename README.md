@@ -25,6 +25,20 @@ aide checar                        # o que as regras de condição estão vendo
 aide usage                         # quanto de LLM foi consumido
 ```
 
+### Notas e memória
+
+```bash
+aide nota "Reunião de orçamento" "cortar 20% da nuvem"
+aide nota "Do stdin" < arquivo.md
+aide notas                         # as mais recentes
+aide buscar "reduzir custo de servidor"   # acha por significado, não só palavra
+aide perfil                        # o que ele sabe sobre você
+aide reindexar                     # reconstrói o índice a partir do vault
+```
+
+As notas vivem em `vault/AAAA-MM/*.md` com frontmatter — legíveis sem o projeto.
+O SQLite é só índice: `aide reindexar` reconstrói tudo a partir dos arquivos.
+
 ## O daemon
 
 É o que faz dele um assessor e não um chatbot: lembretes, cobrança de atrasos e

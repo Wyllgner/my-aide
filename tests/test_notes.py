@@ -128,3 +128,18 @@ def test_arquivo_sem_frontmatter_tambem_serve(tmp_path):
 
 def test_slug_lida_com_acento_e_simbolo():
     assert vault.slugify("Reunião: orçamento & prazos!") == "reuniao-orcamento-prazos"
+
+
+def test_reindexar_reconstroi_do_arquivo(ctx, registry, tmp_path):
+    """O markdown é a fonte da verdade: perder o índice não pode perder a nota."""
+    from aide.storage.search import indexar
+
+    _config_vault(ctx, tmp_path)
+    nota = registry.call("notes.create", {"title": "X", "body": "conteudo original"}, ctx).data
+
+    ctx.conn.execute("DELETE FROM notes_fts")
+    assert buscar_texto(ctx.conn, "original") == []
+
+    corpo = vault.corpo_de(Path(nota["path"]))
+    indexar(ctx.conn, nota["id"], "X", corpo)
+    assert buscar_texto(ctx.conn, "original")
