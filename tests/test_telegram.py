@@ -86,3 +86,16 @@ def test_canal_telegram_sem_config_nao_quebra(ctx):
     object.__setattr__(ctx.config, "notify_channels", ("telegram",))
     notifier = build_notifier(ctx.config)
     assert notifier.send("t", "b") is True  # cai no console
+
+
+def test_config_carrega_o_token_do_env(tmp_path, monkeypatch):
+    """O comando telegram-id lia os.getenv direto e não enxergava o .env."""
+    (tmp_path / "config.yaml").write_text("telegram:\n  enabled: true\n  allowed_chat_ids: [7]\n")
+    (tmp_path / ".env").write_text("TELEGRAM_BOT_TOKEN=abc123\n")
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
+
+    from aide.config import load_config
+
+    config = load_config(root=tmp_path)
+    assert config.telegram.token == "abc123"
+    assert config.telegram.usable

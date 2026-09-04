@@ -289,11 +289,10 @@ def serve(log_level: str = typer.Option("INFO", "--log-level")) -> None:
 def telegram_id(espera: int = typer.Option(60, "--espera", "-t",
                                            help="segundos aguardando a mensagem")) -> None:
     """Descobre o chat id: rode isto e mande qualquer mensagem para o bot."""
-    import os
-
     from aide.channels.telegram import TelegramClient, TelegramError
 
-    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    # via load_config, que é quem carrega o .env — os.getenv sozinho não vê nada
+    token = load_config().telegram.token
     if not token:
         console.print("[red]TELEGRAM_BOT_TOKEN não definida.[/] "
                       "Crie um bot com o @BotFather e ponha o token no .env")
