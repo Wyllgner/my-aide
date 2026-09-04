@@ -30,7 +30,15 @@ class OpenAIProvider(LLMProvider):
         # modelo, aprendemos com a primeira recusa e guardamos para as próximas.
         self._token_param = "max_completion_tokens"
         self._send_temperature = True
-        self._reasoning_effort: str | None = None
+        # Modelos de raciocínio gastam o orçamento de output pensando — chegam a
+        # devolver conteúdo vazio — e tokens de raciocínio são cobrados como
+        # saída. Nada que o assessor faz precisa de cadeia longa: resumir dado
+        # já estruturado e escolher uma tool. Medido no gpt-5-nano: 472 tokens
+        # no padrão contra 24 com 'minimal'.
+        # Cada modelo aceita um nome diferente, então descemos a escada até uma
+        # que passe; a última opção é não mandar nada.
+        self._efforts = ["none", "minimal", None]
+        self._reasoning_effort: str | None = self._efforts[0]
 
     def complete(
         self,
@@ -108,12 +116,17 @@ class OpenAIProvider(LLMProvider):
             log.info("modelo usa %s; ajustado", other)
             return True
 
-        if "reasoning_effort" in message and self._reasoning_effort is None:
-            # modelos de raciocínio exigem effort explícito para usar tools
-            # no chat completions; 'none' é o que a própria API sugere.
-            self._reasoning_effort = "none"
-            payload["reasoning_effort"] = "none"
-            log.info("modelo de raciocínio; reasoning_effort=none")
+        if "reasoning_effort" in message:
+            if self._reasoning_effort is None:
+                return False  # já estamos no fim da escada; a recusa é outra
+            self._efforts.pop(0)
+            self._reasoning_effort = self._efforts[0] if self._efforts else None
+            if self._reasoning_effort:
+                payload["reasoning_effort"] = self._reasoning_effort
+                log.info("modelo prefere reasoning_effort=%s", self._reasoning_effort)
+            else:
+                payload.pop("reasoning_effort", None)
+                log.info("modelo não aceita reasoning_effort; removido")
             return True
 
         if "temperature" in message and "unsupported" in message.lower():

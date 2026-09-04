@@ -27,13 +27,25 @@ def test_troca_max_tokens_por_max_completion_tokens(monkeypatch):
     assert provider._token_param == "max_tokens"
 
 
-def test_ativa_reasoning_effort_para_modelo_de_raciocinio(monkeypatch):
+def test_pede_reasoning_effort_none_por_padrao(monkeypatch):
+    """Sem isso, modelo de raciocínio gasta todo o output pensando e volta vazio."""
     provider = _provider(monkeypatch)
-    payload = {}
-    error = FakeStatusError("To use function tools, set reasoning_effort to 'none'.")
+    assert provider._reasoning_effort == "none"
+
+
+def test_desce_a_escada_de_reasoning_effort(monkeypatch):
+    """gpt-5-nano recusa 'none' mas aceita 'minimal'; desistir custaria 20x mais."""
+    provider = _provider(monkeypatch)
+    payload = {"reasoning_effort": "none"}
+    error = FakeStatusError("Unsupported value: 'reasoning_effort' does not support 'none'")
+
     assert provider._adapt_payload(payload, error) is True
-    assert payload["reasoning_effort"] == "none"
-    # a segunda recusa igual não deve virar loop
+    assert payload["reasoning_effort"] == "minimal"
+
+    assert provider._adapt_payload(payload, error) is True
+    assert "reasoning_effort" not in payload
+
+    # chegou ao fim da escada: não vale reenviar de novo
     assert provider._adapt_payload(payload, error) is False
 
 

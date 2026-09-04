@@ -10,10 +10,13 @@ from rich.console import Console
 from rich.table import Table
 
 from aide import __version__
+from aide.channels import build_notifier
 from aide.config import load_config
 from aide.core.context import now_in
 from aide.core.orchestrator import Orchestrator, record_usage
 from aide.llm import build_provider
+from aide.scheduler import rules
+from aide.scheduler.jobs import JOBS, JobDeps, build_scheduler
 from aide.storage import connect, migrate
 from aide.tools import registry
 from aide.tools.registry import ToolContext
@@ -214,6 +217,78 @@ def chat() -> None:
         if text.lower() in {"sair", "exit", "quit"}:
             break
         console.print(agent.ask(text))
+
+
+# ---------- daemon ----------
+
+
+def _deps(por_thread: bool = False) -> JobDeps:
+    """`por_thread` para o daemon: cada worker do scheduler abre a sua conexão."""
+    config, conn = _open_db()
+    notifier = build_notifier(config)
+    if por_thread:
+        deps = JobDeps(config=config, llm=None, notifier=notifier,
+                       conn_factory=lambda: connect(config.db_path))
+        deps.llm = build_provider(config, usage_sink=record_usage(deps.db))
+        return deps
+    return JobDeps(config=config, llm=build_provider(config, usage_sink=record_usage(conn)),
+                   notifier=notifier, conn=conn)
+
+
+@app.command()
+def serve(log_level: str = typer.Option("INFO", "--log-level")) -> None:
+    """Roda o daemon: lembretes, cobranças e briefings."""
+    import logging
+    import signal
+    import threading
+
+    logging.basicConfig(level=log_level.upper(),
+                        format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    deps = _deps(por_thread=True)
+    scheduler = build_scheduler(deps)
+    scheduler.start()
+
+    table = Table(title="Jobs agendados", box=None, title_justify="left")
+    table.add_column("job", style="cyan")
+    table.add_column("próxima execução")
+    for job in scheduler.get_jobs():
+        table.add_row(job.id, str(job.next_run_time))
+    console.print(table)
+
+    parar = threading.Event()
+    for sinal in (signal.SIGINT, signal.SIGTERM):
+        signal.signal(sinal, lambda *_: parar.set())
+
+    console.print("[dim]daemon no ar · ctrl-c para sair[/]")
+    parar.wait()
+    scheduler.shutdown(wait=False)
+    console.print("[dim]encerrado[/]")
+
+
+@app.command(name="job")
+def rodar_job(nome: str = typer.Argument(..., help=" | ".join(JOBS))) -> None:
+    """Roda um job do daemon agora, para testar."""
+    if nome not in JOBS:
+        console.print(f"[red]job desconhecido.[/] Use: {', '.join(JOBS)}")
+        raise typer.Exit(1)
+    resultado = JOBS[nome](_deps())
+    console.print(f"[dim]{nome} → {resultado}[/]")
+
+
+@app.command()
+def checar() -> None:
+    """Mostra o que as regras de condição estão vendo agora."""
+    config, conn = _open_db()
+    achados = rules.evaluate(conn, now_in(config.timezone))
+    if not achados:
+        console.print("[green]Nada pedindo atenção.[/]")
+        return
+
+    cores = {1: "red", 2: "yellow", 3: "dim"}
+    table = Table(box=None, show_header=False)
+    for f in achados:
+        table.add_row(f"[{cores[f.severity]}]{f.rule}[/]", f.summary)
+    console.print(table)
 
 
 @app.command()

@@ -63,3 +63,17 @@ def test_migrate_e_idempotente(tmp_path):
     conn = connect(tmp_path / "m.db")
     assert migrate(conn) == ["001_init.sql"]
     assert migrate(conn) == []
+
+
+def test_sink_aceita_conexao_e_fabrica(tmp_path):
+    """sqlite3.Connection tem __call__, então callable() não distingue os dois."""
+    from aide.storage import connect, migrate
+
+    conn = connect(tmp_path / "u.db")
+    migrate(conn)
+
+    record_usage(conn)("m", "p", 1, 2, 3)
+    record_usage(lambda: conn)("m", "p", 4, 5, 6)
+
+    linhas = conn.execute("SELECT input_tokens FROM llm_usage ORDER BY id").fetchall()
+    assert [r["input_tokens"] for r in linhas] == [1, 4]

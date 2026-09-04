@@ -28,7 +28,7 @@ paths:
 
 notify:
   # canais usados pelo scheduler: desktop, console
-  channels: [desktop]
+  channels: [desktop, console]
 
 schedule:
   briefing_manha: "07:30"

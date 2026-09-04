@@ -111,10 +111,18 @@ class Orchestrator:
         return Message(role="tool", tool_call_id=call.get("id"), content=result.to_json())
 
 
-def record_usage(conn: sqlite3.Connection):
-    """Sink de uso para o provider: grava cada chamada em llm_usage."""
+def record_usage(conn_or_factory):
+    """Sink de uso para o provider: grava cada chamada em llm_usage.
+
+    Aceita uma conexão ou uma função que devolve uma — o daemon chama de
+    dentro de worker threads, onde a conexão do processo principal não vale.
+    """
 
     def sink(model, purpose, input_tokens, output_tokens, latency_ms):
+        # sqlite3.Connection tem __call__, então callable() não serve para
+        # distinguir uma conexão de uma fábrica de conexões.
+        conn = (conn_or_factory if isinstance(conn_or_factory, sqlite3.Connection)
+                else conn_or_factory())
         conn.execute(
             "INSERT INTO llm_usage (model, purpose, input_tokens, output_tokens, latency_ms)"
             " VALUES (?, ?, ?, ?, ?)",
