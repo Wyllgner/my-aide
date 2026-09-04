@@ -43,6 +43,7 @@ class TelegramBot:
         self._offset: int | None = None
         self._parar = threading.Event()
         self._sessoes: dict[int, str] = {}
+        self._recusados: set[int] = set()
         self._conn = None
 
     # ---------- ciclo de vida ----------
@@ -92,9 +93,12 @@ class TelegramBot:
             return
 
         if chat_id not in self.permitidos:
-            # nunca responder o conteúdo a desconhecido: o bot é pessoal
-            log.warning("mensagem de chat não autorizado %s ignorada", chat_id)
-            self._responder(chat_id, f"Este assessor é pessoal. Seu chat id: {chat_id}")
+            # Silêncio de propósito. Um bot do Telegram é público — qualquer um
+            # que saiba o nome consegue mandar mensagem. Responder confirmaria
+            # que o bot está ativo e deixaria um estranho nos usar como
+            # amplificador de spam, até o Telegram limitar o bot por excesso de
+            # envio. O chat id de quem tentou fica no log, que é onde importa.
+            self._recusar(chat_id)
             return
 
         try:
@@ -104,6 +108,12 @@ class TelegramBot:
             resposta = "Deu erro aqui do meu lado. Tenta de novo?"
 
         self._responder(chat_id, resposta)
+
+    def _recusar(self, chat_id: int) -> None:
+        """Registra a tentativa uma vez por chat, para o log não virar enxurrada."""
+        if chat_id not in self._recusados:
+            self._recusados.add(chat_id)
+            log.warning("chat não autorizado %s tentou falar com o bot", chat_id)
 
     def _resolver(self, chat_id: int, texto: str) -> str:
         if texto.startswith("/"):

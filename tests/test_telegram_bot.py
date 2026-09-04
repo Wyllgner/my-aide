@@ -42,13 +42,26 @@ def test_informa_o_chat_id(ctx, tmp_path):
     assert "42" in bot.enviadas[0][1]
 
 
-def test_chat_nao_autorizado_nao_recebe_dados(ctx, tmp_path):
+def test_chat_nao_autorizado_recebe_silencio(ctx, tmp_path):
+    """Responder confirmaria o bot e permitiria usá-lo como amplificador de spam."""
     bot = _bot(ctx, tmp_path, permitidos=(42,))
     bot._tratar(_msg("/hoje", chat_id=999))
-    destino, texto = bot.enviadas[0]
-    assert destino == 999
-    assert "pessoal" in texto
-    assert "#" not in texto  # nenhuma tarefa vazou
+    assert bot.enviadas == []
+
+
+def test_chat_nao_autorizado_nao_gasta_llm(ctx, tmp_path):
+    llm = FakeLLM()
+    bot = _bot(ctx, tmp_path, permitidos=(42,), llm=llm)
+    bot._tratar(_msg("me lembra de algo", chat_id=999))
+    assert llm.vistas == []
+
+
+def test_tentativa_e_logada_uma_vez_por_chat(ctx, tmp_path, caplog):
+    bot = _bot(ctx, tmp_path, permitidos=(42,))
+    with caplog.at_level("WARNING"):
+        for _ in range(5):
+            bot._tratar(_msg("oi", chat_id=999))
+    assert sum("999" in r.getMessage() for r in caplog.records) == 1
 
 
 def test_conversa_vai_para_o_orquestrador(ctx, tmp_path):
