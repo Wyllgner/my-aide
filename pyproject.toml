@@ -14,11 +14,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "ruff>=0.5"]
+gui = ["pyside6-essentials>=6.7"]
+dev = ["pytest>=8.0", "ruff>=0.5", "pyside6-essentials>=6.7"]
 
 [project.scripts]
 aide = "aide.cli:app"
 aide-mcp = "aide.mcp.server:main"
+aide-gui = "aide.gui.main:main"
 
 [build-system]
 requires = ["setuptools>=68"]

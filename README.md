@@ -51,6 +51,18 @@ aide job briefing_manha            # roda um job agora, para testar
 
 Para rodar sempre, veja `deploy/my-aide.service`.
 
+## Interface gráfica
+
+```bash
+.venv/bin/pip install -e ".[gui]"
+aide-gui
+```
+
+App nativo (PySide6): sidebar com contador de pendência, captura rápida em
+"Hoje", clique duplo conclui, busca semântica nas notas, e a conversa como uma
+aba — não como a tela inteira. Fechar a janela some para a bandeja; o assessor
+continua ali.
+
 ## Telegram (opcional, mas é o que faz ele te alcançar)
 
 1. Fale com o [@BotFather](https://t.me/BotFather), mande `/newbot` e copie o token.

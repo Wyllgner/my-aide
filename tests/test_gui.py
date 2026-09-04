@@ -220,3 +220,104 @@ def test_tarefa_criada_em_hoje_aparece_em_hoje(qapp, modelo):
     visao._criar()
     assert visao.lista.count() == 1
     assert "hoje" in visao.lista.item(0).text()
+
+
+# ---------- conversa, bandeja e montagem ----------
+
+from aide.gui.views.conversa import VisaoConversa
+
+
+class AgenteFake:
+    def __init__(self, resposta="feito", erro=None):
+        self.resposta = resposta
+        self.erro = erro
+        self.perguntas = []
+
+    def ask(self, texto):
+        self.perguntas.append(texto)
+        if self.erro:
+            raise self.erro
+        return self.resposta
+
+
+def _conversa(modelo, agente):
+    return VisaoConversa(modelo, lambda: agente)
+
+
+def test_conversa_envia_e_mostra_resposta(qapp, modelo):
+    agente = AgenteFake("Criei a tarefa.")
+    visao = _conversa(modelo, agente)
+    visao.entrada.setText("me lembra do IPVA")
+    visao.enviar()
+    visao.thread.wait(5000)
+    qapp.processEvents()
+
+    assert agente.perguntas == ["me lembra do IPVA"]
+    assert "Criei a tarefa." in visao.transcricao.toPlainText()
+
+
+def test_conversa_nao_congela_a_janela(qapp, modelo):
+    """A chamada à LLM sai da thread da interface."""
+    import threading
+
+    thread_da_ui = threading.get_ident()
+    vistas = []
+
+    class Espia(AgenteFake):
+        def ask(self, texto):
+            vistas.append(threading.get_ident())
+            return "ok"
+
+    visao = _conversa(modelo, Espia())
+    visao.entrada.setText("oi")
+    visao.enviar()
+    visao.thread.wait(5000)
+    qapp.processEvents()
+
+    assert vistas and vistas[0] != thread_da_ui
+
+
+def test_falha_da_llm_nao_derruba_a_janela(qapp, modelo):
+    visao = _conversa(modelo, AgenteFake(erro=RuntimeError("sem rede")))
+    visao.entrada.setText("oi")
+    visao.enviar()
+    visao.thread.wait(5000)
+    qapp.processEvents()
+
+    assert "sem rede" in visao.transcricao.toPlainText()
+    assert visao.botao.isEnabled()  # voltou a aceitar mensagem
+
+
+def test_conversa_ignora_mensagem_vazia(qapp, modelo):
+    agente = AgenteFake()
+    visao = _conversa(modelo, agente)
+    visao.entrada.setText("   ")
+    visao.enviar()
+    assert agente.perguntas == []
+
+
+def test_bandeja_resume_o_estado(qapp, modelo, registry, ctx):
+    from aide.gui.tray import Bandeja
+
+    registry.call("tasks.create", {"title": "X", "due": "2020-01-01T09:00"}, ctx)
+    bandeja = Bandeja(modelo, janela=None, ao_sair=lambda: None)
+    assert "atrasada" in bandeja.acao_resumo.text()
+    assert "my-aide" in bandeja.toolTip()
+
+
+def test_montagem_completa_do_app(qapp, ctx, monkeypatch):
+    """Prova que todas as visões constroem juntas, sem entrar no loop."""
+    from aide.gui import main as gui_main
+
+    monkeypatch.setattr(gui_main, "__name__", "aide.gui.main")
+    _, janela, _bandeja = gui_main.construir(config=ctx.config, app=qapp)
+    assert janela.ordem == ["hoje", "atrasadas", "projetos", "notas", "fila", "conversa"]
+    for chave in janela.ordem:
+        janela.mostrar(chave)
+
+
+def test_navegacao_por_codigo_move_a_selecao(janela):
+    """A bandeja e o relógio navegam sem clique; a sidebar tem de acompanhar."""
+    janela.mostrar("conversa")
+    linha = janela.sidebar.lista.currentRow()
+    assert janela.sidebar.chaves[linha] == "conversa"

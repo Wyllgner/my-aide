@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QListWidget, QVBoxLayout, QWidget
 
 from aide.gui import theme
@@ -18,6 +19,7 @@ class VisaoBase(QWidget):
         super().__init__()
         self.modelo = modelo
         self.setObjectName("painel")
+        self.setAttribute(Qt.WA_StyledBackground, True)
 
         self.layout_principal = QVBoxLayout(self)
         self.layout_principal.setContentsMargins(0, 0, 0, 0)

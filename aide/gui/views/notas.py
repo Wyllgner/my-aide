@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QHBoxLayout, QLineEdit, QListWidgetItem, QTextEdit, QWidget
 
+from aide.gui import theme
 from aide.gui.views.base import VisaoBase
 
 
@@ -62,6 +64,8 @@ class VisaoNotas(VisaoBase):
                 rotulo += f"\n{nota['tags']}"
             item = QListWidgetItem(rotulo)
             item.setData(Qt.UserRole, nota["id"])
+            if nota.get("tags"):
+                item.setForeground(QColor(theme.TOKENS["text_muted"]))
             self.lista.addItem(item)
 
         self.mostrar_vazio(not dados, sem_resultado)

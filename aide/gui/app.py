@@ -42,6 +42,8 @@ class Sidebar(QWidget):
         super().__init__()
         self.setObjectName("sidebar")
         self.setFixedWidth(LARGURA_SIDEBAR)
+        # QWidget puro ignora 'background' de folha de estilo sem isto
+        self.setAttribute(Qt.WA_StyledBackground, True)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -73,6 +75,13 @@ class Sidebar(QWidget):
         layout.addWidget(self.lista)
         layout.addStretch()
         # sem selecionar aqui: o sinal dispararia antes de a janela existir
+
+    def selecionar(self, chave: str) -> None:
+        """Mantém a seleção em sincronia com navegação feita por código."""
+        if chave in self.chaves:
+            linha = self.chaves.index(chave)
+            if self.lista.currentRow() != linha:
+                self.lista.setCurrentRow(linha)
 
     def atualizar_contadores(self, contadores: dict[str, int]) -> None:
         """Número ao lado do rótulo. Zero não aparece — ruído não é informação."""
@@ -125,6 +134,7 @@ class JanelaPrincipal(QMainWindow):
         if chave not in self.ordem:
             return
         self.pilha.setCurrentIndex(self.ordem.index(chave))
+        self.sidebar.selecionar(chave)
         self.atualizar()
 
     def atualizar(self) -> None:
