@@ -15,6 +15,19 @@ def now_in(timezone: str) -> datetime:
     return datetime.now(ZoneInfo(timezone))
 
 
+def profile_prompt(conn, config) -> Message | None:
+    """O perfil vai inteiro em toda conversa — é o que faz o assessor te conhecer."""
+    from aide.tools.memory import perfil_para_prompt
+
+    perfil = perfil_para_prompt(conn, config)
+    if not perfil:
+        return None
+    return Message(
+        role="system",
+        content="O que você já sabe sobre a pessoa (não pergunte de novo):\n" + perfil,
+    )
+
+
 def system_prompt(config) -> Message:
     template = (PROMPTS_DIR / "system.md").read_text()
     text = template.format(
@@ -73,6 +86,9 @@ def state_snapshot(conn, config) -> Message | None:
 def build(config, history: list[Message], conn=None) -> list[Message]:
     messages = [system_prompt(config)]
     if conn is not None:
+        perfil = profile_prompt(conn, config)
+        if perfil:
+            messages.append(perfil)
         snapshot = state_snapshot(conn, config)
         if snapshot:
             messages.append(snapshot)
