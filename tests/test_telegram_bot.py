@@ -130,3 +130,20 @@ def test_offset_avanca_para_nao_reprocessar(ctx, tmp_path):
     bot.client.get_updates = updates
     bot.run()
     assert bot._offset == 11
+
+
+def test_conflito_de_instancia_para_o_bot(ctx, tmp_path, caplog):
+    """409 significa dois daemons no mesmo bot; insistir só atrapalha os dois."""
+    bot = _bot(ctx, tmp_path)
+    tentativas = []
+
+    def conflito(offset=None, timeout=25):
+        tentativas.append(1)
+        raise TelegramError('getUpdates falhou (409): Conflict: terminated by other')
+
+    bot.client.get_updates = conflito
+    with caplog.at_level("ERROR"):
+        bot.run()
+
+    assert len(tentativas) == 1  # não fica insistindo
+    assert any("outro my-aide" in r.getMessage() for r in caplog.records)

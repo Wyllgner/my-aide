@@ -67,6 +67,15 @@ class TelegramBot:
                     self._tratar(update)
                 backoff = BACKOFF_INICIAL
             except TelegramError as exc:
+                if "409" in str(exc):
+                    # o Telegram só entrega updates para um getUpdates por bot;
+                    # insistir aqui só faz os dois daemons se atrapalharem.
+                    log.error(
+                        "outro my-aide já está atendendo este bot. "
+                        "Encerre o outro 'aide serve' (ou o serviço do systemd) "
+                        "e suba um só. O bot deste processo fica parado."
+                    )
+                    return
                 # rede caiu ou o Telegram está fora: espera e tenta de novo
                 log.warning("polling falhou (%s); nova tentativa em %ss", exc, backoff)
                 self._parar.wait(backoff)
