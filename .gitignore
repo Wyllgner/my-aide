@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+
+# Segredos e config local
+.env
+config.local.yaml
+
+# Dados pessoais do assessor
+data/
+vault/
+*.db
+*.db-wal
+*.db-shm
+
+# Ferramentas
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.idea/
+.vscode/
+
+# Documentação local
+ARQUITETURA.md
