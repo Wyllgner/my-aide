@@ -1,0 +1,27 @@
+# Configuração do my-aide. Valores locais/sensíveis vão em config.local.yaml,
+# que sobrepõe este arquivo e é ignorado pelo git.
+
+timezone: America/Sao_Paulo
+locale: pt-BR
+user_name: Wyllgner
+
+llm:
+  provider: openai
+  # modelo forte: conversa e planejamento
+  model_chat: gpt-4.1
+  # modelo barato: rotina, classificação, parsing de data, briefings
+  model_fast: gpt-4.1-mini
+  temperature: 0.3
+  max_output_tokens: 1200
+  timeout_seconds: 60
+  max_retries: 3
+
+context:
+  # orçamento de contexto montado pelo orquestrador
+  token_budget: 8000
+  # quantas mensagens da sessão entram no prompt
+  history_messages: 12
+
+paths:
+  data_dir: data
+  vault_dir: vault
