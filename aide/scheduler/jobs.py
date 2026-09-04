@@ -10,7 +10,7 @@ import logging
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from aide.core.context import now_in
@@ -18,6 +18,9 @@ from aide.scheduler import briefing, rules
 from aide.tools import reminders
 
 log = logging.getLogger(__name__)
+
+# folga na comparação de mtime; ver reindex_vault
+FOLGA_MTIME = timedelta(seconds=2)
 
 DIAS = {"segunda": "mon", "terça": "tue", "terca": "tue", "quarta": "wed",
         "quinta": "thu", "sexta": "fri", "sábado": "sat", "sabado": "sat",
@@ -164,9 +167,13 @@ def reindex_vault(deps: JobDeps) -> int:
             log.warning("arquivo da nota %s sumiu: %s", row["id"], caminho)
             continue
 
-        modificado = datetime.fromtimestamp(caminho.stat().st_mtime, tz=deps.now.tzinfo)
-        indexado = datetime.fromisoformat(row["updated_at"]).replace(tzinfo=deps.now.tzinfo)
-        if modificado <= indexado:
+        # datetime('now') do SQLite é UTC; comparar com mtime local atrasaria a
+        # reindexação pelo tamanho do fuso (3h aqui) e ninguém entenderia por quê.
+        modificado = datetime.fromtimestamp(caminho.stat().st_mtime, tz=UTC)
+        indexado = datetime.fromisoformat(row["updated_at"]).replace(tzinfo=UTC)
+        # o updated_at do SQLite tem resolução de segundos e o mtime tem fração;
+        # sem folga, toda nota recém-criada parece editada e reindexa à toa
+        if modificado <= indexado + FOLGA_MTIME:
             continue
 
         corpo = vault.corpo_de(caminho)
