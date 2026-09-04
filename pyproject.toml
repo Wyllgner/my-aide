@@ -10,6 +10,7 @@ dependencies = [
     "typer>=0.12",
     "rich>=13.7",
     "apscheduler>=3.10",
+    "mcp>=1.0",
 ]
 
 [project.optional-dependencies]
@@ -17,6 +18,7 @@ dev = ["pytest>=8.0", "ruff>=0.5"]
 
 [project.scripts]
 aide = "aide.cli:app"
+aide-mcp = "aide.mcp.server:main"
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -31,3 +33,6 @@ line-length = 100
 [tool.ruff.lint.per-file-ignores]
 # datas fixas em teste não precisam de fuso
 "tests/*" = ["DTZ001"]
+
+[tool.pytest.ini_options]
+markers = ["slow: sobe processo de verdade; mais lento"]

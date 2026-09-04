@@ -74,7 +74,10 @@ class Config:
         return self.data_dir / "aide.db"
 
 
-def load_config(root: Path = ROOT) -> Config:
+def load_config(root: Path | None = None) -> Config:
+    """Carrega a config. `AIDE_ROOT` aponta para outra raiz — útil para testar
+    e para rodar uma instância separada sem tocar nos seus dados."""
+    root = root or Path(os.getenv("AIDE_ROOT") or ROOT)
     load_dotenv(root / ".env")
 
     raw: dict[str, Any] = {}
