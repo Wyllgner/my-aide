@@ -321,3 +321,4 @@ def test_navegacao_por_codigo_move_a_selecao(janela):
     janela.mostrar("conversa")
     linha = janela.sidebar.lista.currentRow()
     assert janela.sidebar.chaves[linha] == "conversa"
+

@@ -33,6 +33,8 @@ class LLMConfig:
     timeout_seconds: int = 60
     max_retries: int = 3
     api_key: str | None = None
+    # modelo -> (US$ por 1M de entrada, US$ por 1M de saída)
+    precos: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -105,6 +107,7 @@ def load_config(root: Path | None = None) -> Config:
         timeout_seconds=int(llm_raw.get("timeout_seconds", 60)),
         max_retries=int(llm_raw.get("max_retries", 3)),
         api_key=os.getenv("OPENAI_API_KEY"),
+        precos={m: tuple(v) for m, v in (llm_raw.get("precos") or {}).items()},
     )
 
     def _dir(key: str, default: str) -> Path:

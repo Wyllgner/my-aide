@@ -22,7 +22,10 @@ aide done 3
 aide ls overdue                    # today | overdue | week | inbox | done | all
 aide chat                          # conversa; ele cria e altera tarefas sozinho
 aide checar                        # o que as regras de condição estão vendo
+aide status                        # retrato geral: estado, cobranças e custo
 aide usage                         # quanto de LLM foi consumido
+aide pessoas                       # com quem você combinou de manter contato
+aide falei Pedro "vai se mudar"    # registra o contato
 ```
 
 ### Notas e memória

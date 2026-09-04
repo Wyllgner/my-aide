@@ -15,6 +15,14 @@ llm:
   max_output_tokens: 1200
   timeout_seconds: 60
   max_retries: 3
+  # US$ por 1M de tokens [entrada, saída], para o `aide status` estimar o custo.
+  # Confira em developers.openai.com/api/docs/pricing — muda de tempos em tempos.
+  precos:
+    gpt-5.6-luna: [0.20, 1.20]
+    gpt-5-nano: [0.05, 0.40]
+    gpt-4.1: [2.00, 8.00]
+    gpt-4.1-mini: [0.40, 1.60]
+    text-embedding-3-small: [0.02, 0.00]
 
 context:
   # orçamento de contexto montado pelo orquestrador
