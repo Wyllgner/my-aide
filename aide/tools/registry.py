@@ -22,6 +22,8 @@ class ToolContext:
     config: Any
     conn: sqlite3.Connection
     actor: str = "cli"
+    # opcional: sem ele a busca funciona só por palavra-chave
+    embedder: Any = None
 
 
 @dataclass

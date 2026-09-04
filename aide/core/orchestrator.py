@@ -22,7 +22,7 @@ class Orchestrator:
     def __init__(self, config, conn: sqlite3.Connection, llm: LLMProvider,
                  session_id: str | None = None, registry=None,
                  confirm: Callable[[str, dict], bool] | None = None,
-                 actor: str = "cli"):
+                 actor: str = "cli", embedder=None):
         self.config = config
         self.conn = conn
         self.llm = llm
@@ -31,6 +31,7 @@ class Orchestrator:
         # devolve True para autorizar uma tool marcada 'confirm'
         self.confirm = confirm
         self.actor = actor
+        self.embedder = embedder
 
     # ---------- persistência ----------
 
@@ -64,7 +65,8 @@ class Orchestrator:
         self._save(Message(role="user", content=text))
         messages = context.build(self.config, self.history(), conn=self.conn)
         schemas = self.registry.schemas()
-        ctx = ToolContext(config=self.config, conn=self.conn, actor=self.actor)
+        ctx = ToolContext(config=self.config, conn=self.conn, actor=self.actor,
+                          embedder=self.embedder)
 
         for _ in range(MAX_ITERATIONS):
             response = self.llm.complete(messages, tools=schemas, purpose="chat")

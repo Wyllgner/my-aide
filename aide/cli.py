@@ -34,9 +34,22 @@ def _open_db() -> tuple[object, sqlite3.Connection]:
     return config, conn
 
 
+def _embedder(config, conn):
+    """Sem chave ou sem rede o assessor segue funcionando, só sem semântica."""
+    from aide.llm.embeddings import Embedder
+
+    if not config.llm.api_key:
+        return None
+    try:
+        return Embedder(config, usage_sink=record_usage(conn))
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _ctx() -> tuple[object, sqlite3.Connection, ToolContext]:
     config, conn = _open_db()
-    return config, conn, ToolContext(config=config, conn=conn, actor="cli")
+    return config, conn, ToolContext(config=config, conn=conn, actor="cli",
+                                     embedder=_embedder(config, conn))
 
 
 def _confirm(name: str, args: dict) -> bool:
@@ -46,7 +59,8 @@ def _confirm(name: str, args: dict) -> bool:
 
 def _agent(config, conn) -> Orchestrator:
     llm = build_provider(config, usage_sink=record_usage(conn))
-    return Orchestrator(config, conn, llm, confirm=_confirm)
+    return Orchestrator(config, conn, llm, confirm=_confirm,
+                        embedder=_embedder(config, conn))
 
 
 def _fmt_due(due: str | None, now: datetime) -> tuple[str, str]:
