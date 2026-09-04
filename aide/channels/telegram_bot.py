@@ -22,6 +22,9 @@ AJUDA = """Comandos:
 /hoje - o que precisa de você hoje
 /atrasadas - o que passou do prazo
 /checar - o que as regras estão vendo
+/notas - suas notas mais recentes
+/buscar <termo> - procura nas notas por significado
+/perfil - o que eu sei sobre você
 /id - o id deste chat
 /ajuda - isto aqui
 
@@ -29,15 +32,18 @@ Fora isso, é só falar normalmente:
 "me lembra de pagar o IPVA sexta"
 "adia o dentista pra semana que vem"
 "já paguei o boleto"
+"anota que decidimos cortar 20% da nuvem"
+"o que eu tinha anotado sobre o carro?"
 """
 
 
 class TelegramBot:
-    def __init__(self, config, conn_factory, llm, registry):
+    def __init__(self, config, conn_factory, llm, registry, embedder=None):
         self.config = config
         self.conn_factory = conn_factory
         self.llm = llm
         self.registry = registry
+        self.embedder = embedder
         self.client = TelegramClient(config.telegram.token)
         self.permitidos = set(config.telegram.allowed_chat_ids)
         self._offset: int | None = None
@@ -126,10 +132,19 @@ class TelegramBot:
 
     def _resolver(self, chat_id: int, texto: str) -> str:
         if texto.startswith("/"):
-            return self._comando(chat_id, texto.split()[0].lstrip("/").lower())
+            partes = texto.split(maxsplit=1)
+            nome = partes[0].lstrip("/").lower()
+            resto = partes[1].strip() if len(partes) > 1 else ""
+            return self._comando(chat_id, nome, resto)
         return self._agente(chat_id).ask(texto)
 
-    def _comando(self, chat_id: int, nome: str) -> str:
+    def _ctx(self, chat_id: int):
+        from aide.tools.registry import ToolContext
+
+        return ToolContext(config=self.config, conn=self._db(),
+                           actor=f"telegram:{chat_id}", embedder=self.embedder)
+
+    def _comando(self, chat_id: int, nome: str, resto: str = "") -> str:
         from aide.scheduler import rules
 
         if nome in {"start", "ajuda", "help"}:
@@ -138,16 +153,35 @@ class TelegramBot:
             return f"chat id: {chat_id}"
         if nome in {"hoje", "atrasadas"}:
             filtro = "today" if nome == "hoje" else "overdue"
-            from aide.tools.registry import ToolContext
-
-            ctx = ToolContext(config=self.config, conn=self._db(), actor=f"telegram:{chat_id}")
-            tarefas = self.registry.call("tasks.list", {"filter": filtro}, ctx).data
+            tarefas = self.registry.call(
+                "tasks.list", {"filter": filtro}, self._ctx(chat_id)).data
             if not tarefas:
                 return "Nada por aqui."
             return "\n".join(
                 f"#{t['id']} {t['title']}" + (f" — {t['due_at']}" if t["due_at"] else "")
                 for t in tarefas
             )
+        if nome == "notas":
+            linhas = self.registry.call("notes.list", {"limit": 15}, self._ctx(chat_id)).data
+            if not linhas:
+                return "Nenhuma nota ainda."
+            return "\n".join(f"#{n['id']} {n['title']}" for n in linhas)
+        if nome == "buscar":
+            if not resto:
+                return "Use: /buscar <o que você procura>"
+            achados = self.registry.call(
+                "notes.search", {"query": resto}, self._ctx(chat_id)).data
+            if not achados:
+                return "Não achei nada sobre isso."
+            return "\n\n".join(
+                f"#{a['id']} {a['title']}\n{(a.get('trecho') or '').strip()[:200]}"
+                for a in achados
+            )
+        if nome == "perfil":
+            fatos = self.registry.call("memory.list", {}, self._ctx(chat_id)).data
+            if not fatos:
+                return "Ainda não sei nada sobre você."
+            return "\n".join(f"{f['key']}: {f['value']}" for f in fatos)
         if nome == "checar":
             achados = rules.evaluate(self._db(), self._agora())
             return "\n".join(f.summary for f in achados) if achados else "Nada pedindo atenção."
@@ -166,7 +200,7 @@ class TelegramBot:
             self._sessoes[chat_id] = session_id
         return Orchestrator(
             self.config, self._db(), self.llm, session_id=session_id,
-            registry=self.registry, actor=f"telegram:{chat_id}",
+            registry=self.registry, actor=f"telegram:{chat_id}", embedder=self.embedder,
             # sem confirmação interativa por aqui: tool 'confirm' é recusada
             confirm=lambda name, args: False,
         )

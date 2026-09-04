@@ -365,7 +365,8 @@ def _start_bot(config, deps):
 
     from aide.channels.telegram_bot import TelegramBot
 
-    bot = TelegramBot(config, deps.conn_factory, deps.llm, registry)
+    bot = TelegramBot(config, deps.conn_factory, deps.llm, registry,
+                      embedder=_embedder(config, deps.db()))
     bot.start()
     console.print(f"[green]telegram no ar[/] [dim]chats {list(config.telegram.allowed_chat_ids)}[/]")
     return bot

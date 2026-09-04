@@ -147,3 +147,36 @@ def test_conflito_de_instancia_para_o_bot(ctx, tmp_path, caplog):
 
     assert len(tentativas) == 1  # não fica insistindo
     assert any("outro my-aide" in r.getMessage() for r in caplog.records)
+
+
+def test_comando_notas(ctx, tmp_path, registry):
+    bot = _bot(ctx, tmp_path)
+    object.__setattr__(ctx.config, "vault_dir", tmp_path / "v")
+    registry.call("notes.create", {"title": "Carro", "body": "trocar óleo"}, ctx)
+    bot._conn = ctx.conn  # usar o mesmo banco da fixture
+    bot._tratar(_msg("/notas"))
+    assert "Carro" in bot.enviadas[0][1]
+
+
+def test_comando_buscar_com_argumento(ctx, tmp_path, registry):
+    bot = _bot(ctx, tmp_path)
+    object.__setattr__(ctx.config, "vault_dir", tmp_path / "v")
+    registry.call("notes.create", {"title": "Carro", "body": "trocar o óleo"}, ctx)
+    bot._conn = ctx.conn
+    bot._tratar(_msg("/buscar óleo"))
+    assert "Carro" in bot.enviadas[0][1]
+
+
+def test_buscar_sem_argumento_orienta(ctx, tmp_path):
+    bot = _bot(ctx, tmp_path)
+    bot._tratar(_msg("/buscar"))
+    assert "Use: /buscar" in bot.enviadas[0][1]
+
+
+def test_comando_perfil(ctx, tmp_path, registry):
+    bot = _bot(ctx, tmp_path)
+    registry.call("memory.save", {"kind": "profile", "key": "treino",
+                                  "value": "6h da manhã"}, ctx)
+    bot._conn = ctx.conn
+    bot._tratar(_msg("/perfil"))
+    assert "6h da manhã" in bot.enviadas[0][1]
