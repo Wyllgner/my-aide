@@ -114,6 +114,9 @@ def doctor() -> None:
         ("OPENAI_API_KEY", bool(key), "definida" if key else "faltando — veja .env.example"),
         ("banco", config.db_path.exists(), str(config.db_path)),
         ("tools", bool(registry.names()), f"{len(registry.names())} registradas"),
+        ("telegram", config.telegram.usable,
+         "configurado" if config.telegram.usable
+         else "desligado (opcional — veja 'aide telegram-id')"),
     ]
     table = Table(show_header=False, box=None)
     for name, ok, detail in checks:
@@ -235,18 +238,33 @@ def _deps(por_thread: bool = False) -> JobDeps:
                    notifier=notifier, conn=conn)
 
 
+def _start_bot(config, deps):
+    """Sobe o bot do Telegram junto do daemon, se estiver configurado."""
+    if not config.telegram.usable:
+        return None
+
+    from aide.channels.telegram_bot import TelegramBot
+
+    bot = TelegramBot(config, deps.conn_factory, deps.llm, registry)
+    bot.start()
+    console.print(f"[green]telegram no ar[/] [dim]chats {list(config.telegram.allowed_chat_ids)}[/]")
+    return bot
+
+
 @app.command()
 def serve(log_level: str = typer.Option("INFO", "--log-level")) -> None:
-    """Roda o daemon: lembretes, cobranças e briefings."""
+    """Roda o daemon: lembretes, cobranças, briefings e o bot do Telegram."""
     import logging
     import signal
     import threading
 
     logging.basicConfig(level=log_level.upper(),
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    config, _ = _open_db()
     deps = _deps(por_thread=True)
     scheduler = build_scheduler(deps)
     scheduler.start()
+    bot = _start_bot(config, deps)
 
     table = Table(title="Jobs agendados", box=None, title_justify="left")
     table.add_column("job", style="cyan")
@@ -261,8 +279,52 @@ def serve(log_level: str = typer.Option("INFO", "--log-level")) -> None:
 
     console.print("[dim]daemon no ar · ctrl-c para sair[/]")
     parar.wait()
+    if bot:
+        bot.stop()
     scheduler.shutdown(wait=False)
     console.print("[dim]encerrado[/]")
+
+
+@app.command(name="telegram-id")
+def telegram_id(espera: int = typer.Option(60, "--espera", "-t",
+                                           help="segundos aguardando a mensagem")) -> None:
+    """Descobre o chat id: rode isto e mande qualquer mensagem para o bot."""
+    import os
+
+    from aide.channels.telegram import TelegramClient, TelegramError
+
+    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    if not token:
+        console.print("[red]TELEGRAM_BOT_TOKEN não definida.[/] "
+                      "Crie um bot com o @BotFather e ponha o token no .env")
+        raise typer.Exit(1)
+
+    client = TelegramClient(token)
+    try:
+        bot = client.me()
+    except TelegramError as exc:
+        console.print(f"[red]token não funcionou:[/] {exc}")
+        raise typer.Exit(1) from exc
+
+    console.print(f"bot [cyan]@{bot['username']}[/] · mande uma mensagem para ele agora")
+    try:
+        updates = client.get_updates(timeout=espera)
+    except TelegramError as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(1) from exc
+
+    ids = {u.get("message", {}).get("chat", {}).get("id") for u in updates}
+    ids.discard(None)
+    if not ids:
+        console.print("[yellow]nenhuma mensagem chegou.[/] Tente de novo.")
+        raise typer.Exit(1)
+
+    for chat_id in ids:
+        console.print(f"[green]chat id:[/] {chat_id}")
+    console.print("\n[dim]Ponha em config.yaml:[/]")
+    console.print("[dim]telegram:[/]")
+    console.print("[dim]  enabled: true[/]")
+    console.print(f"[dim]  allowed_chat_ids: [{next(iter(ids))}][/]")
 
 
 @app.command(name="job")

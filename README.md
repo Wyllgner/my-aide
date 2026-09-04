@@ -37,6 +37,24 @@ aide job briefing_manha            # roda um job agora, para testar
 
 Para rodar sempre, veja `deploy/my-aide.service`.
 
+## Telegram (opcional, mas é o que faz ele te alcançar)
+
+1. Fale com o [@BotFather](https://t.me/BotFather), mande `/newbot` e copie o token.
+2. Ponha em `.env`: `TELEGRAM_BOT_TOKEN=...`
+3. Rode `aide telegram-id` e mande qualquer mensagem para o seu bot.
+4. Ponha o id que aparecer em `config.yaml`:
+
+```yaml
+telegram:
+  enabled: true
+  allowed_chat_ids: [123456789]
+```
+
+5. Adicione `telegram` em `notify.channels` para receber os briefings por lá.
+
+O bot sobe junto com `aide serve`. Só os chats da lista são atendidos — qualquer
+outro recebe só o próprio id, nunca os seus dados.
+
 ## Configuração
 
 `config.yaml` (versionado) define modelo, horários e canais de notificação.

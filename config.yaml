@@ -28,6 +28,7 @@ paths:
 
 notify:
   # canais usados pelo scheduler: desktop, console
+  # acrescente 'telegram' para receber briefings no celular
   channels: [desktop, console]
 
 schedule:
