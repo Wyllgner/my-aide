@@ -69,6 +69,33 @@ telegram:
 O bot sobe junto com `aide serve`. Só os chats da lista são atendidos — qualquer
 outro recebe só o próprio id, nunca os seus dados.
 
+## MCP: plugar um executor externo
+
+O assessor expõe suas tools por MCP, então um agente de propósito geral
+(Claude Desktop, Cowork e afins) enxerga suas tarefas, notas e a fila de
+trabalho — e escreve o resultado de volta aqui.
+
+```bash
+aide mcp-config     # imprime o bloco para colar no cliente
+```
+
+Tools marcadas `confirm` (apagar tarefa, nota ou memória) **não** são expostas:
+por MCP não há como pedir "tem certeza?" a uma pessoa.
+
+### Fila de trabalho
+
+O daemon não faz trabalho pesado — ele enfileira e deixa pronto para quando
+você abrir uma sessão com o executor:
+
+```bash
+aide fila                    # o que está esperando
+aide enfileirar "Organizar as notas fiscais de agosto" -c "estão em ~/Downloads"
+aide job queue_work          # roda agora o que o daemon faria
+```
+
+No executor, comece por `work_orders_list`; ao terminar, `work_orders_complete`
+grava o resultado aqui — é assim que o trabalho feito lá fora vira memória.
+
 ## Configuração
 
 `config.yaml` (versionado) define modelo, horários e canais de notificação.

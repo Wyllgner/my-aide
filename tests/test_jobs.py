@@ -136,3 +136,34 @@ def test_usage_sink_do_embedder_funciona_em_outra_thread(tmp_path, ctx):
     assert erros == []
     total = deps.db().execute("SELECT COUNT(*) c FROM llm_usage").fetchone()["c"]
     assert total == 1
+
+
+def test_queue_work_enfileira_projeto_parado(ctx, registry):
+    from datetime import timedelta
+
+    registry.call("tasks.create", {"title": "X", "project": "parado"}, ctx)
+    antigo = (jobs.JobDeps(config=ctx.config, llm=FakeLLM(), notifier=FakeNotifier(),
+                           conn=ctx.conn).now - timedelta(days=30)).isoformat(timespec="minutes")
+    ctx.conn.execute("UPDATE tasks SET last_touched_at = ?, created_at = ?", (antigo, antigo))
+
+    assert jobs.queue_work(_deps(ctx)) == 1
+    fila = registry.call("work_orders.list", {}, ctx).data
+    assert "parado" in fila[0]["goal"]
+
+
+def test_queue_work_nao_duplica(ctx, registry):
+    """Rodando 2x por dia, sem essa checagem a fila enche de repetição."""
+    from datetime import timedelta
+
+    registry.call("tasks.create", {"title": "X", "project": "parado"}, ctx)
+    antigo = (jobs.JobDeps(config=ctx.config, llm=FakeLLM(), notifier=FakeNotifier(),
+                           conn=ctx.conn).now - timedelta(days=30)).isoformat(timespec="minutes")
+    ctx.conn.execute("UPDATE tasks SET last_touched_at = ?, created_at = ?", (antigo, antigo))
+
+    jobs.queue_work(_deps(ctx))
+    assert jobs.queue_work(_deps(ctx)) == 0
+
+
+def test_queue_work_ignora_projeto_ativo(ctx, registry):
+    registry.call("tasks.create", {"title": "X", "project": "vivo"}, ctx)
+    assert jobs.queue_work(_deps(ctx)) == 0

@@ -106,12 +106,47 @@ def revisao_semanal(deps: JobDeps) -> bool:
     return _briefing_job(deps, "semanal")
 
 
+def queue_work(deps: JobDeps) -> int:
+    """Converte pendências pesadas em ordens de trabalho.
+
+    O daemon não executa esse tipo de coisa — ele deixa a fila pronta para
+    quando você abrir uma sessão com um executor externo.
+    """
+    conn = deps.db()
+    criadas = 0
+
+    # projeto parado costuma precisar de alguém revisar material, não de uma
+    # tarefa a mais na lista
+    for achado in rules.evaluate(conn, deps.now):
+        if achado.rule != "projeto_parado":
+            continue
+        ja_existe = conn.execute(
+            "SELECT 1 FROM work_orders WHERE status IN ('open', 'claimed')"
+            " AND goal = ?", (f"Revisar o projeto parado: {achado.summary}",)
+        ).fetchone()
+        if ja_existe:
+            continue
+        conn.execute(
+            "INSERT INTO work_orders (goal, context, done_criteria, priority)"
+            " VALUES (?, ?, ?, ?)",
+            (f"Revisar o projeto parado: {achado.summary}",
+             "Ver o que trava o projeto e propor o próximo passo concreto.",
+             "Uma decisão registrada: seguir, adiar com data, ou encerrar.", 3),
+        )
+        criadas += 1
+
+    if criadas:
+        log.info("%s ordem(ns) de trabalho enfileirada(s)", criadas)
+    return criadas
+
+
 JOBS = {
     "tick_reminders": tick_reminders,
     "eval_conditions": eval_conditions,
     "briefing_manha": briefing_manha,
     "briefing_noite": briefing_noite,
     "revisao_semanal": revisao_semanal,
+    "queue_work": queue_work,
 }
 
 
@@ -155,6 +190,7 @@ def build_scheduler(deps: JobDeps):
     add(tick_reminders, "tick_reminders", trigger="interval", minutes=1)
     add(eval_conditions, "eval_conditions", trigger="interval",
         hours=cfg.regras_a_cada_horas)
+    add(queue_work, "queue_work", trigger="interval", hours=cfg.regras_a_cada_horas)
 
     manha_h, manha_m = _hora(cfg.briefing_manha)
     add(briefing_manha, "briefing_manha", trigger="cron", hour=manha_h, minute=manha_m)
