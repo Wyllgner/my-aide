@@ -61,7 +61,9 @@ def test_uso_de_llm_e_registrado(tmp_path):
 
 def test_migrate_e_idempotente(tmp_path):
     conn = connect(tmp_path / "m.db")
-    assert migrate(conn) == ["001_init.sql"]
+    aplicadas = migrate(conn)
+    assert aplicadas[0] == "001_init.sql"
+    assert aplicadas == sorted(aplicadas)  # ordem numérica
     assert migrate(conn) == []
 
 
