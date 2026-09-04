@@ -8,9 +8,9 @@ user_name: Wyllgner
 llm:
   provider: openai
   # modelo forte: conversa e planejamento
-  model_chat: gpt-4.1
+  model_chat: gpt-5.6-luna
   # modelo barato: rotina, classificação, parsing de data, briefings
-  model_fast: gpt-4.1-mini
+  model_fast: gpt-5-nano
   temperature: 0.3
   max_output_tokens: 1200
   timeout_seconds: 60

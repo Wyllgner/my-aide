@@ -26,8 +26,8 @@ def _deep_merge(base: dict, over: dict) -> dict:
 @dataclass(frozen=True)
 class LLMConfig:
     provider: str = "openai"
-    model_chat: str = "gpt-4.1"
-    model_fast: str = "gpt-4.1-mini"
+    model_chat: str = "gpt-5.6-luna"
+    model_fast: str = "gpt-5-nano"
     temperature: float = 0.3
     max_output_tokens: int = 1200
     timeout_seconds: int = 60
@@ -66,8 +66,8 @@ def load_config(root: Path = ROOT) -> Config:
 
     llm = LLMConfig(
         provider=llm_raw.get("provider", "openai"),
-        model_chat=llm_raw.get("model_chat", "gpt-4.1"),
-        model_fast=llm_raw.get("model_fast", "gpt-4.1-mini"),
+        model_chat=llm_raw.get("model_chat", "gpt-5.6-luna"),
+        model_fast=llm_raw.get("model_fast", "gpt-5-nano"),
         temperature=float(llm_raw.get("temperature", 0.3)),
         max_output_tokens=int(llm_raw.get("max_output_tokens", 1200)),
         timeout_seconds=int(llm_raw.get("timeout_seconds", 60)),

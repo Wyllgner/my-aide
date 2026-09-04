@@ -25,6 +25,12 @@ class OpenAIProvider(LLMProvider):
         self.client = OpenAI(api_key=self.cfg.api_key, timeout=self.cfg.timeout_seconds)
         # callable(model, purpose, in_tokens, out_tokens, latency_ms) -> None
         self.usage_sink = usage_sink
+        # Modelos novos trocaram max_tokens por max_completion_tokens e alguns
+        # não aceitam temperature. Em vez de fixar um dialeto por nome de
+        # modelo, aprendemos com a primeira recusa e guardamos para as próximas.
+        self._token_param = "max_completion_tokens"
+        self._send_temperature = True
+        self._reasoning_effort: str | None = None
 
     def complete(
         self,
@@ -38,9 +44,12 @@ class OpenAIProvider(LLMProvider):
         payload: dict[str, Any] = {
             "model": model,
             "messages": [m.to_api() for m in messages],
-            "temperature": self.cfg.temperature,
-            "max_tokens": self.cfg.max_output_tokens,
+            self._token_param: self.cfg.max_output_tokens,
         }
+        if self._send_temperature:
+            payload["temperature"] = self.cfg.temperature
+        if self._reasoning_effort:
+            payload["reasoning_effort"] = self._reasoning_effort
         if tools:
             payload["tools"] = tools
 
@@ -81,7 +90,36 @@ class OpenAIProvider(LLMProvider):
                 time.sleep(delay)
                 delay *= 2
             except APIStatusError as exc:
+                if self._adapt_payload(payload, exc):
+                    continue  # dialeto ajustado: vale reenviar
                 # 4xx que não é rate limit: reenviar não resolve.
                 raise RuntimeError(f"OpenAI recusou a chamada ({exc.status_code}): {exc}") from exc
 
         raise RuntimeError(f"OpenAI indisponível após {self.cfg.max_retries} tentativas") from last
+
+    def _adapt_payload(self, payload: dict[str, Any], exc: APIStatusError) -> bool:
+        """Ajusta o payload a um modelo com dialeto diferente. True se vale reenviar."""
+        message = str(exc)
+
+        if "max_tokens" in message and "max_completion_tokens" in message:
+            other = "max_tokens" if self._token_param == "max_completion_tokens" else "max_completion_tokens"
+            payload[other] = payload.pop(self._token_param, self.cfg.max_output_tokens)
+            self._token_param = other
+            log.info("modelo usa %s; ajustado", other)
+            return True
+
+        if "reasoning_effort" in message and self._reasoning_effort is None:
+            # modelos de raciocínio exigem effort explícito para usar tools
+            # no chat completions; 'none' é o que a própria API sugere.
+            self._reasoning_effort = "none"
+            payload["reasoning_effort"] = "none"
+            log.info("modelo de raciocínio; reasoning_effort=none")
+            return True
+
+        if "temperature" in message and "unsupported" in message.lower():
+            payload.pop("temperature", None)
+            self._send_temperature = False
+            log.info("modelo não aceita temperature; removido")
+            return True
+
+        return False
