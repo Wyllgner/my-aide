@@ -316,6 +316,45 @@ def reindexar() -> None:
                   + (f" · [yellow]{sumidas} arquivo(s) sumido(s)[/]" if sumidas else ""))
 
 
+@app.command()
+def pessoas(atrasados: bool = typer.Option(False, "--atrasados", "-a")) -> None:
+    """Com quem você combinou de manter contato."""
+    _, _, ctx = _ctx()
+    linhas = registry.call("people.list", {"atrasados": atrasados}, ctx).data
+    if not linhas:
+        console.print("[dim]Ninguém registrado.[/]" if not atrasados
+                      else "[green]Ninguém em atraso.[/]")
+        return
+
+    table = Table(box=None)
+    table.add_column("pessoa")
+    table.add_column("relação", style="dim")
+    table.add_column("sem falar")
+    table.add_column("combinado", style="dim")
+    for p in linhas:
+        dias = p["dias_sem_falar"]
+        texto = f"{dias}d" if dias is not None else "—"
+        cor = "red" if p["atrasado"] else "white"
+        table.add_row(p["name"], p["relation"] or "",
+                      f"[{cor}]{texto}[/]",
+                      f"a cada {p['cadence_days']}d" if p["cadence_days"] else "sem cobrança")
+    console.print(table)
+
+
+@app.command()
+def falei(nome: str, nota: str = typer.Argument(None)) -> None:
+    """Registra que você falou com alguém agora."""
+    _, _, ctx = _ctx()
+    args = {"name": nome}
+    if nota:
+        args["note"] = nota
+    resultado = registry.call("people.touch", args, ctx)
+    if not resultado.ok:
+        console.print(f"[red]{resultado.error}[/]")
+        raise typer.Exit(1)
+    console.print(f"[green]ok[/] {resultado.data['name']}")
+
+
 # ---------- fila de trabalho ----------
 
 

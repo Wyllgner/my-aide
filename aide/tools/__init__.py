@@ -4,6 +4,7 @@ from aide.tools import (  # noqa: F401
     clock,
     memory,
     notes,
+    people,
     reminders,
     tasks,
     work_orders,
