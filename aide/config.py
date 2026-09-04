@@ -36,6 +36,18 @@ class LLMConfig:
 
 
 @dataclass(frozen=True)
+class TelegramConfig:
+    enabled: bool = False
+    # só estes chats podem falar com o assessor; vazio = ninguém
+    allowed_chat_ids: tuple[int, ...] = ()
+    token: str | None = None
+
+    @property
+    def usable(self) -> bool:
+        return bool(self.enabled and self.token and self.allowed_chat_ids)
+
+
+@dataclass(frozen=True)
 class ScheduleConfig:
     briefing_manha: str = "07:30"
     briefing_noite: str = "21:30"
@@ -54,6 +66,7 @@ class Config:
     data_dir: Path = ROOT / "data"
     vault_dir: Path = ROOT / "vault"
     notify_channels: tuple[str, ...] = ("desktop",)
+    telegram: TelegramConfig = field(default_factory=TelegramConfig)
     schedule: ScheduleConfig = field(default_factory=ScheduleConfig)
 
     @property
@@ -75,6 +88,7 @@ def load_config(root: Path = ROOT) -> Config:
     paths_raw = raw.get("paths", {})
     notify_raw = raw.get("notify", {})
     sched_raw = raw.get("schedule", {})
+    tg_raw = raw.get("telegram", {})
 
     llm = LLMConfig(
         provider=llm_raw.get("provider", "openai"),
@@ -101,6 +115,11 @@ def load_config(root: Path = ROOT) -> Config:
         data_dir=_dir("data_dir", "data"),
         vault_dir=_dir("vault_dir", "vault"),
         notify_channels=tuple(notify_raw.get("channels", ["desktop"])),
+        telegram=TelegramConfig(
+            enabled=bool(tg_raw.get("enabled", False)),
+            allowed_chat_ids=tuple(int(x) for x in tg_raw.get("allowed_chat_ids", [])),
+            token=os.getenv("TELEGRAM_BOT_TOKEN"),
+        ),
         schedule=ScheduleConfig(
             briefing_manha=sched_raw.get("briefing_manha", "07:30"),
             briefing_noite=sched_raw.get("briefing_noite", "21:30"),

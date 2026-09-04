@@ -36,3 +36,8 @@ schedule:
   revisao_semanal: "domingo 19:00"
   # de quanto em quanto tempo as regras de condição rodam
   regras_a_cada_horas: 12
+
+telegram:
+  enabled: false
+  # descubra o seu com: aide telegram-id
+  allowed_chat_ids: []

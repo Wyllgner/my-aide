@@ -65,6 +65,25 @@ def build_notifier(config) -> Notifier:
             built.append(DesktopNotifier())
         elif name == "console":
             built.append(ConsoleNotifier())
+        elif name == "telegram":
+            telegram = _build_telegram(config)
+            if telegram:
+                built.append(telegram)
         else:
             log.warning("canal de notificação desconhecido: %s", name)
     return MultiNotifier(*built) if built else ConsoleNotifier()
+
+
+def _build_telegram(config) -> Notifier | None:
+    cfg = getattr(config, "telegram", None)
+    if cfg is None or not cfg.usable:
+        log.warning(
+            "canal telegram pedido mas não configurado "
+            "(precisa de enabled, TELEGRAM_BOT_TOKEN e allowed_chat_ids)"
+        )
+        return None
+
+    from aide.channels.telegram import TelegramClient, TelegramNotifier
+
+    client = TelegramClient(cfg.token)
+    return TelegramNotifier(client, cfg.allowed_chat_ids[0])
