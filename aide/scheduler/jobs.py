@@ -38,6 +38,7 @@ class JobDeps:
     notifier: object
     conn_factory: Callable[[], object] | None = None
     conn: object | None = None
+    embedder: object | None = None
     _local: threading.local = field(default_factory=threading.local, repr=False)
 
     def db(self):
@@ -140,6 +141,54 @@ def queue_work(deps: JobDeps) -> int:
     return criadas
 
 
+def reindex_vault(deps: JobDeps) -> int:
+    """Reindexa as notas cujo arquivo mudou desde a última indexação.
+
+    O markdown é a fonte da verdade: se você editar uma nota no editor, a busca
+    precisa acompanhar — senão ela responde com o texto antigo, calada.
+    """
+    from pathlib import Path
+
+    from aide.storage import vault
+    from aide.storage.search import guardar_vetor, indexar
+
+    conn = deps.db()
+    linhas = conn.execute(
+        "SELECT id, title, path, updated_at FROM notes WHERE deleted_at IS NULL"
+    ).fetchall()
+
+    reindexadas = 0
+    for row in linhas:
+        caminho = Path(row["path"])
+        if not caminho.exists():
+            log.warning("arquivo da nota %s sumiu: %s", row["id"], caminho)
+            continue
+
+        modificado = datetime.fromtimestamp(caminho.stat().st_mtime, tz=deps.now.tzinfo)
+        indexado = datetime.fromisoformat(row["updated_at"]).replace(tzinfo=deps.now.tzinfo)
+        if modificado <= indexado:
+            continue
+
+        corpo = vault.corpo_de(caminho)
+        indexar(conn, row["id"], row["title"], corpo)
+        conn.execute("UPDATE notes SET updated_at = datetime('now') WHERE id = ?", (row["id"],))
+
+        embedder = getattr(deps, "embedder", None)
+        if embedder is not None:
+            try:
+                vetor = embedder.embed_one(f"{row['title']}\n\n{corpo}")
+            except Exception:
+                log.warning("embedding da nota %s falhou", row["id"], exc_info=True)
+                vetor = None
+            if vetor:
+                guardar_vetor(conn, "note", row["id"], f"{row['title']}\n\n{corpo}", vetor)
+
+        reindexadas += 1
+        log.info("nota %s reindexada (arquivo mudou)", row["id"])
+
+    return reindexadas
+
+
 JOBS = {
     "tick_reminders": tick_reminders,
     "eval_conditions": eval_conditions,
@@ -147,6 +196,7 @@ JOBS = {
     "briefing_noite": briefing_noite,
     "revisao_semanal": revisao_semanal,
     "queue_work": queue_work,
+    "reindex_vault": reindex_vault,
 }
 
 
@@ -191,6 +241,7 @@ def build_scheduler(deps: JobDeps):
     add(eval_conditions, "eval_conditions", trigger="interval",
         hours=cfg.regras_a_cada_horas)
     add(queue_work, "queue_work", trigger="interval", hours=cfg.regras_a_cada_horas)
+    add(reindex_vault, "reindex_vault", trigger="interval", minutes=15)
 
     manha_h, manha_m = _hora(cfg.briefing_manha)
     add(briefing_manha, "briefing_manha", trigger="cron", hour=manha_h, minute=manha_m)

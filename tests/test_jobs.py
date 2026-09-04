@@ -167,3 +167,41 @@ def test_queue_work_nao_duplica(ctx, registry):
 def test_queue_work_ignora_projeto_ativo(ctx, registry):
     registry.call("tasks.create", {"title": "X", "project": "vivo"}, ctx)
     assert jobs.queue_work(_deps(ctx)) == 0
+
+
+def _nota_no_vault(ctx, registry, tmp_path):
+    object.__setattr__(ctx.config, "vault_dir", tmp_path / "v")
+    return registry.call("notes.create", {"title": "Carro", "body": "trocar o óleo"}, ctx).data
+
+
+def test_reindex_pega_arquivo_editado_a_mao(ctx, registry, tmp_path):
+    """Editar o .md no editor sem isto deixa a busca respondendo o texto antigo."""
+    import os
+    import time
+    from pathlib import Path
+
+    from aide.storage.search import buscar_texto
+
+    nota = _nota_no_vault(ctx, registry, tmp_path)
+    caminho = Path(nota["path"])
+    caminho.write_text(caminho.read_text() + "\n\ntambém revisar a suspensão\n")
+    # garante mtime posterior ao updated_at gravado
+    futuro = time.time() + 60
+    os.utime(caminho, (futuro, futuro))
+
+    assert buscar_texto(ctx.conn, "suspensão") == []
+    assert jobs.reindex_vault(_deps(ctx)) == 1
+    assert buscar_texto(ctx.conn, "suspensão")
+
+
+def test_reindex_ignora_arquivo_intocado(ctx, registry, tmp_path):
+    _nota_no_vault(ctx, registry, tmp_path)
+    assert jobs.reindex_vault(_deps(ctx)) == 0
+
+
+def test_reindex_sobrevive_a_arquivo_sumido(ctx, registry, tmp_path):
+    from pathlib import Path
+
+    nota = _nota_no_vault(ctx, registry, tmp_path)
+    Path(nota["path"]).unlink()
+    assert jobs.reindex_vault(_deps(ctx)) == 0  # não levanta

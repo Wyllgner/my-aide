@@ -415,9 +415,10 @@ def _deps(por_thread: bool = False) -> JobDeps:
         deps = JobDeps(config=config, llm=None, notifier=notifier,
                        conn_factory=lambda: connect(config.db_path))
         deps.llm = build_provider(config, usage_sink=record_usage(deps.db))
+        deps.embedder = _embedder(config, deps.db)
         return deps
     return JobDeps(config=config, llm=build_provider(config, usage_sink=record_usage(conn)),
-                   notifier=notifier, conn=conn)
+                   notifier=notifier, conn=conn, embedder=_embedder(config, conn))
 
 
 def _start_bot(config, deps):
@@ -429,7 +430,7 @@ def _start_bot(config, deps):
 
     # deps.db (sem parênteses): a conexão é resolvida na thread que usar
     bot = TelegramBot(config, deps.conn_factory, deps.llm, registry,
-                      embedder=_embedder(config, deps.db))
+                      embedder=deps.embedder)
     bot.start()
     console.print(f"[green]telegram no ar[/] [dim]chats {list(config.telegram.allowed_chat_ids)}[/]")
     return bot
