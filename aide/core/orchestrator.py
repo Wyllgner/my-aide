@@ -68,11 +68,14 @@ class Orchestrator:
         ctx = ToolContext(config=self.config, conn=self.conn, actor=self.actor,
                           embedder=self.embedder)
 
+        log.info("[%s] pergunta: %s", self.actor, text)
+
         for _ in range(MAX_ITERATIONS):
             response = self.llm.complete(messages, tools=schemas, purpose="chat")
 
             if not response.tool_calls:
                 reply = response.text.strip()
+                log.info("[%s] resposta: %s", self.actor, reply)
                 self._save(Message(role="assistant", content=reply))
                 return reply
 
@@ -108,9 +111,11 @@ class Orchestrator:
             return Message(role="tool", tool_call_id=call.get("id"),
                            content=json.dumps(payload, ensure_ascii=False))
 
-        log.debug("tool %s(%s)", name, args)
         result = self.registry.call(name, args, ctx)
-        return Message(role="tool", tool_call_id=call.get("id"), content=result.to_json())
+        resumo = result.to_json()
+        log.info("[%s] tool %s(%s) -> %s%s", ctx.actor, name, args,
+                 "ok" if result.ok else "ERRO ", resumo[:300])
+        return Message(role="tool", tool_call_id=call.get("id"), content=resumo)
 
 
 def record_usage(conn_or_factory):

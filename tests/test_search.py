@@ -129,3 +129,28 @@ def test_ordem_correta_com_pergunta_natural(ctx, registry, tmp_path):
     registry.call("notes.create", {"title": "Dentista", "body": "marcar limpeza do dente"}, ctx)
     achados = buscar(ctx.conn, "problema no meu dente")
     assert achados[0]["title"] == "Dentista"
+
+
+def test_piso_corta_resultado_sem_relacao(ctx, registry, tmp_path):
+    """Sem piso a busca devolve a nota 'menos distante' e o assessor mente com convicção."""
+    from aide.storage.search import buscar_semantico
+
+    object.__setattr__(ctx.config, "vault_dir", tmp_path / "v")
+    ctx.embedder = FakeEmbedder({"dentista": 1})
+    registry.call("notes.create", {"title": "Dentista", "body": "marcar limpeza"}, ctx)
+
+    # vetor ortogonal ao da nota: nada a ver
+    assert buscar_semantico(ctx.conn, [1.0, 0.0, 0.0]) == []
+    # vetor igual: acha
+    assert buscar_semantico(ctx.conn, [0.0, 1.0, 0.0])
+
+
+def test_piso_e_ajustavel(ctx, registry, tmp_path):
+    from aide.storage.search import buscar_semantico, guardar_vetor
+
+    object.__setattr__(ctx.config, "vault_dir", tmp_path / "v")
+    registry.call("notes.create", {"title": "X", "body": "y"}, ctx)
+    guardar_vetor(ctx.conn, "note", 1, "y", [0.6, 0.8, 0.0])
+
+    assert buscar_semantico(ctx.conn, [1.0, 0.0, 0.0], piso=0.9) == []
+    assert buscar_semantico(ctx.conn, [1.0, 0.0, 0.0], piso=0.5)

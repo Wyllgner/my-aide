@@ -53,8 +53,9 @@ def _nota(ctx: ToolContext, id_ou_titulo):
 @registry.register(
     name="notes.create",
     description=(
-        "Guarda uma nota no vault. Use para o que a pessoa quer registrar e "
-        "reler depois — ideias, decisões, resumos — não para tarefas."
+        "Guarda uma nota no vault. É a tool certa quando a pessoa diz 'anota', "
+        "'guarda', 'registra' ou 'salva isso' — mesmo que o texto fale de algo "
+        "a fazer. Nota é informação para reler; tarefa é compromisso com prazo."
     ),
     parameters={
         "type": "object",

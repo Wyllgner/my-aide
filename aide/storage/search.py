@@ -81,6 +81,17 @@ def buscar_texto(conn, consulta: str, limite: int = 10,
 
 K_RRF = 60  # constante usual do reciprocal rank fusion
 
+# Cosseno abaixo disto é ruído. Sem piso, a busca semântica sempre devolve algo
+# — a nota "menos distante" — e o assessor responde com convicção sobre algo
+# que não tem relação com a pergunta. Melhor dizer que não achou.
+#
+# Calibrado medindo o text-embedding-3-small com perguntas reais:
+#   acerto verdadeiro   0,53 a 0,56
+#   ruído               0,16 a 0,37
+# 0,45 separa os dois com folga. Se aparecer falso negativo, baixe; se voltar
+# a responder sobre nota sem relação, suba.
+PISO_SIMILARIDADE = 0.45
+
 
 def guardar_vetor(conn, ref_type: str, ref_id: int, chunk: str, vetor: list[float]) -> None:
     from aide.llm.embeddings import empacotar
@@ -95,7 +106,8 @@ def guardar_vetor(conn, ref_type: str, ref_id: int, chunk: str, vetor: list[floa
 
 
 def buscar_semantico(conn, vetor: list[float], limite: int = 10,
-                     incluir_privadas: bool = True) -> list[dict]:
+                     incluir_privadas: bool = True,
+                     piso: float = PISO_SIMILARIDADE) -> list[dict]:
     """Força bruta sobre todos os vetores.
 
     Com algumas milhares de notas isto roda em milissegundos; um índice
@@ -114,6 +126,8 @@ def buscar_semantico(conn, vetor: list[float], limite: int = 10,
     achados = []
     for row in conn.execute(sql).fetchall():
         score = similaridade(vetor, desempacotar(row["vector"]))
+        if score < piso:
+            continue
         achados.append({"id": row["ref_id"], "title": row["title"], "tags": row["tags"],
                         "trecho": row["chunk"][:200], "score": score})
     achados.sort(key=lambda a: a["score"], reverse=True)

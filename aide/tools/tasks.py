@@ -61,7 +61,12 @@ def _require(ctx: ToolContext, task_id: int):
 
 @registry.register(
     name="tasks.create",
-    description="Cria uma tarefa. Converta prazos relativos com time.now antes de chamar.",
+    description=(
+        "Cria uma tarefa: algo a fazer, com ou sem prazo. Use quando a pessoa "
+        "diz 'me lembra', 'preciso' ou 'tenho que'. Se ela disse 'anota' ou "
+        "'guarda', é nota (notes.create), não tarefa. "
+        "Converta prazos relativos com time.now antes de chamar."
+    ),
     parameters={
         "type": "object",
         "properties": {

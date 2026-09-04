@@ -479,6 +479,45 @@ def checar() -> None:
 
 
 @app.command()
+def historico(limite: int = typer.Option(15, "--limite", "-n"),
+              canal: str = typer.Option(None, "--canal", "-c",
+                                        help="cli | telegram")) -> None:
+    """Mostra as últimas conversas e as tools que foram chamadas."""
+    _, conn = _open_db()
+
+    sql = ("SELECT id, session_id, role, content, tool_calls, created_at"
+           "  FROM messages WHERE role IN ('user', 'assistant')")
+    params: list = []
+    if canal == "telegram":
+        sql += " AND session_id LIKE 'tg%'"
+    elif canal == "cli":
+        sql += " AND session_id NOT LIKE 'tg%'"
+    sql += " ORDER BY id DESC LIMIT ?"
+    params.append(limite)
+
+    linhas = list(reversed(conn.execute(sql, params).fetchall()))
+    if not linhas:
+        console.print("[dim]Nada no histórico.[/]")
+        return
+
+    for m in linhas:
+        cor = "cyan" if m["role"] == "user" else "green"
+        seta = "›" if m["role"] == "user" else "‹"
+        origem = "tg" if m["session_id"].startswith("tg") else "cli"
+        texto = (m["content"] or "").strip() or "[dim](chamou tools)[/]"
+        console.print(f"[dim]{m['created_at']} {origem}[/] [{cor}]{seta}[/] {texto}")
+
+    console.print("\n[dim]tools chamadas recentemente:[/]")
+    for a in conn.execute(
+        "SELECT ts, actor, tool, args_json, ok FROM audit ORDER BY id DESC LIMIT ?",
+        (limite,),
+    ).fetchall():
+        marca = "[green]ok[/]" if a["ok"] else "[red]erro[/]"
+        console.print(f"[dim]{a['ts']} {a['actor']}[/] {marca} "
+                      f"[cyan]{a['tool']}[/] [dim]{a['args_json']}[/]")
+
+
+@app.command()
 def usage(days: int = 7) -> None:
     """Quanto o assessor consumiu de LLM nos últimos dias."""
     _, conn = _open_db()
