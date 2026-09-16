@@ -22,6 +22,7 @@ AJUDA = """Comandos:
 /hoje - o que precisa de você hoje
 /atrasadas - o que passou do prazo
 /checar - o que as regras estão vendo
+/gastos - quanto você gastou esse mês
 /notas - suas notas mais recentes
 /buscar <termo> - procura nas notas por significado
 /perfil - o que eu sei sobre você
@@ -32,6 +33,8 @@ Fora isso, é só falar normalmente:
 "me lembra de pagar o IPVA sexta"
 "adia o dentista pra semana que vem"
 "já paguei o boleto"
+"10,50 almoço com a KA"
+"quanto gastei esse mês?"
 "anota que decidimos cortar 20% da nuvem"
 "o que eu tinha anotado sobre o carro?"
 """
@@ -161,6 +164,17 @@ class TelegramBot:
                 f"#{t['id']} {t['title']}" + (f" — {t['due_at']}" if t["due_at"] else "")
                 for t in tarefas
             )
+        if nome == "gastos":
+            dados = self.registry.call(
+                "expenses.summary", {"periodo": resto or "mes"}, self._ctx(chat_id))
+            if not dados.ok:
+                return dados.error
+            if not dados.data["quantos"]:
+                return "Nenhum gasto nesse período."
+            linhas = [f"{dados.data['total']} em {dados.data['quantos']} lançamento(s)"]
+            linhas += [f"  {c['category']}: {c['valor']}"
+                       for c in dados.data["por_categoria"]]
+            return "\n".join(linhas)
         if nome == "notas":
             linhas = self.registry.call("notes.list", {"limit": 15}, self._ctx(chat_id)).data
             if not linhas:
