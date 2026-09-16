@@ -34,7 +34,8 @@ def caminho_para(vault_dir: Path, titulo: str, criada_em: datetime) -> Path:
 
 def escrever(caminho: Path, titulo: str, corpo: str, tags: str | None,
              criada_em: datetime) -> None:
-    caminho.parent.mkdir(parents=True, exist_ok=True)
+    # nota é texto puro com a sua vida dentro; nasce só sua
+    caminho.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     frontmatter = [
         SEPARADOR,
         f"title: {titulo}",
@@ -44,6 +45,7 @@ def escrever(caminho: Path, titulo: str, corpo: str, tags: str | None,
         frontmatter.append(f"tags: [{tags}]")
     frontmatter.append(SEPARADOR)
     caminho.write_text("\n".join(frontmatter) + "\n\n" + corpo.strip() + "\n")
+    caminho.chmod(0o600)
 
 
 def acrescentar(caminho: Path, texto: str, quando: datetime) -> None:
