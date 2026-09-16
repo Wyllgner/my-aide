@@ -807,12 +807,7 @@ def fila(ctx, registry, agora: datetime) -> str:
                 + '<p class="vazio">Fila vazia. Enfileire com '
                   '<span class="mono">myaide enfileirar "objetivo"</span>.</p>')
 
-    por_status: dict[str, int] = {}
-    for o in ordens:
-        por_status[o["status"]] = por_status.get(o["status"], 0) + 1
-
-    cartoes = ""
-    for o in ordens:
+    def cartao(o: dict) -> str:
         aberta = o["status"] in ("open", "claimed")
         cor = "var(--accent)" if aberta else "var(--faint)"
         resultado = ""
@@ -825,21 +820,43 @@ def fila(ctx, registry, agora: datetime) -> str:
         if o.get("context"):
             contexto_txt = (f'<p style="margin:6px 0 0;font-size:13px;color:var(--faint);'
                             f'line-height:1.5">{escape(o["context"])}</p>')
-        cartoes += (
-            f'<div class="card" style="padding:18px 20px">'
-            f'<div style="display:flex;align-items:baseline;gap:10px">'
-            f'<span class="mono" style="font-size:12px;color:var(--faint)">#{o["id"]}</span>'
-            f'<span style="font-size:15px;font-weight:500">{escape(o["goal"])}</span>'
-            f'<span style="margin-left:auto;font-size:11px;color:{cor};background:'
-            f'{"var(--soft)" if aberta else "#F5F6F8"};padding:3px 9px;'
-            f'border-radius:var(--r-pill)">{escape(ROTULO_STATUS.get(o["status"], o["status"]))}'
-            f'</span></div>{contexto_txt}{resultado}</div>')
+        return (f'<div class="card" style="padding:18px 20px">'
+                f'<div style="display:flex;align-items:baseline;gap:10px">'
+                f'<span class="mono" style="font-size:12px;color:var(--faint)">#{o["id"]}</span>'
+                f'<span style="font-size:15px;font-weight:500">{escape(o["goal"])}</span>'
+                f'<span style="margin-left:auto;font-size:11px;color:{cor};background:'
+                f'{"var(--soft)" if aberta else "#F5F6F8"};padding:3px 9px;'
+                f'border-radius:var(--r-pill)">'
+                f'{escape(ROTULO_STATUS.get(o["status"], o["status"]))}</span></div>'
+                f'{contexto_txt}{resultado}</div>')
 
-    resumo = " · ".join(f'{n} {ROTULO_STATUS.get(s, s)}' for s, n in por_status.items())
+    # Separadas de propósito: uma ordem concluída é registro do que foi feito,
+    # não coisa a fazer. Misturadas, o histórico empurra para baixo o que ainda
+    # espera — e parece que a fila não atualizou.
+    esperando = [o for o in ordens if o["status"] in ("open", "claimed")]
+    passadas = [o for o in ordens if o["status"] not in ("open", "claimed")]
+
+    blocos = ""
+    if esperando:
+        blocos += (f'<p class="eyebrow" style="margin-bottom:12px">Esperando um executor</p>'
+                   f'<div style="display:flex;flex-direction:column;gap:14px;'
+                   f'margin-bottom:28px">{"".join(cartao(o) for o in esperando)}</div>')
+    else:
+        blocos += ('<div class="card" style="padding:22px 24px;margin-bottom:28px">'
+                   '<p style="margin:0;color:var(--muted);line-height:1.6">Nada esperando. '
+                   'O daemon enfileira sozinho quando uma regra pede, ou você enfileira com '
+                   '<span class="mono">myaide enfileirar "objetivo"</span>.</p></div>')
+
+    if passadas:
+        blocos += (f'<p class="eyebrow" style="margin-bottom:12px">Já feitas · {len(passadas)}</p>'
+                   f'<div style="display:flex;flex-direction:column;gap:14px">'
+                   f'{"".join(cartao(o) for o in passadas)}</div>')
+
     return f"""
-{cabecalho("Fila de trabalho", resumo,
+{cabecalho("Fila de trabalho",
+           f"{len(esperando)} esperando · {len(passadas)} no histórico",
            '<p style="margin:0;font-size:12.5px;color:var(--faint);max-width:44ch;'
            'text-align:right;line-height:1.5">O daemon enfileira; um executor externo '
            'faz por MCP e grava o resultado de volta aqui.</p>')}
-<div style="display:flex;flex-direction:column;gap:14px">{cartoes}</div>
+{blocos}
 """
