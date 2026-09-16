@@ -266,19 +266,38 @@ def test_grafico_vazio_nao_parece_quebrado():
     assert graficos.colunas([]).count("<svg") == 1
 
 
+def test_o_eixo_aparece_mesmo_com_a_serie_zerada():
+    """Sem rótulo, uma série toda em zero não diz nem de que período é."""
+    from aide.web import graficos
+
+    saida = graficos.area([("14", 0), ("15", 0), ("16", 0)], 300, 80)
+    assert ">14<" in saida and ">16<" in saida
+
+
+def test_eixo_denso_e_ralo_para_nao_borrar():
+    """14 rótulos lado a lado se encavalam; um sim, um não continua legível."""
+    from aide.web import graficos
+
+    pares = [(f"{d:02d}", d) for d in range(1, 15)]
+    saida = graficos.area(pares, 600, 96)
+    assert ">01<" in saida
+    assert ">02<" not in saida  # pulado
+    assert ">03<" in saida
+
+
 def test_serie_de_um_ponto_nao_estoura():
     """Com um dia só, a divisão por (n-1) seria divisão por zero."""
     from aide.web import graficos
 
-    assert "<svg" in graficos.area([5], 300, 80)
+    assert "<svg" in graficos.area([("16", 5)], 300, 80)
 
 
 def test_cada_gradiente_tem_id_proprio():
     """Dois gráficos com o mesmo id: o segundo herda o gradiente do primeiro."""
     from aide.web import graficos
 
-    a = graficos.area([1, 2, 3], 200, 60)
-    b = graficos.area([3, 2, 1], 200, 60)
+    a = graficos.area([("1", 1), ("2", 2), ("3", 3)], 200, 60)
+    b = graficos.area([("1", 3), ("2", 2), ("3", 1)], 200, 60)
     id_a = a.split('id="')[1].split('"')[0]
     id_b = b.split('id="')[1].split('"')[0]
     assert id_a != id_b
@@ -304,3 +323,70 @@ def test_titulo_de_tarefa_e_escapado(cliente, app, registry):
     html = cliente.get("/hoje").text
     assert "<script>alert(1)</script>" not in html
     assert "&lt;script&gt;" in html
+
+
+# ---------- calendário ----------
+
+def test_o_mes_mostra_o_que_esta_marcado(cliente, app, registry):
+    ctx = app.state.contexto()
+    registry.call("tasks.create", {"title": "Pagar o condomínio",
+                                   "due": "2026-09-20T09:00"}, ctx)
+    html = cliente.get("/calendario").text
+    assert "Pagar o condomínio" in html
+    assert "Setembro" in html or "setembro" in html.lower()
+
+
+def test_a_grade_deixa_o_dia_encolher(cliente):
+    """Item de grid nasce com min-width:auto — a largura do texto sem quebra.
+    Sem min-width:0 a grade transborda e a coluna de domingo sai da tela."""
+    html = cliente.get("/calendario").text
+    assert "min-width:0" in html
+
+
+def test_a_semana_tem_os_sete_dias(cliente):
+    html = cliente.get("/calendario").text
+    for dia in ("SEG", "TER", "QUA", "QUI", "SEX", "SÁB", "DOM"):
+        assert f">{dia}<" in html.upper() or dia.lower() in html
+
+
+def test_junta_tarefa_evento_e_lembrete_no_mesmo_dia(app, registry):
+    """O dia acontece junto: você não separa o que veio da agenda do que anotou."""
+    from zoneinfo import ZoneInfo
+
+    from aide.web import consultas
+
+    tz = ZoneInfo("America/Porto_Velho")
+    ctx = app.state.contexto()
+    conn = ctx.conn
+    registry.call("tasks.create", {"title": "Tarefa", "due": "2026-09-20T09:00"}, ctx)
+    conn.execute("INSERT INTO events (title, start_at, source) "
+                 "VALUES ('Evento', '2026-09-20T14:00-04:00', 'ical')")
+    conn.execute("INSERT INTO reminders (text, fire_at) "
+                 "VALUES ('Lembrete', '2026-09-20T18:00-04:00')")
+
+    dia = consultas.planejado_no_mes(conn, 2026, 9, tz)[20]
+    assert {i["tipo"] for i in dia} == {"tarefa", "evento", "lembrete"}
+
+
+def test_dia_cheio_corta_e_avisa_quantos_faltam(app, registry):
+    """Cabem três marcas no quadrado; empilhar mais rompe a altura da linha."""
+    ctx = app.state.contexto()
+    for nome in ("Dentista", "Mercado", "Oficina", "Contador", "Academia"):
+        ctx.conn.execute("INSERT INTO reminders (text, fire_at) VALUES (?, ?)",
+                         (nome, "2026-09-20T09:00-04:00"))
+
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from aide.web import telas
+
+    html = telas.calendario(ctx, registry,
+                            datetime(2026, 9, 16, 12, tzinfo=ZoneInfo("America/Porto_Velho")))
+    assert "+2" in html
+
+
+def test_mes_sem_nada_ainda_desenha_a_grade(cliente):
+    """A grade é a informação: mostra que a semana está livre."""
+    html = cliente.get("/calendario").text
+    assert "0 compromisso(s) no mês" in html
+    assert html.count("border-radius:12px") > 20
