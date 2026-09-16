@@ -234,3 +234,90 @@ def test_chat_estranho_nao_alcanca_o_banco(ctx, tmp_path):
     bot._tratar(_msg("/perfil", chat_id=99))
     bot._tratar(_msg("o que você sabe sobre mim?", chat_id=99))
     assert bot.enviadas == []
+
+
+# ---------- apagar pelo Telegram ----------
+
+def _pedir_para_apagar(bot, tool="tasks.drop", args=None):
+    """Simula o que o orquestrador faz ao topar uma tool marcada `confirm`."""
+    bot._anotar_confirmacao(42, tool, args or {"id": 1})
+
+
+def test_apagar_pergunta_antes(ctx, tmp_path, registry):
+    """Antes disto o Telegram só sabia dizer 'não autorizado', e ponto."""
+    bot = _bot(ctx, tmp_path)
+    conn = bot._db()
+    conn.execute("INSERT INTO tasks (id, title) VALUES (1, 'Pagar o IPVA')")
+
+    _pedir_para_apagar(bot)
+    pergunta = bot._perguntar(bot._pendentes[42])
+    assert "Pagar o IPVA" in pergunta
+    assert "sim" in pergunta.lower()
+
+
+def test_sim_apaga_de_verdade(ctx, tmp_path):
+    bot = _bot(ctx, tmp_path)
+    conn = bot._db()
+    conn.execute("INSERT INTO tasks (id, title) VALUES (1, 'Pagar o IPVA')")
+    _pedir_para_apagar(bot)
+
+    bot._tratar(_msg("sim"))
+    # tasks.drop marca status, não deleted_at: descartar não é o mesmo que sumir
+    assert conn.execute("SELECT status FROM tasks WHERE id = 1").fetchone()["status"] == "dropped"
+    assert "apaguei" in bot.enviadas[-1][1]
+
+
+def test_qualquer_outra_coisa_cancela(ctx, tmp_path):
+    """O padrão é não apagar: só um sim explícito executa."""
+    bot = _bot(ctx, tmp_path)
+    conn = bot._db()
+    conn.execute("INSERT INTO tasks (id, title) VALUES (1, 'Pagar o IPVA')")
+    _pedir_para_apagar(bot)
+
+    bot._tratar(_msg("melhor não"))
+    assert conn.execute("SELECT status FROM tasks WHERE id = 1").fetchone()["status"] == "open"
+    assert "Cancelado" in bot.enviadas[-1][1]
+
+
+def test_a_confirmacao_caduca(ctx, tmp_path):
+    """Um 'sim' solto meia hora depois não pode apagar o que você esqueceu."""
+    import time
+
+    bot = _bot(ctx, tmp_path)
+    conn = bot._db()
+    conn.execute("INSERT INTO tasks (id, title) VALUES (1, 'Pagar o IPVA')")
+    bot._pendentes[42] = ("tasks.drop", {"id": 1}, time.time() - 999)
+
+    bot._tratar(_msg("sim"))
+    assert conn.execute("SELECT status FROM tasks WHERE id = 1").fetchone()["status"] == "open"
+
+
+def test_o_sim_nao_vai_para_o_modelo(ctx, tmp_path):
+    """Confirmar não é conversa; mandar ao modelo gastaria chamada e poderia virar outra coisa."""
+    llm = FakeLLM()
+    bot = _bot(ctx, tmp_path, llm=llm)
+    bot._db().execute("INSERT INTO tasks (id, title) VALUES (1, 'X')")
+    _pedir_para_apagar(bot)
+
+    bot._tratar(_msg("sim"))
+    assert llm.vistas == []
+
+
+def test_so_o_chat_que_pediu_confirma(ctx, tmp_path):
+    """Pendência é por chat: outro chat não herda o 'sim' alheio."""
+    bot = _bot(ctx, tmp_path, permitidos=(42, 99))
+    conn = bot._db()
+    conn.execute("INSERT INTO tasks (id, title) VALUES (1, 'X')")
+    _pedir_para_apagar(bot)
+
+    bot._tratar(_msg("sim", chat_id=99))
+    assert conn.execute("SELECT status FROM tasks WHERE id = 1").fetchone()["status"] == "open"
+    assert 42 in bot._pendentes
+
+
+def test_a_pergunta_diz_o_que_vai_sumir(ctx, tmp_path):
+    """'tasks.drop {id: 4}' não é pergunta que dá para responder."""
+    bot = _bot(ctx, tmp_path)
+    bot._db().execute("INSERT INTO notes (id, title, path) VALUES (7, 'Laudo médico', '/x')")
+    _pedir_para_apagar(bot, "notes.delete", {"id": 7})
+    assert "Laudo médico" in bot._perguntar(bot._pendentes[42])
