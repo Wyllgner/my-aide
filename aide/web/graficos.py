@@ -116,8 +116,14 @@ def colunas(pares: list[tuple[str, float]], largura: int = 600, altura: int = 96
 
 
 def barras(pares: list[tuple[str, float]], rotulo_px: int = 96,
-           vazio: str = "nada registrado ainda") -> str:
-    """Barras horizontais. Rótulo ao lado, valor no fim — nunca cor sozinha."""
+           vazio: str = "nada registrado ainda", formatar=None) -> str:
+    """Barras horizontais. Rótulo ao lado, valor no fim — nunca cor sozinha.
+
+    `formatar` existe porque o padrão escreve 0.0406 com ponto, e a página
+    inteira escreve vírgula: o número destoar do resto é o mesmo defeito que
+    escrever a data em inglês.
+    """
+    escrever = formatar or (lambda v: f"{v:g}")
     if not pares:
         return f'<p style="margin:0;font-size:12.5px;color:{FRACO}">{escape(vazio)}</p>'
 
@@ -134,8 +140,8 @@ def barras(pares: list[tuple[str, float]], rotulo_px: int = 96,
             f'<div style="flex:1;height:16px;background:{TRILHO};border-radius:5px;overflow:hidden">'
             f'<div style="width:{pc:.1f}%;height:100%;background:{ACENTO};'
             f'opacity:{opac:.2f};border-radius:5px"></div></div>'
-            f'<span class="mono" style="width:38px;text-align:right;font-size:12.5px">'
-            f'{valor:g}</span></div>')
+            f'<span class="mono" style="white-space:nowrap;text-align:right;'
+            f'font-size:12.5px">{escape(escrever(valor))}</span></div>')
     return f'<div style="display:flex;flex-direction:column;gap:7px">{linhas}</div>'
 
 
