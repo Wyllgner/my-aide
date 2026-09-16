@@ -93,38 +93,73 @@ K_RRF = 60  # constante usual do reciprocal rank fusion
 PISO_SIMILARIDADE = 0.45
 
 
-def guardar_vetor(conn, ref_type: str, ref_id: int, chunk: str, vetor: list[float]) -> None:
+def guardar_vetor(conn, ref_type: str, ref_id: int, chunk: str, vetor: list[float],
+                  modelo: str) -> None:
+    """`modelo` é obrigatório de propósito.
+
+    Um vetor sem procedência é pior que nenhum: comparado com o de outro modelo
+    ele devolve 0.0 e some da busca sem reclamar. Com o nome gravado, dá para
+    filtrar e avisar.
+    """
     from aide.llm.embeddings import empacotar
 
     conn.execute(
         "DELETE FROM embeddings WHERE ref_type = ? AND ref_id = ?", (ref_type, ref_id)
     )
     conn.execute(
-        "INSERT INTO embeddings (ref_type, ref_id, chunk, vector) VALUES (?, ?, ?, ?)",
-        (ref_type, ref_id, chunk[:2000], empacotar(vetor)),
+        "INSERT INTO embeddings (ref_type, ref_id, chunk, vector, model)"
+        " VALUES (?, ?, ?, ?, ?)",
+        (ref_type, ref_id, chunk[:2000], empacotar(vetor), modelo),
     )
 
 
-def buscar_semantico(conn, vetor: list[float], limite: int = 10,
-                     incluir_privadas: bool = True,
+def vetores_de_outro_modelo(conn, modelo: str) -> dict[str, int]:
+    """Quantos vetores ficaram para trás, por modelo. Vazio é o estado saudável."""
+    linhas = conn.execute(
+        "SELECT COALESCE(model, 'desconhecido') AS m, COUNT(*) AS n FROM embeddings"
+        " WHERE model IS NOT ? GROUP BY m", (modelo,),
+    ).fetchall()
+    return {r["m"]: r["n"] for r in linhas}
+
+
+def buscar_semantico(conn, vetor: list[float], modelo: str | None = None,
+                     limite: int = 10, incluir_privadas: bool = True,
                      piso: float = PISO_SIMILARIDADE) -> list[dict]:
-    """Força bruta sobre todos os vetores.
+    """Força bruta sobre os vetores do mesmo modelo da consulta.
 
     Com algumas milhares de notas isto roda em milissegundos; um índice
     aproximado só se pagaria numa ordem de grandeza acima.
+
+    O filtro por modelo é o que impede a falha silenciosa: vetor de outro
+    modelo tem outra dimensão, daria 0.0 em toda comparação e sumiria da busca
+    sem um erro sequer. Aqui ele fica de fora explicitamente, e o que ficou
+    para trás é logado com o comando que conserta.
     """
     from aide.llm.embeddings import desempacotar, similaridade
+
+    if modelo is not None:
+        atrasados = vetores_de_outro_modelo(conn, modelo)
+        if atrasados:
+            log.warning(
+                "%s vetor(es) de outro modelo (%s) ignorados; a busca semântica só "
+                "enxerga %s. Rode `myaide reindexar` para regerá-los.",
+                sum(atrasados.values()), ", ".join(atrasados), modelo,
+            )
 
     sql = (
         "SELECT e.ref_id, e.chunk, e.vector, n.title, n.tags, n.private"
         "  FROM embeddings e JOIN notes n ON n.id = e.ref_id"
         " WHERE e.ref_type = 'note' AND n.deleted_at IS NULL"
     )
+    parametros: list = []
+    if modelo is not None:
+        sql += " AND e.model = ?"
+        parametros.append(modelo)
     if not incluir_privadas:
         sql += " AND n.private = 0"
 
     achados = []
-    for row in conn.execute(sql).fetchall():
+    for row in conn.execute(sql, parametros).fetchall():
         score = similaridade(vetor, desempacotar(row["vector"]))
         if score < piso:
             continue
@@ -174,6 +209,6 @@ def buscar(conn, consulta: str, embedder=None, limite: int = 5,
     if not vetor:
         return texto[:limite]
 
-    semantico = buscar_semantico(conn, vetor, limite=limite * 2,
-                                 incluir_privadas=incluir_privadas)
+    semantico = buscar_semantico(conn, vetor, modelo=getattr(embedder, "modelo", None),
+                                 limite=limite * 2, incluir_privadas=incluir_privadas)
     return fundir([texto, semantico], limite=limite)
