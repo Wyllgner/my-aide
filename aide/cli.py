@@ -136,6 +136,24 @@ def doctor() -> None:
          "configurado" if config.telegram.usable
          else "desligado (opcional — veja 'myaide telegram-id')"),
     ]
+
+    # vetor de outro modelo não dá erro: ele só some da busca. Se ninguém
+    # perguntar, ninguém descobre — então o doctor pergunta.
+    if config.db_path.exists():
+        from aide.llm.embeddings import MODELO_PADRAO
+        from aide.storage.search import vetores_de_outro_modelo
+
+        conn = connect(config.db_path)
+        migrate(conn)
+        atrasados = vetores_de_outro_modelo(conn, MODELO_PADRAO)
+        total = sum(atrasados.values())
+        checks.append((
+            "embeddings", not total,
+            f"{MODELO_PADRAO}" if not total
+            else f"{total} de outro modelo ({', '.join(atrasados)}) — rode `myaide reindexar`",
+        ))
+        conn.close()
+
     table = Table(show_header=False, box=None)
     for name, ok, detail in checks:
         table.add_row("[green]ok[/]" if ok else "[red]--[/]", name, f"[dim]{detail}[/]")
@@ -309,7 +327,8 @@ def reindexar() -> None:
             if vetor:
                 from aide.storage.search import guardar_vetor
 
-                guardar_vetor(conn, "note", row["id"], f"{row['title']}\n\n{corpo}", vetor)
+                guardar_vetor(conn, "note", row["id"], f"{row['title']}\n\n{corpo}", vetor,
+                              ctx.embedder.modelo)
         reindexadas += 1
 
     console.print(f"[green]{reindexadas} nota(s) reindexada(s)[/]"
