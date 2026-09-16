@@ -59,7 +59,7 @@ class ScheduleConfig:
 
 @dataclass(frozen=True)
 class Config:
-    timezone: str = "America/Sao_Paulo"
+    timezone: str = "America/Porto_Velho"
     locale: str = "pt-BR"
     user_name: str = ""
     llm: LLMConfig = field(default_factory=LLMConfig)
@@ -115,7 +115,7 @@ def load_config(root: Path | None = None) -> Config:
         return value if value.is_absolute() else root / value
 
     return Config(
-        timezone=raw.get("timezone", "America/Sao_Paulo"),
+        timezone=raw.get("timezone", "America/Porto_Velho"),
         locale=raw.get("locale", "pt-BR"),
         user_name=raw.get("user_name", ""),
         llm=llm,

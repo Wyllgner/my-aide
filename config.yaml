@@ -1,7 +1,7 @@
 # Configuração do my-aide. Valores locais/sensíveis vão em config.local.yaml,
 # que sobrepõe este arquivo e é ignorado pelo git.
 
-timezone: America/Sao_Paulo
+timezone: America/Porto_Velho
 locale: pt-BR
 user_name: Wyllgner
 
