@@ -96,11 +96,13 @@ def criar_app(config=None, conn_factory=None):
     # existe cai no aviso dentro da moldura, em vez de deixar a rota em 404.
     MONTADORES = {"painel": conteudo.painel, "hoje": conteudo.hoje,
                   "calendario": conteudo.calendario, "gastos": conteudo.gastos,
-                  "custo": conteudo.custo}
+                  "custo": conteudo.custo, "conversas": conteudo.conversas,
+                  "ferramentas": conteudo.ferramentas, "auditoria": conteudo.auditoria}
 
     def _registrar(tela):
         @app.get(tela.caminho, response_class=HTMLResponse, name=tela.slug)
-        def ver(periodo: str = "mes") -> str:
+        def ver(periodo: str = "mes", sessao: str | None = None,
+                ator: str | None = None) -> str:
             montar = MONTADORES.get(tela.slug)
             if montar is None:
                 return render(cabecalho(tela.rotulo) + em_breve(tela.rotulo), tela.slug)
@@ -108,7 +110,13 @@ def criar_app(config=None, conn_factory=None):
             agora = now_in(config.timezone)
             # o período é query string: continua sendo GET, e o histórico do
             # navegador guarda o recorte que você estava olhando
-            extra = {"periodo": periodo} if tela.slug == "gastos" else {}
+            extra = {}
+            if tela.slug == "gastos":
+                extra = {"periodo": periodo}
+            elif tela.slug == "conversas":
+                extra = {"sessao": sessao}
+            elif tela.slug == "auditoria":
+                extra = {"ator": ator}
             return render(montar(ctx, toolbelt, agora, **extra), tela.slug)
 
     for tela in TELAS:

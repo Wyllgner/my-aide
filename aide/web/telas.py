@@ -7,6 +7,7 @@ from html import escape
 
 from aide.channels.formato import por_extenso, quando
 from aide.web import consultas, graficos
+from aide.web.icones import icone
 from aide.web.paginas import cabecalho
 
 
@@ -451,4 +452,202 @@ def custo(ctx, registry, agora: datetime) -> str:
   {_cartao("Para quê", graficos.barras(consultas.uso_por_finalidade(ctx.conn),
                                        rotulo_px=112, vazio="nada registrado ainda"))}
 </div>
+"""
+
+
+# ---------- conversas ----------
+
+def _hora_curta(iso: str, agora: datetime) -> str:
+    try:
+        momento = datetime.fromisoformat(iso.replace(" ", "T"))
+    except ValueError:
+        return iso[:16]
+    if momento.tzinfo is None:
+        from datetime import UTC
+        momento = momento.replace(tzinfo=UTC)
+    momento = momento.astimezone(agora.tzinfo)
+    if momento.date() == agora.date():
+        return momento.strftime("%H:%M")
+    return momento.strftime("%d/%m")
+
+
+def _bolha_tool(chamada: dict) -> str:
+    """A chamada de ferramenta aparece no meio da conversa, que é onde ela acontece."""
+    fn = chamada.get("function") or {}
+    nome = fn.get("name", "?")
+    args = (fn.get("arguments") or "").strip()
+    if len(args) > 120:
+        args = args[:117] + "…"
+    return (f'<div class="card" style="padding:7px 14px;border-radius:16px 16px 16px 4px;'
+            f'align-self:flex-start;max-width:74%;display:flex;align-items:center;gap:9px">'
+            f'{icone("ferramentas", 14)}'
+            f'<span class="mono" style="font-size:11.5px;color:var(--muted)">{escape(nome)}</span>'
+            f'<span style="font-size:11.5px;color:var(--faint);overflow:hidden;'
+            f'text-overflow:ellipsis;white-space:nowrap">{escape(args)}</span></div>')
+
+
+def conversas(ctx, registry, agora: datetime, sessao: str | None = None) -> str:
+    sessoes = consultas.conversas(ctx.conn)
+    if not sessoes:
+        return (cabecalho("Conversas")
+                + '<p class="vazio">Nenhuma conversa ainda. Fale com ele por '
+                  '<span class="mono">myaide chat</span> ou pelo Telegram.</p>')
+
+    escolhida = sessao if any(s["sessao"] == sessao for s in sessoes) else sessoes[0]["sessao"]
+
+    itens = ""
+    for s in sessoes:
+        ativa = s["sessao"] == escolhida
+        fundo = "background:var(--soft);" if ativa else ""
+        cor = "var(--accent)" if ativa else "var(--ink)"
+        fraco = "#A8674F" if ativa else "var(--faint)"
+        abertura = s["abertura"] or "(sem texto)"
+        itens += (
+            f'<a href="/conversas?sessao={escape(s["sessao"])}" style="display:block;'
+            f'padding:11px 12px;border-radius:var(--r-inner);{fundo}color:{cor}">'
+            f'<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">'
+            f'<span style="font-size:13.5px;font-weight:{"600" if ativa else "450"};'
+            f'overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{escape(abertura)}</span>'
+            f'<span class="mono" style="font-size:11px;color:{fraco};flex-shrink:0">'
+            f'{escape(_hora_curta(s["fim"], agora))}</span></div>'
+            f'<p style="margin:3px 0 0;font-size:12.5px;color:{fraco}">'
+            f'{escape(s["canal"])} · {s["mensagens"]} mensagem(ns)</p></a>')
+
+    baloes = ""
+    for m in consultas.mensagens(ctx.conn, escolhida):
+        if m["role"] == "user":
+            baloes += (f'<div style="align-self:flex-end;max-width:62%;background:var(--ink);'
+                       f'color:#FFF;padding:12px 16px;border-radius:16px 16px 4px 16px;'
+                       f'font-size:14.5px;line-height:1.5;white-space:pre-wrap">'
+                       f'{escape(m["content"] or "")}</div>')
+        elif m["role"] == "assistant":
+            if m["tool_calls"]:
+                import json
+                try:
+                    for chamada in json.loads(m["tool_calls"]):
+                        baloes += _bolha_tool(chamada)
+                except (ValueError, TypeError):
+                    pass
+            if (m["content"] or "").strip():
+                baloes += (f'<div class="card" style="align-self:flex-start;max-width:74%;'
+                           f'padding:14px 18px;border-radius:16px 16px 16px 4px;'
+                           f'font-size:14.5px;line-height:1.55;white-space:pre-wrap">'
+                           f'{escape(m["content"])}</div>')
+
+    return f"""
+{cabecalho("Conversas", f"{len(sessoes)} sessão(ões)")}
+<div style="display:grid;grid-template-columns:300px minmax(0,1fr);gap:20px;align-items:start">
+  <div class="card" style="padding:10px;display:flex;flex-direction:column;gap:2px;
+                           max-height:74vh;overflow:auto">{itens}</div>
+  <div class="card" style="padding:24px;display:flex;flex-direction:column;gap:14px;
+                           max-height:74vh;overflow:auto">
+    <p class="mono" style="margin:0;font-size:11.5px;color:var(--faint)">
+      sessão {escape(escolhida)}</p>
+    {baloes or '<p class="vazio">Sessão sem mensagens legíveis.</p>'}
+    <p style="margin:auto 0 0;padding-top:14px;border-top:1px solid var(--line);
+              font-size:12.5px;color:var(--faint)">
+      Só leitura. Para conversar, use <span class="mono">myaide chat</span> ou o Telegram.</p>
+  </div>
+</div>
+"""
+
+
+# ---------- ferramentas ----------
+
+# A família é o nome técnico da tool; o ícone tem nome de tela. Sem este mapa
+# o `icone()` cai no traço genérico, e metade dos cartões fica sem símbolo.
+ICONE_DA_FAMILIA = {
+    "tasks": "hoje", "notes": "notas", "expenses": "gastos", "memory": "memoria",
+    "people": "pessoas", "events": "calendario", "reminders": "hoje",
+    "work_orders": "fila", "usage": "custo", "time": "calendario",
+}
+
+
+def ferramentas(ctx, registry, agora: datetime) -> str:
+    import collections
+
+    uso = dict(consultas.uso_das_ferramentas(ctx.conn, limite=50))
+
+    familias: dict[str, list] = collections.OrderedDict()
+    for nome in registry.names():
+        familias.setdefault(nome.split(".")[0], []).append(registry.get(nome))
+
+    cartoes = ""
+    for familia, tools in sorted(familias.items(), key=lambda kv: -uso.get(kv[0], 0)):
+        linhas = ""
+        for tool in sorted(tools, key=lambda t: t.name):
+            confirma = ('<span class="pill" style="font-size:10px">confirma</span>'
+                        if tool.safety == "confirm" else "")
+            descricao = tool.description.split(".")[0][:110]
+            linhas += (
+                f'<div style="display:flex;align-items:baseline;gap:10px;padding:7px 0;'
+                f'border-top:1px solid var(--line-soft)">'
+                f'<span class="mono" style="font-size:12.5px;flex-shrink:0">'
+                f'{escape(tool.name.split(".", 1)[1])}</span>{confirma}'
+                f'<span style="font-size:12px;color:var(--faint);margin-left:auto;'
+                f'text-align:right;line-height:1.35">{escape(descricao)}</span></div>')
+        cartoes += (
+            f'<div class="card" style="padding:16px 18px">'
+            f'<div style="display:flex;align-items:center;gap:9px;margin-bottom:10px;'
+            f'color:var(--accent)">{icone(ICONE_DA_FAMILIA.get(familia, "ferramentas"), 17)}'
+            f'<span class="mono" style="font-size:13.5px;font-weight:500;color:var(--ink)">'
+            f'{escape(familia)}</span>'
+            f'<span style="margin-left:auto;font-size:11.5px;color:var(--faint)">'
+            f'{uso.get(familia, 0)} uso(s)</span></div>{linhas}</div>')
+
+    confirmam = sum(1 for n in registry.names() if registry.get(n).safety == "confirm")
+    return f"""
+{cabecalho("Ferramentas", f"{len(registry.names())} registradas · {len(familias)} famílias",
+           f'<p style="margin:0;font-size:13px;color:var(--muted);max-width:52ch;'
+           f'text-align:right;line-height:1.5">Tudo que ele sabe fazer. As '
+           f'{confirmam} marcadas <span style="color:var(--accent);font-weight:600">confirma</span> '
+           f'pedem autorização e não são expostas por MCP.</p>')}
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;
+            align-items:start">{cartoes}</div>
+"""
+
+
+# ---------- auditoria ----------
+
+def auditoria(ctx, registry, agora: datetime, ator: str | None = None) -> str:
+    atores = consultas.atores_da_auditoria(ctx.conn)
+    if not atores:
+        return cabecalho("Auditoria") + '<p class="vazio">Nada registrado ainda.</p>'
+
+    if ator and ator not in {a for a, _ in atores}:
+        ator = None
+    linhas_db = consultas.auditoria(ctx.conn, limite=150, ator=ator)
+
+    filtros = (f'<a href="/auditoria" style="font-size:12.5px;padding:5px 12px;'
+               f'border-radius:var(--r-pill);'
+               f'{"background:var(--soft);font-weight:600" if not ator else "color:var(--muted)"}">'
+               f'todos</a>')
+    for nome, total in atores:
+        marcado = nome == ator
+        estilo = ("background:var(--soft);font-weight:600" if marcado else "color:var(--muted)")
+        filtros += (f'<a href="/auditoria?ator={escape(nome)}" style="font-size:12.5px;'
+                    f'padding:5px 12px;border-radius:var(--r-pill);{estilo}">'
+                    f'{escape(nome)} <span class="mono">{total}</span></a>')
+
+    linhas = ""
+    for r in linhas_db:
+        falhou = not r["ok"]
+        resumo = (r["result_summary"] or "")[:150]
+        linhas += (
+            f'<div class="linha" style="padding:9px 18px;align-items:baseline">'
+            f'<span class="mono" style="font-size:11.5px;color:var(--faint);width:80px;'
+            f'flex-shrink:0">{escape(_hora_curta(r["ts"], agora))}</span>'
+            f'<span style="font-size:11px;color:var(--muted);background:#F5F6F8;'
+            f'padding:2px 8px;border-radius:var(--r-pill);flex-shrink:0">'
+            f'{escape(r["actor"])}</span>'
+            f'<span class="mono" style="font-size:12.5px;width:170px;flex-shrink:0;'
+            f'color:{"var(--accent)" if falhou else "var(--ink)"}">{escape(r["tool"])}</span>'
+            f'<span style="font-size:12px;color:var(--faint);overflow:hidden;'
+            f'text-overflow:ellipsis;white-space:nowrap">{escape(resumo)}</span></div>')
+
+    total_geral = sum(n for _, n in atores)
+    return f"""
+{cabecalho("Auditoria", f"{total_geral} chamadas registradas · mostrando as 150 últimas")}
+<div style="display:flex;gap:6px;flex-wrap:wrap;margin:-14px 0 16px">{filtros}</div>
+<div class="card"><div>{linhas or '<p class="vazio">Nada deste ator.</p>'}</div></div>
 """
