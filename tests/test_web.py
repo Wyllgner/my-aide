@@ -725,3 +725,53 @@ def test_nenhum_entry_point_aponta_para_a_gui():
     texto = (Path(__file__).parent.parent / "pyproject.toml").read_text()
     assert "myaide-gui" not in texto
     assert "pyside6" not in texto.lower()
+
+
+def test_tarefa_descartada_sai_do_calendario(cliente, app, registry):
+    """`tasks.drop` marca status, não apaga a linha. Filtrar só por deleted_at
+    deixava a tarefa ocupando o dia depois de você tê-la descartado."""
+    ctx = app.state.contexto()
+    fica = registry.call("tasks.create", {"title": "Condomínio",
+                                          "due": "2026-09-20T09:00"}, ctx).data
+    sai = registry.call("tasks.create", {"title": "Descartada",
+                                         "due": "2026-09-21T09:00"}, ctx).data
+    registry.call("tasks.drop", {"id": sai["id"]}, ctx)
+
+    html = cliente.get("/calendario").text
+    assert "Condomínio" in html
+    assert "Descartada" not in html
+    assert fica["id"]
+
+
+def test_tarefa_concluida_continua_no_calendario(cliente, app, registry):
+    """Saber o que foi feito naquele dia é metade do que o mês conta."""
+    ctx = app.state.contexto()
+    feita = registry.call("tasks.create", {"title": "Boleto da luz",
+                                           "due": "2026-09-18T09:00"}, ctx).data
+    registry.call("tasks.complete", {"id": feita["id"]}, ctx)
+    assert "Boleto da luz" in cliente.get("/calendario").text
+
+
+def test_a_fila_separa_o_que_espera_do_que_ja_foi(cliente, app, registry):
+    """Misturadas, o histórico empurra para baixo o que ainda espera — e
+    parece que a fila não atualizou."""
+    ctx = app.state.contexto()
+    feita = registry.call("work_orders.create", {"goal": "Já feita"}, ctx).data
+    registry.call("work_orders.complete", {"id": feita["id"],
+                                           "result_summary": "ok"}, ctx)
+    registry.call("work_orders.create", {"goal": "Ainda esperando"}, ctx)
+
+    html = cliente.get("/fila").text
+    assert "Esperando um executor" in html
+    assert "Já feitas" in html
+    assert html.index("Ainda esperando") < html.index("Já feita")
+
+
+def test_fila_sem_nada_esperando_explica(cliente, app, registry):
+    ctx = app.state.contexto()
+    ordem = registry.call("work_orders.create", {"goal": "Antiga"}, ctx).data
+    registry.call("work_orders.complete", {"id": ordem["id"], "result_summary": "x"}, ctx)
+
+    html = cliente.get("/fila").text
+    assert "Nada esperando" in html
+    assert "0 esperando · 1 no histórico" in html
