@@ -24,6 +24,12 @@ class ToolContext:
     actor: str = "cli"
     # opcional: sem ele a busca funciona só por palavra-chave
     embedder: Any = None
+    # Conteúdo marcado `private` nunca sai da máquina. O resultado de uma tool
+    # volta para o modelo — e, por MCP, para um programa de terceiro — então o
+    # padrão é negar: quem quiser ver o privado tem de pedir, e só o terminal
+    # do dono pede. Isto não é argumento de tool: se estivesse no schema, o
+    # próprio modelo poderia ligar.
+    ver_privado: bool = False
 
 
 @dataclass
