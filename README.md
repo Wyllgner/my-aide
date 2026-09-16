@@ -79,17 +79,20 @@ myaide job briefing_manha            # roda um job agora, para testar
 
 Para rodar sempre, veja `deploy/my-aide.service`.
 
-## Interface gráfica
+## Interface web
 
 ```bash
-.venv/bin/pip install -e ".[gui]"
-myaide-gui
+.venv/bin/pip install -e ".[web]"
 ```
 
-App nativo (PySide6): sidebar com contador de pendência, captura rápida em
-"Hoje", clique duplo conclui, busca semântica nas notas, e a conversa como uma
-aba — não como a tela inteira. Fechar a janela some para a bandeja; o assessor
-continua ali.
+Sobe junto com o daemon, em **http://127.0.0.1:8787**. Doze telas de leitura:
+painel com gráficos, hoje, calendário do mês, conversas, notas, gastos, custo e
+saldo, memória, pessoas, fila, ferramentas e auditoria.
+
+**Só leitura, e só nesta máquina.** A página mostra tudo — inclusive o que está
+marcado como privado — e não pede senha; o que a torna segura é escutar em
+127.0.0.1, e por isso o endereço é constante no código, não configuração.
+Concluir tarefa, lançar gasto e conversar continuam sendo CLI, Telegram ou MCP.
 
 ## Telegram (opcional, mas é o que faz ele te alcançar)
 
