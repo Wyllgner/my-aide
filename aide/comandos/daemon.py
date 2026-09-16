@@ -30,6 +30,31 @@ def _deps(por_thread: bool = False) -> JobDeps:
                    notifier=notifier, conn=conn, embedder=_embedder(config, conn))
 
 
+def _start_web(config):
+    """Sobe a interface web, se as dependências do extra `web` estiverem lá.
+
+    Ausentes não é erro: quem usa só CLI e Telegram não precisa instalar
+    FastAPI para o daemon rodar.
+    """
+    from aide.storage import connect, migrate
+
+    def conn_factory():
+        conn = connect(config.db_path)
+        migrate(conn)
+        return conn
+
+    try:
+        from aide.web.servidor import ServidorWeb
+    except ImportError:
+        console.print("[dim]interface web desligada[/] "
+                      "[dim](instale com: pip install -e \".[web]\")[/]")
+        return None
+
+    servidor = ServidorWeb(config, conn_factory)
+    servidor.start()
+    return servidor
+
+
 def _start_bot(config, deps):
     """Sobe o bot do Telegram junto do daemon, se estiver configurado."""
     if not config.telegram.usable:
@@ -58,6 +83,7 @@ def serve(log_level: str = typer.Option("INFO", "--log-level")) -> None:
     scheduler = build_scheduler(deps)
     scheduler.start()
     bot = _start_bot(config, deps)
+    web = _start_web(config)
 
     table = Table(title="Jobs agendados", box=None, title_justify="left")
     table.add_column("job", style="cyan")
@@ -70,8 +96,12 @@ def serve(log_level: str = typer.Option("INFO", "--log-level")) -> None:
     for sinal in (signal.SIGINT, signal.SIGTERM):
         signal.signal(sinal, lambda *_: parar.set())
 
+    if web:
+        console.print(f"[dim]interface web em[/] {web.url}")
     console.print("[dim]daemon no ar · ctrl-c para sair[/]")
     parar.wait()
+    if web:
+        web.stop()
     if bot:
         bot.stop()
     scheduler.shutdown(wait=False)
