@@ -22,6 +22,10 @@ BACKOFF_MAXIMO = 300
 # solto meia hora depois não pode apagar algo que você já esqueceu ter pedido.
 VALIDADE_CONFIRMACAO = 120
 
+# Teto por confirmação. Um "sim" não deveria conseguir varrer a base inteira
+# de uma vez, e uma pergunta com trinta itens ninguém lê antes de responder.
+LIMITE_CONFIRMACAO = 12
+
 SIM = {"sim", "s", "confirmo", "confirmar", "pode", "pode apagar", "isso",
        "ok", "claro", "apaga", "apagar"}
 
@@ -61,8 +65,12 @@ class TelegramBot:
         self._parar = threading.Event()
         self._sessoes: dict[int, str] = {}
         self._recusados: set[int] = set()
-        # chat -> (nome da tool, argumentos, quando foi pedida)
-        self._pendentes: dict[int, tuple[str, dict, float]] = {}
+        # chat -> (lista de (tool, args), quando o pedido começou)
+        #
+        # Lista e não uma ação só: o modelo devolve várias chamadas numa volta
+        # quando você pede "apaga o IPVA e a CNH", e guardar só a última
+        # apagaria uma e perderia a outra caladamente.
+        self._pendentes: dict[int, tuple[list[tuple[str, dict]], float]] = {}
         self._conn = None
 
     # ---------- ciclo de vida ----------
@@ -169,14 +177,21 @@ class TelegramBot:
         pedido = self._pendentes.get(chat_id)
         if not pedido:
             return None
-        if time.time() - pedido[2] > VALIDADE_CONFIRMACAO:
+        if time.time() - pedido[1] > VALIDADE_CONFIRMACAO:
             self._pendentes.pop(chat_id, None)
             return None
         return pedido
 
     def _anotar_confirmacao(self, chat_id: int, nome: str, args: dict) -> bool:
-        """Chamado pelo orquestrador. Sempre nega agora e guarda para perguntar."""
-        self._pendentes[chat_id] = (nome, dict(args), time.time())
+        """Chamado pelo orquestrador. Sempre nega agora e guarda para perguntar.
+
+        Acumula: uma volta do modelo pode pedir várias exclusões, e todas têm
+        de caber na mesma pergunta.
+        """
+        acoes, desde = self._pendentes.get(chat_id) or ([], time.time())
+        if (nome, args) not in [(n, a) for n, a in acoes]:
+            acoes.append((nome, dict(args)))
+        self._pendentes[chat_id] = (acoes[:LIMITE_CONFIRMACAO], desde)
         return False
 
     def _descrever(self, nome: str, args: dict) -> str:
@@ -193,25 +208,53 @@ class TelegramBot:
                 return f'"{linha[coluna]}" (#{alvo})'
         return f"{alvo}" if alvo else nome
 
-    def _perguntar(self, pedido: tuple[str, dict, float]) -> str:
-        nome, args, _ = pedido
-        verbo = {"memory.forget": "esquecer", "people.remove": "parar de acompanhar"}.get(
-            nome, "apagar")
-        return (f"Quer mesmo {verbo} {self._descrever(nome, args)}?\n"
-                f"Responda sim para confirmar. Qualquer outra coisa cancela.")
+    @staticmethod
+    def _verbo(nome: str) -> str:
+        return {"memory.forget": "esquecer",
+                "people.remove": "parar de acompanhar"}.get(nome, "apagar")
+
+    RODAPE = "Responda sim para confirmar. Qualquer outra coisa cancela."
+
+    def _perguntar(self, pedido) -> str:
+        acoes, _ = pedido
+        if len(acoes) == 1:
+            nome, args = acoes[0]
+            pergunta = f"Quer mesmo {self._verbo(nome)} {self._descrever(nome, args)}?"
+        else:
+            linhas = "\n".join(f"· {self._verbo(n)} {self._descrever(n, a)}"
+                               for n, a in acoes)
+            # a interrogação fica no fim da frase, não sozinha depois da lista
+            pergunta = f"Quer mesmo fazer estas {len(acoes)} coisas?\n{linhas}"
+        return f"{pergunta}\n\n{self.RODAPE}"
 
     def _responder_confirmacao(self, chat_id: int, texto: str, pedido) -> str:
-        nome, args, _ = pedido
+        acoes, _ = pedido
         self._pendentes.pop(chat_id, None)
 
         if texto.strip().lower().rstrip("!.") not in SIM:
             return "Cancelado, não apaguei nada."
 
-        resultado = self.registry.call(nome, args, self._ctx(chat_id))
-        if not resultado.ok:
-            return f"Não deu: {resultado.error}"
-        log.info("[telegram:%s] %s confirmado e executado", chat_id, nome)
-        return f"Pronto, apaguei {self._descrever(nome, args)}."
+        feitas, falhas = [], []
+        for nome, args in acoes:
+            # descreve antes de executar: depois de apagada, a linha some e
+            # a resposta viraria "apaguei 4" em vez do nome da tarefa
+            descricao = self._descrever(nome, args)
+            resultado = self.registry.call(nome, args, self._ctx(chat_id))
+            if resultado.ok:
+                feitas.append(descricao)
+                log.info("[telegram:%s] %s confirmado e executado", chat_id, nome)
+            else:
+                falhas.append(f"{descricao}: {resultado.error}")
+
+        partes = []
+        if feitas:
+            partes.append("Pronto, apaguei " + (feitas[0] if len(feitas) == 1
+                                                else "\n" + "\n".join(f"· {f}" for f in feitas)))
+        if falhas:
+            # o que deu certo já está feito; calar as falhas faria você achar
+            # que apagou tudo
+            partes.append("Não consegui:\n" + "\n".join(f"· {f}" for f in falhas))
+        return "\n\n".join(partes) if partes else "Nada a fazer."
 
     def _ctx(self, chat_id: int):
         from aide.tools.registry import ToolContext
