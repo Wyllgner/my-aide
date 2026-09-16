@@ -557,19 +557,26 @@ def test_a_tool_que_pede_confirmacao_e_marcada(cliente):
 
 # ---------- auditoria ----------
 
-def test_auditoria_mostra_e_filtra_por_ator(cliente, app, registry):
-    ctx = app.state.contexto()
-    registry.call("tasks.create", {"title": "X"}, ctx)
+def test_auditoria_mostra_e_filtra_por_ator(cliente, app, registry, ctx):
+    """A web não entra na trilha, então a linha aqui vem do terminal."""
+    from aide.tools.registry import ToolContext
+
+    terminal = ToolContext(config=ctx.config, conn=app.state.conn_factory(), actor="cli")
+    registry.call("tasks.create", {"title": "X"}, terminal)
+
     html = cliente.get("/auditoria").text
     assert "tasks.create" in html
-    assert "web" in html
+    assert "cli" in html
 
-    so_web = cliente.get("/auditoria?ator=web").text
-    assert "tasks.create" in so_web
+    filtrada = cliente.get("/auditoria?ator=cli").text
+    assert "tasks.create" in filtrada
 
 
-def test_ator_inexistente_volta_para_todos(cliente, app, registry):
-    registry.call("tasks.create", {"title": "X"}, app.state.contexto())
+def test_ator_inexistente_volta_para_todos(cliente, app, registry, ctx):
+    from aide.tools.registry import ToolContext
+
+    registry.call("tasks.create", {"title": "X"},
+                  ToolContext(config=ctx.config, conn=app.state.conn_factory(), actor="cli"))
     assert cliente.get("/auditoria?ator=fulano").status_code == 200
 
 
@@ -659,3 +666,62 @@ def test_a_fila_mostra_o_resultado_gravado(cliente, app, registry):
 
 def test_fila_vazia_diz_como_enfileirar(cliente):
     assert "myaide enfileirar" in cliente.get("/fila").text
+
+
+# ---------- a trilha de auditoria ----------
+
+def test_abrir_uma_tela_nao_escreve_na_auditoria(cliente, app, registry):
+    """A trilha registra o que aconteceu; olhar uma lista não é um acontecimento.
+
+    A janela antiga em PySide6 chegou a responder por 413 de 572 linhas
+    consultando em laço, e uma aba deixada aberta faria o mesmo.
+    """
+    conn = app.state.conn_factory()
+    registry.call("tasks.create", {"title": "X"}, app.state.contexto())
+    antes = conn.execute("SELECT COUNT(*) c FROM audit").fetchone()["c"]
+
+    for rota in ("/", "/hoje", "/gastos", "/notas", "/ferramentas"):
+        assert cliente.get(rota).status_code == 200
+
+    depois = conn.execute("SELECT COUNT(*) c FROM audit").fetchone()["c"]
+    assert depois == antes
+
+
+def test_quem_escreve_continua_sendo_registrado(ctx, registry):
+    """Não é um interruptor geral: o padrão audita, e só quem lê desliga."""
+    from aide.tools.registry import ToolContext
+
+    assert ToolContext(config=ctx.config, conn=ctx.conn).auditar is True
+
+    registry.call("tasks.create", {"title": "Do terminal"}, ctx)
+    linhas = ctx.conn.execute("SELECT tool FROM audit").fetchall()
+    assert any(r["tool"] == "tasks.create" for r in linhas)
+
+
+def test_a_web_so_pode_calar_a_trilha_porque_nao_escreve(app):
+    """Se ganhar uma rota de escrita, esta suposição cai — e o teste de
+    métodos quebra antes, que é a ordem certa de descobrir."""
+    assert app.state.contexto().auditar is False
+    metodos = set()
+    for rota in app.routes:
+        metodos |= getattr(rota, "methods", set())
+    assert metodos <= {"GET", "HEAD"}
+
+
+# ---------- a janela antiga ----------
+
+def test_a_gui_pyside6_nao_existe_mais():
+    """Substituída pela web em 16/09. Ficar meia viva seria pior que as duas."""
+    import importlib.util
+    from pathlib import Path
+
+    assert importlib.util.find_spec("aide.gui") is None
+    assert not (Path(__file__).parent.parent / "aide" / "gui").exists()
+
+
+def test_nenhum_entry_point_aponta_para_a_gui():
+    from pathlib import Path
+
+    texto = (Path(__file__).parent.parent / "pyproject.toml").read_text()
+    assert "myaide-gui" not in texto
+    assert "pyside6" not in texto.lower()
