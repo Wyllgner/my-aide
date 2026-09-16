@@ -212,3 +212,95 @@ def test_valor_usa_virgula_como_a_pagina_toda():
 
     assert usd(4.21) == "US$ 4,21"
     assert usd(0) == "US$ 0,00"
+
+
+# ---------- painel e hoje ----------
+
+@pytest.fixture
+def com_dados(app, registry):
+    """Um estado parecido com o real: atrasada, de hoje, nota, gasto."""
+    ctx = app.state.contexto()
+    registry.call("tasks.create", {"title": "Pagar o IPVA", "due": "2020-01-01T09:00"}, ctx)
+    registry.call("tasks.create", {"title": "Comprar pão"}, ctx)
+    registry.call("expenses.add", {"amount": "10,50", "description": "almoço",
+                                   "category": "alimentação"}, ctx)
+    ctx.conn.execute("INSERT INTO llm_usage (model, purpose, input_tokens, output_tokens)"
+                     " VALUES ('gpt-5-nano', 'chat', 100, 10)")
+    return app
+
+
+def test_o_painel_mostra_os_numeros_reais(cliente, com_dados):
+    html = cliente.get("/").text
+    assert "Tarefas abertas" in html
+    assert "Regras disparando" in html
+    assert "R$ 10,50" in html
+
+
+def test_hoje_lista_o_que_passou_do_prazo(cliente, com_dados):
+    html = cliente.get("/hoje").text
+    assert "Pagar o IPVA" in html
+    assert "há" in html and "dias" in html
+
+
+def test_a_data_do_cabecalho_e_em_portugues(cliente):
+    """strftime depende do locale do sistema; numa máquina em C sai 'Wednesday'."""
+    html = cliente.get("/").text
+    for ingles in ("Monday", "Wednesday", "September", "January"):
+        assert ingles not in html
+    assert " de " in html
+
+
+def test_o_grafico_aparece_mesmo_sem_dado(cliente, app):
+    """Decisão do dono: a moldura fica, para não mudar de forma quando encher."""
+    html = cliente.get("/").text
+    assert "Chamadas de LLM por dia" in html
+    assert "Tarefas criadas por dia" in html
+    assert "nenhuma chamada nos últimos 14 dias" in html
+
+
+def test_grafico_vazio_nao_parece_quebrado():
+    from aide.web import graficos
+
+    vazio = graficos.area([], 300, 80, vazio="sem uso ainda")
+    assert "<svg" in vazio and "sem uso ainda" in vazio
+    assert graficos.colunas([]).count("<svg") == 1
+
+
+def test_serie_de_um_ponto_nao_estoura():
+    """Com um dia só, a divisão por (n-1) seria divisão por zero."""
+    from aide.web import graficos
+
+    assert "<svg" in graficos.area([5], 300, 80)
+
+
+def test_cada_gradiente_tem_id_proprio():
+    """Dois gráficos com o mesmo id: o segundo herda o gradiente do primeiro."""
+    from aide.web import graficos
+
+    a = graficos.area([1, 2, 3], 200, 60)
+    b = graficos.area([3, 2, 1], 200, 60)
+    id_a = a.split('id="')[1].split('"')[0]
+    id_b = b.split('id="')[1].split('"')[0]
+    assert id_a != id_b
+
+
+def test_a_serie_inclui_dia_sem_nada(app):
+    """Dia vazio precisa virar zero; sumir da série encurta o eixo e mente."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from aide.web import consultas
+
+    agora = datetime(2026, 9, 16, 12, 0, tzinfo=ZoneInfo("America/Porto_Velho"))
+    serie = consultas.chamadas_por_dia(app.state.conn_factory(), agora, dias=14)
+    assert len(serie) == 14
+    assert all(v == 0 for _, v in serie)
+
+
+def test_titulo_de_tarefa_e_escapado(cliente, app, registry):
+    ctx = app.state.contexto()
+    registry.call("tasks.create", {"title": "<script>alert(1)</script>",
+                                   "due": "2020-01-01T09:00"}, ctx)
+    html = cliente.get("/hoje").text
+    assert "<script>alert(1)</script>" not in html
+    assert "&lt;script&gt;" in html
