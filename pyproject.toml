@@ -15,7 +15,7 @@ dependencies = [
 
 [project.optional-dependencies]
 gui = ["pyside6-essentials>=6.7"]
-dev = ["pytest>=8.0", "ruff>=0.5", "pyside6-essentials>=6.7"]
+dev = ["pytest>=8.0", "ruff>=0.5", "pyside6-essentials>=6.7", "pip-audit>=2.7"]
 
 [project.scripts]
 myaide = "aide.cli:app"

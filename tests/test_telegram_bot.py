@@ -180,3 +180,57 @@ def test_comando_perfil(ctx, tmp_path, registry):
     bot._conn = ctx.conn
     bot._tratar(_msg("/perfil"))
     assert "6h da manhã" in bot.enviadas[0][1]
+
+
+# ---------- a porta remota ----------
+
+SEGREDO = "TERAPIA-QUINTA-FEIRA"
+
+
+def _com_privado(bot):
+    """Semeia conteúdo privado pelo caminho do dono, no mesmo banco do bot."""
+    from aide.tools.registry import ToolContext
+
+    conn = bot._db()
+    dono = ToolContext(config=bot.config, conn=conn, actor="cli", ver_privado=True)
+    tool_registry.call("tasks.create", {"title": f"Tarefa {SEGREDO}", "private": True}, dono)
+    tool_registry.call("tasks.create", {"title": "Comprar pão", "due": "2020-01-01T09:00"}, dono)
+    tool_registry.call("memory.save", {"kind": "profile", "key": "saude",
+                                       "value": f"perfil {SEGREDO}", "private": True}, dono)
+    return bot
+
+
+def test_telegram_nao_recebe_tarefa_privada(ctx, tmp_path):
+    """O Telegram é rede de terceiro: privado não atravessa."""
+    bot = _com_privado(_bot(ctx, tmp_path))
+    bot._tratar(_msg("/atrasadas"))
+    resposta = bot.enviadas[0][1]
+    assert "Comprar pão" in resposta
+    assert SEGREDO not in resposta
+
+
+def test_telegram_nao_recebe_perfil_privado(ctx, tmp_path):
+    bot = _com_privado(_bot(ctx, tmp_path))
+    bot._tratar(_msg("/perfil"))
+    assert SEGREDO not in bot.enviadas[0][1]
+
+
+def test_contexto_do_bot_nega_privado_por_padrao(ctx, tmp_path):
+    bot = _bot(ctx, tmp_path)
+    assert bot._ctx(42).ver_privado is False
+
+
+def test_allowlist_vazia_recusa_todo_mundo(ctx, tmp_path):
+    """Falhar fechado: `enabled` sem lista não pode virar bot aberto."""
+    bot = _bot(ctx, tmp_path, permitidos=())
+    bot._tratar(_msg("/hoje", chat_id=42))
+    bot._tratar(_msg("/hoje", chat_id=99))
+    assert bot.enviadas == []
+
+
+def test_chat_estranho_nao_alcanca_o_banco(ctx, tmp_path):
+    """A allowlist é checada antes de qualquer leitura."""
+    bot = _com_privado(_bot(ctx, tmp_path))
+    bot._tratar(_msg("/perfil", chat_id=99))
+    bot._tratar(_msg("o que você sabe sobre mim?", chat_id=99))
+    assert bot.enviadas == []
