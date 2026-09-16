@@ -18,6 +18,10 @@
 
 set -euo pipefail
 
+# O destino guarda o banco inteiro em texto e as notas. Sem isto o umask do
+# desktop (002) faria o dump nascer legível por qualquer conta da máquina.
+umask 077
+
 ORIGEM="${MY_AIDE_DIR:-$HOME/Documentos/acessor}"
 DESTINO="${MY_AIDE_BACKUP_DIR:-$HOME/.local/share/my-aide-backup}"
 PYTHON="$ORIGEM/.venv/bin/python"
@@ -65,7 +69,9 @@ PYEOF
 
 # --delete para uma nota apagada sumir também do backup; o histórico do git é
 # quem guarda a versão anterior.
-rsync -a --delete "$ORIGEM/vault/" "$DESTINO/vault/"
+# --chmod porque -a preserva a permissão da origem: uma nota frouxa lá viraria
+# uma nota frouxa aqui. O destino impõe a sua, não herda a do vizinho.
+rsync -a --delete --chmod=D700,F600 "$ORIGEM/vault/" "$DESTINO/vault/"
 
 git -C "$DESTINO" add -A
 if git -C "$DESTINO" diff --cached --quiet; then
