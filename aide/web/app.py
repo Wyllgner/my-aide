@@ -94,7 +94,8 @@ def criar_app(config=None, conn_factory=None):
 
     # Cada tela é uma função (ctx, registry, agora) -> html. A que ainda não
     # existe cai no aviso dentro da moldura, em vez de deixar a rota em 404.
-    MONTADORES = {"painel": conteudo.painel, "hoje": conteudo.hoje}
+    MONTADORES = {"painel": conteudo.painel, "hoje": conteudo.hoje,
+                  "calendario": conteudo.calendario}
 
     def _registrar(tela):
         @app.get(tela.caminho, response_class=HTMLResponse, name=tela.slug)
