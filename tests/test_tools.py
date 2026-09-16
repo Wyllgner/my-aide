@@ -65,3 +65,71 @@ def test_privada_nao_entra_no_contexto(ctx, registry):
     snapshot = state_snapshot(ctx.conn, ctx.config)
     assert "Publica" in snapshot.content
     assert "Segredo" not in snapshot.content
+
+
+# ---------- tasks.update ----------
+
+def test_update_altera_campos(ctx, registry):
+    tarefa = registry.call("tasks.create", {"title": "Rascunho"}, ctx).data
+    atualizada = registry.call("tasks.update", {
+        "id": tarefa["id"], "title": "Definitivo", "priority": 1,
+        "project": "viagem", "tags": "carro", "notes": "levar documento",
+    }, ctx)
+    assert atualizada.ok
+    assert atualizada.data["title"] == "Definitivo"
+    assert atualizada.data["priority_label"] == "urgente"
+    assert atualizada.data["project"] == "viagem"
+
+
+def test_update_marca_que_a_tarefa_foi_tocada(ctx, registry):
+    """`last_touched_at` não é enfeite: projeto_parado e zumbi dependem dele.
+
+    Sem isto, mexer numa tarefa não a tirava da mira das regras e o assessor
+    cobrava algo que você acabou de tratar.
+    """
+    def tocada_em():
+        return ctx.conn.execute(
+            "SELECT last_touched_at FROM tasks WHERE id = ?", (tarefa["id"],)
+        ).fetchone()["last_touched_at"]
+
+    tarefa = registry.call("tasks.create", {"title": "X"}, ctx).data
+    # envelhece a marca: é o estado que faz as regras cobrarem
+    ctx.conn.execute("UPDATE tasks SET last_touched_at = '2026-01-01 00:00' WHERE id = ?",
+                     (tarefa["id"],))
+    assert tocada_em() == "2026-01-01 00:00"
+
+    registry.call("tasks.update", {"id": tarefa["id"], "notes": "andei nisso"}, ctx)
+    assert tocada_em() > "2026-01-01 00:00"
+
+
+def test_update_remove_o_prazo_com_string_vazia(ctx, registry):
+    tarefa = registry.call(
+        "tasks.create", {"title": "X", "due": "2026-09-20T09:00"}, ctx).data
+    assert tarefa["due_at"]
+    limpa = registry.call("tasks.update", {"id": tarefa["id"], "due": ""}, ctx)
+    assert limpa.data["due_at"] is None
+
+
+def test_update_rejeita_prazo_que_nao_e_iso(ctx, registry):
+    tarefa = registry.call("tasks.create", {"title": "X"}, ctx).data
+    erro = registry.call("tasks.update", {"id": tarefa["id"], "due": "amanhã"}, ctx)
+    assert not erro.ok
+    assert "ISO 8601" in erro.error
+
+
+def test_update_sem_campo_nenhum_reclama(ctx, registry):
+    tarefa = registry.call("tasks.create", {"title": "X"}, ctx).data
+    vazio = registry.call("tasks.update", {"id": tarefa["id"]}, ctx)
+    assert not vazio.ok
+    assert "nada para alterar" in vazio.error
+
+
+def test_update_em_tarefa_inexistente_falha(ctx, registry):
+    assert not registry.call("tasks.update", {"id": 999, "title": "X"}, ctx).ok
+
+
+def test_update_nao_ressuscita_tarefa_apagada(ctx, registry):
+    tarefa = registry.call("tasks.create", {"title": "X"}, ctx).data
+    ctx.conn.execute("UPDATE tasks SET deleted_at = datetime('now') WHERE id = ?",
+                     (tarefa["id"],))
+    assert not registry.call("tasks.update", {"id": tarefa["id"], "title": "Y"}, ctx).ok

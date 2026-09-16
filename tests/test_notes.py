@@ -143,3 +143,39 @@ def test_reindexar_reconstroi_do_arquivo(ctx, registry, tmp_path):
     corpo = vault.corpo_de(Path(nota["path"]))
     indexar(ctx.conn, nota["id"], "X", corpo)
     assert buscar_texto(ctx.conn, "original")
+
+
+# ---------- notes.list ----------
+
+def test_lista_notas_da_mais_recente_para_a_mais_antiga(ctx, registry, tmp_path):
+    object.__setattr__(ctx.config, "vault_dir", tmp_path / "v")
+    for titulo in ("Primeira", "Segunda", "Terceira"):
+        registry.call("notes.create", {"title": titulo, "body": "x"}, ctx)
+    # updated_at tem resolução de segundos: sem separar, a ordem fica empatada
+    ctx.conn.execute("UPDATE notes SET updated_at = '2026-01-0' || id || ' 00:00'")
+
+    titulos = [n["title"] for n in registry.call("notes.list", {}, ctx).data]
+    assert titulos == ["Terceira", "Segunda", "Primeira"]
+
+
+def test_lista_respeita_o_limite(ctx, registry, tmp_path):
+    object.__setattr__(ctx.config, "vault_dir", tmp_path / "v")
+    for i in range(5):
+        registry.call("notes.create", {"title": f"N{i}", "body": "x"}, ctx)
+    assert len(registry.call("notes.list", {"limit": 2}, ctx).data) == 2
+
+
+def test_lista_filtra_por_tag(ctx, registry, tmp_path):
+    object.__setattr__(ctx.config, "vault_dir", tmp_path / "v")
+    registry.call("notes.create", {"title": "Com", "body": "x", "tags": "carro,viagem"}, ctx)
+    registry.call("notes.create", {"title": "Sem", "body": "x", "tags": "trabalho"}, ctx)
+
+    achadas = registry.call("notes.list", {"tag": "carro"}, ctx).data
+    assert [n["title"] for n in achadas] == ["Com"]
+
+
+def test_lista_esconde_nota_apagada(ctx, registry, tmp_path):
+    object.__setattr__(ctx.config, "vault_dir", tmp_path / "v")
+    registry.call("notes.create", {"title": "Alvo", "body": "x"}, ctx)
+    ctx.conn.execute("UPDATE notes SET deleted_at = datetime('now')")
+    assert registry.call("notes.list", {}, ctx).data == []
