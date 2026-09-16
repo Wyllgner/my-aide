@@ -9,9 +9,10 @@ class FakeEmbedder:
 
     EIXOS = ("dinheiro", "saude", "codigo")
 
-    def __init__(self, mapa=None, erro=None):
+    def __init__(self, mapa=None, erro=None, modelo="fake-embed-1"):
         self.mapa = mapa or {}
         self.erro = erro
+        self.modelo = modelo
 
     def _vetor(self, texto):
         texto = texto.lower()
@@ -93,7 +94,7 @@ def test_reindexar_substitui_o_vetor(ctx, registry, tmp_path):
     object.__setattr__(ctx.config, "vault_dir", tmp_path / "v")
     ctx.embedder = FakeEmbedder({"x": 0})
     registry.call("notes.create", {"title": "X", "body": "um"}, ctx)
-    guardar_vetor(ctx.conn, "note", 1, "outro", [0.0, 1.0, 0.0])
+    guardar_vetor(ctx.conn, "note", 1, "outro", [0.0, 1.0, 0.0], "fake-embed-1")
     total = ctx.conn.execute(
         "SELECT COUNT(*) c FROM embeddings WHERE ref_id = 1").fetchone()["c"]
     assert total == 1
@@ -150,7 +151,88 @@ def test_piso_e_ajustavel(ctx, registry, tmp_path):
 
     object.__setattr__(ctx.config, "vault_dir", tmp_path / "v")
     registry.call("notes.create", {"title": "X", "body": "y"}, ctx)
-    guardar_vetor(ctx.conn, "note", 1, "y", [0.6, 0.8, 0.0])
+    guardar_vetor(ctx.conn, "note", 1, "y", [0.6, 0.8, 0.0], "fake-embed-1")
 
     assert buscar_semantico(ctx.conn, [1.0, 0.0, 0.0], piso=0.9) == []
     assert buscar_semantico(ctx.conn, [1.0, 0.0, 0.0], piso=0.5)
+
+
+def test_vetor_de_outro_modelo_fica_fora_da_busca(ctx, registry, tmp_path):
+    """O bug que isto fecha: trocar de modelo calava a busca sem um erro sequer.
+
+    Dimensões diferentes dão similaridade 0.0, então a nota sumia do resultado
+    e o assessor respondia como se ela não existisse.
+    """
+    from aide.storage.search import buscar_semantico
+
+    object.__setattr__(ctx.config, "vault_dir", tmp_path / "v")
+    ctx.embedder = FakeEmbedder({"dentista": 1}, modelo="modelo-antigo")
+    registry.call("notes.create", {"title": "Dentista", "body": "marcar limpeza"}, ctx)
+
+    # o mesmo modelo continua achando
+    assert buscar_semantico(ctx.conn, [0.0, 1.0, 0.0], modelo="modelo-antigo")
+    # outro modelo não compara com vetor que não é dele
+    assert buscar_semantico(ctx.conn, [0.0, 1.0, 0.0], modelo="modelo-novo") == []
+    # sem informar modelo o comportamento antigo se mantém
+    assert buscar_semantico(ctx.conn, [0.0, 1.0, 0.0])
+
+
+def test_vetores_de_outro_modelo_sao_contados(ctx, registry, tmp_path):
+    """É o que o doctor usa para quebrar o silêncio antes de alguém buscar."""
+    from aide.storage.search import vetores_de_outro_modelo
+
+    object.__setattr__(ctx.config, "vault_dir", tmp_path / "v")
+    ctx.embedder = FakeEmbedder({"x": 0}, modelo="modelo-antigo")
+    registry.call("notes.create", {"title": "X", "body": "um"}, ctx)
+
+    assert vetores_de_outro_modelo(ctx.conn, "modelo-antigo") == {}
+    assert vetores_de_outro_modelo(ctx.conn, "modelo-novo") == {"modelo-antigo": 1}
+
+
+def test_guardar_vetor_registra_o_modelo(ctx, registry, tmp_path):
+    object.__setattr__(ctx.config, "vault_dir", tmp_path / "v")
+    ctx.embedder = FakeEmbedder({"x": 0}, modelo="modelo-antigo")
+    registry.call("notes.create", {"title": "X", "body": "um"}, ctx)
+
+    linha = ctx.conn.execute("SELECT model FROM embeddings WHERE ref_id = 1").fetchone()
+    assert linha["model"] == "modelo-antigo"
+
+
+def test_reindexar_troca_o_vetor_para_o_modelo_novo(ctx, registry, tmp_path):
+    """Reindexar é o conserto: o vetor velho sai e a busca volta a enxergar."""
+    from aide.storage.search import buscar_semantico, guardar_vetor
+
+    object.__setattr__(ctx.config, "vault_dir", tmp_path / "v")
+    ctx.embedder = FakeEmbedder({"x": 0}, modelo="modelo-antigo")
+    registry.call("notes.create", {"title": "X", "body": "um"}, ctx)
+    assert buscar_semantico(ctx.conn, [1.0, 0.0, 0.0], modelo="modelo-novo") == []
+
+    guardar_vetor(ctx.conn, "note", 1, "um", [1.0, 0.0, 0.0], "modelo-novo")
+
+    assert buscar_semantico(ctx.conn, [1.0, 0.0, 0.0], modelo="modelo-novo")
+    assert ctx.conn.execute("SELECT COUNT(*) c FROM embeddings").fetchone()["c"] == 1
+
+
+def test_busca_avisa_quando_ha_vetor_de_outro_modelo(ctx, registry, tmp_path, caplog):
+    """O conserto de verdade: a falha deixa de ser muda.
+
+    Com dimensões diferentes a similaridade é 0.0 e a nota some do resultado —
+    o comportamento antigo era esse silêncio. O resultado vazio continua (não
+    há como comparar vetores de modelos diferentes), mas agora ele vem com o
+    motivo e o comando que resolve.
+    """
+    import logging
+
+    from aide.storage.search import buscar_semantico, guardar_vetor
+
+    object.__setattr__(ctx.config, "vault_dir", tmp_path / "v")
+    registry.call("notes.create", {"title": "Dentista", "body": "limpeza"}, ctx)
+    # vetor de 3 dimensões, como o modelo antigo gerava
+    guardar_vetor(ctx.conn, "note", 1, "limpeza", [0.0, 1.0, 0.0], "modelo-antigo")
+
+    with caplog.at_level(logging.WARNING, logger="aide.storage.search"):
+        # consulta do modelo novo, com outra dimensão
+        assert buscar_semantico(ctx.conn, [0.0, 1.0, 0.0, 0.0], modelo="modelo-novo") == []
+
+    assert "modelo-antigo" in caplog.text
+    assert "myaide reindexar" in caplog.text
