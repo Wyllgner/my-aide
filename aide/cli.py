@@ -9,11 +9,21 @@ assunto. Importar cada um aqui é o que os registra no `app` — o decorador
 
 from __future__ import annotations
 
-from aide.comandos import conversa, daemon, fila, notas, pessoas, relatorios, setup, tarefas
+from aide.comandos import (
+    conversa,
+    daemon,
+    fila,
+    gastos,
+    notas,
+    pessoas,
+    relatorios,
+    setup,
+    tarefas,
+)
 from aide.comandos.base import _embedder, app, console
 
 # os módulos acima são importados pelo efeito colateral de registrar comandos;
 # nomeá-los aqui é o que impede o linter de apagar o import e a CLI de ficar vazia.
-_MODULOS = (setup, tarefas, notas, pessoas, fila, conversa, daemon, relatorios)
+_MODULOS = (setup, tarefas, notas, gastos, pessoas, fila, conversa, daemon, relatorios)
 
 __all__ = ["_embedder", "app", "console"]
