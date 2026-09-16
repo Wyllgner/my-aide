@@ -14,6 +14,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from aide.channels import formato
 from aide.config import load_config
 from aide.core.context import now_in
 from aide.core.orchestrator import Orchestrator, record_usage
@@ -82,11 +83,14 @@ def _fmt_due(due: str | None, now: datetime) -> tuple[str, str]:
     # apareceria com a hora de lá, e você leria o horário errado achando que
     # está certo. A comparação abaixo sempre esteve correta: ela usa o instante.
     moment = moment.astimezone(now.tzinfo)
+    # o texto vem do mesmo lugar que os briefings usam, para o prazo não ser
+    # escrito de dois jeitos dependendo de onde você olha
+    texto = formato.quando(due, now)
     if moment < now:
-        return moment.strftime("%d/%m %H:%M"), "red"
+        return texto, "red"
     if moment.date() == now.date():
-        return moment.strftime("hoje %H:%M"), "yellow"
-    return moment.strftime("%d/%m %H:%M"), "white"
+        return texto, "yellow"
+    return texto, "white"
 
 
 def _print_tasks(rows: list[dict], config, title: str) -> None:
