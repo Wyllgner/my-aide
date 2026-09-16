@@ -267,3 +267,188 @@ def calendario(ctx, registry, agora: datetime, ano: int | None = None,
 <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));
             grid-auto-rows:minmax(104px,1fr);gap:8px">{"".join(celulas)}</div>
 """
+
+
+# ---------- gastos ----------
+
+PERIODOS_ROTULO = (("hoje", "hoje"), ("semana", "semana"), ("mes", "mês"),
+                   ("ano", "ano"), ("sempre", "tudo"))
+
+
+def _seletor(caminho: str, atual: str) -> str:
+    """Links, não botões: a página é de leitura e o histórico do navegador funciona."""
+    itens = ""
+    for chave, rotulo in PERIODOS_ROTULO:
+        ativo = chave == atual
+        estilo = ("background:var(--surface);font-weight:600;"
+                  "box-shadow:0 1px 2px rgba(21,23,28,.06)" if ativo else "color:var(--muted)")
+        itens += (f'<a href="{caminho}?periodo={chave}" style="font-size:12.5px;'
+                  f'padding:6px 14px;border-radius:var(--r-pill);{estilo}">{rotulo}</a>')
+    return (f'<div style="display:flex;gap:6px;background:#F5F6F8;padding:3px;'
+            f'border-radius:var(--r-pill)">{itens}</div>')
+
+
+def _periodo_por_extenso(de: str, ate: str, periodo: str) -> str:
+    """'1 a 16 de setembro'. '2026/09/01 a 2026/09/16' é formato de máquina."""
+    if periodo == "sempre":
+        return "desde o começo"
+    inicio = datetime.fromisoformat(de)
+    fim = datetime.fromisoformat(ate)
+    if periodo in ("hoje", "ontem"):
+        return por_extenso(inicio)
+    if inicio.month == fim.month:
+        return f"{inicio.day} a {fim.day} de {MESES[fim.month - 1]}"
+    return (f"{inicio.day} de {MESES[inicio.month - 1]} "
+            f"a {fim.day} de {MESES[fim.month - 1]}")
+
+
+def gastos(ctx, registry, agora: datetime, periodo: str = "mes") -> str:
+    from aide.tools.expenses import PERIODOS, formatar, intervalo
+
+    if periodo not in PERIODOS:
+        periodo = "mes"
+
+    resumo = registry.call("expenses.summary", {"periodo": periodo}, ctx)
+    lista = registry.call("expenses.list", {"periodo": periodo, "limit": 40}, ctx)
+    if not resumo.ok:
+        return cabecalho("Gastos") + f'<p class="vazio">{escape(resumo.error)}</p>'
+
+    dados = resumo.data
+    lancamentos = lista.data or []
+    de, ate = intervalo(periodo, agora)
+
+    por_dia = consultas.gastos_por_dia(ctx.conn, de, ate, agora.tzinfo)
+    # séries longas em barra diária viram cerca; acima de 40 dias só o acumulado
+    diario = graficos.colunas([(r, v / 100) for r, v in por_dia], 1260, 76,
+                              vazio="nenhum gasto neste período") if len(por_dia) <= 40 else ""
+    acum = graficos.area([(r, v / 100) for r, v in consultas.acumulado(por_dia)], 300, 62,
+                         vazio="nada lançado ainda")
+
+    maior = max(lancamentos, key=lambda g: g["cents"], default=None)
+    categorias = [(c["category"], c["cents"] / 100) for c in dados["por_categoria"]]
+
+    def _linha_gasto(g: dict) -> str:
+        dia = f'{g["spent_at"][8:10]}/{g["spent_at"][5:7]}'
+        etiqueta = ""
+        if g["category"]:
+            etiqueta = (f'<span style="font-size:11px;color:var(--muted);background:#F5F6F8;'
+                        f'padding:2px 8px;border-radius:var(--r-pill)">'
+                        f'{escape(g["category"])}</span>')
+        return (f'<div class="linha" style="padding:10px 18px">'
+                f'<span class="mono" style="font-size:12px;color:var(--faint);width:46px;'
+                f'flex-shrink:0">{escape(dia)}</span>'
+                f'<span style="font-size:13.5px">{escape(g["description"])}</span>'
+                f'{etiqueta}'
+                f'<span class="quando mono" style="color:var(--ink);font-size:13.5px">'
+                f'{escape(g["valor"])}</span></div>')
+
+    linhas = "".join(_linha_gasto(g) for g in lancamentos)
+
+    return f"""
+{cabecalho("Gastos", _periodo_por_extenso(de, ate, periodo), _seletor("/gastos", periodo))}
+<div style="display:grid;grid-template-columns:minmax(0,1.6fr) repeat(3,minmax(0,1fr));gap:14px">
+  <div class="card" style="padding:16px 20px">
+    <p class="eyebrow" style="margin-bottom:6px">Acumulado</p>
+    <p class="mono" style="margin:0 0 6px;font-size:26px;letter-spacing:-.01em">
+      {escape(dados["total"])}</p>
+    {acum}
+  </div>
+  {_indicador("Lançamentos", str(dados["quantos"]), "no período")}
+  {_indicador("Média", dados["media"], "por lançamento")}
+  {_indicador("Maior", formatar(maior["cents"]) if maior else "—",
+              maior["description"][:28] if maior else "nada lançado")}
+</div>
+
+{f'<div class="card" style="padding:16px 20px;margin-top:16px">'
+ f'<p class="eyebrow" style="margin-bottom:8px">Por dia</p>{diario}</div>' if diario else ''}
+
+<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);
+            gap:16px;margin-top:16px;align-items:start">
+  {_cartao("Por categoria",
+           graficos.barras(categorias, rotulo_px=104, vazio="nenhuma categoria ainda",
+                           formatar=lambda v: f"R$ {v:,.2f}".replace(",", "@")
+                                               .replace(".", ",").replace("@", ".")))}
+  <div class="card">
+    <div style="padding:15px 18px 11px"><span class="eyebrow">Lançamentos</span></div>
+    <div style="border-top:1px solid var(--line-soft)">
+      {linhas or '<p class="vazio">Nenhum gasto neste período.</p>'}
+    </div>
+  </div>
+</div>
+"""
+
+
+# ---------- custo e saldo ----------
+
+def custo(ctx, registry, agora: datetime) -> str:
+    from aide.llm import custo as calculo
+    from aide.web.paginas import usd
+
+    gasto = calculo.mes_corrente(ctx.conn, ctx.config, agora)
+    gasto = calculo.com_custo_real(gasto, ctx.config, agora.replace(day=1, hour=0, minute=0))
+    saldo = calculo.saldo_estimado(ctx.conn, ctx.config)
+
+    serie = consultas.custo_por_dia(ctx.conn, agora, 14, ctx.config.llm.precos)
+    modelos = [(m["model"], round(m["usd"] or 0, 4)) for m in gasto.por_modelo]
+
+    if saldo:
+        pc = min(saldo["fracao_usada"] * 100, 100)
+        dias = saldo["dias_desde"]
+        idade = "hoje" if dias == 0 else "ontem" if dias == 1 else f"há {dias} dias"
+        velho = ('<p style="margin:10px 0 0;font-size:12px;color:var(--accent)">'
+                 'a âncora tem mais de um mês; confira no painel e rode '
+                 '<span class="mono">myaide saldo</span></p>' if dias >= 30 else "")
+        bloco_saldo = f"""
+          <p class="eyebrow" style="margin-bottom:8px">Saldo estimado</p>
+          <p class="mono" style="margin:0 0 10px;font-size:34px;letter-spacing:-.015em">
+            {escape(usd(saldo["saldo_usd"]))}</p>
+          <div class="barra" style="height:6px"><div style="width:{pc:.1f}%"></div></div>
+          <p style="margin:10px 0 0;font-size:12.5px;color:var(--muted)">
+            {escape(usd(saldo["ancora_usd"]))} anotados {idade}
+            − {escape(usd(saldo["gasto_desde"]))} gastos desde então</p>{velho}"""
+    else:
+        bloco_saldo = """
+          <p class="eyebrow" style="margin-bottom:8px">Saldo</p>
+          <p style="margin:0;font-size:14px;color:var(--muted);line-height:1.6">
+            A OpenAI não expõe saldo por API — os endereços de cobrança exigem a
+            sessão do navegador. Veja no painel e anote com
+            <span class="mono">myaide saldo 4.22</span>; daí em diante o gasto é
+            descontado a partir dali.</p>"""
+
+    real = ""
+    if gasto.real_usd is not None:
+        real = (f'<p style="margin:8px 0 0;font-size:12.5px;color:var(--muted)">'
+                f'{escape(usd(gasto.real_usd))} cobrados pela OpenAI (real)</p>')
+    elif gasto.erro_real:
+        real = (f'<p style="margin:8px 0 0;font-size:12.5px;color:var(--accent)">'
+                f'custo real indisponível: {escape(gasto.erro_real)}</p>')
+
+    sem_preco = ""
+    if gasto.sem_preco:
+        sem_preco = (f'<p style="margin:10px 0 0;font-size:12px;color:var(--accent)">'
+                     f'sem preço em config.yaml: {escape(", ".join(gasto.sem_preco))}</p>')
+
+    return f"""
+{cabecalho("Custo e saldo", f"desde {gasto.desde}",
+           '<p style="margin:0;font-size:12.5px;color:var(--faint);max-width:32ch;'
+           'text-align:right;line-height:1.5">O saldo é estimativa: o valor anotado '
+           'do painel menos o gasto calculado desde então.</p>')}
+<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:16px">
+  <div class="card" style="padding:20px 22px">{bloco_saldo}</div>
+  {_cartao("Custo por dia, em dólares",
+           graficos.area(serie, 620, 96, vazio="nenhuma chamada nos últimos 14 dias")
+           + f'<p class="mono" style="margin:10px 0 0;font-size:20px">'
+             f'{escape(usd(gasto.estimado_usd))}</p>'
+             f'<p style="margin:3px 0 0;font-size:12px;color:var(--faint)">'
+             f'estimado no mês · {gasto.chamadas} chamada(s)</p>{real}{sem_preco}')}
+</div>
+
+<div style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);
+            gap:16px;margin-top:16px;align-items:start">
+  {_cartao("Por modelo", graficos.barras(modelos, rotulo_px=168,
+                                         vazio="nenhum modelo usado ainda",
+                                         formatar=lambda v: f"{v:.4f}".replace(".", ",")))}
+  {_cartao("Para quê", graficos.barras(consultas.uso_por_finalidade(ctx.conn),
+                                       rotulo_px=112, vazio="nada registrado ainda"))}
+</div>
+"""

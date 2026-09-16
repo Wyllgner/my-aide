@@ -95,16 +95,21 @@ def criar_app(config=None, conn_factory=None):
     # Cada tela é uma função (ctx, registry, agora) -> html. A que ainda não
     # existe cai no aviso dentro da moldura, em vez de deixar a rota em 404.
     MONTADORES = {"painel": conteudo.painel, "hoje": conteudo.hoje,
-                  "calendario": conteudo.calendario}
+                  "calendario": conteudo.calendario, "gastos": conteudo.gastos,
+                  "custo": conteudo.custo}
 
     def _registrar(tela):
         @app.get(tela.caminho, response_class=HTMLResponse, name=tela.slug)
-        def ver() -> str:
+        def ver(periodo: str = "mes") -> str:
             montar = MONTADORES.get(tela.slug)
             if montar is None:
                 return render(cabecalho(tela.rotulo) + em_breve(tela.rotulo), tela.slug)
-            corpo = montar(contexto(), toolbelt, now_in(config.timezone))
-            return render(corpo, tela.slug)
+            ctx = contexto()
+            agora = now_in(config.timezone)
+            # o período é query string: continua sendo GET, e o histórico do
+            # navegador guarda o recorte que você estava olhando
+            extra = {"periodo": periodo} if tela.slug == "gastos" else {}
+            return render(montar(ctx, toolbelt, agora, **extra), tela.slug)
 
     for tela in TELAS:
         _registrar(tela)
