@@ -132,3 +132,83 @@ def test_o_contexto_ve_o_privado(app):
 def test_cada_pedido_abre_sua_conexao(app):
     """O uvicorn atende em thread; sqlite recusa conexão criada noutra."""
     assert app.state.contexto().conn is not app.state.contexto().conn
+
+
+# ---------- a moldura ----------
+
+def test_toda_tela_tem_rota(cliente):
+    """A navegação mostra 12 links; um deles em 404 é um beco sem saída."""
+    from aide.web.paginas import TELAS
+
+    for tela in TELAS:
+        resposta = cliente.get(tela.caminho)
+        assert resposta.status_code == 200, tela.caminho
+        assert tela.rotulo in resposta.text
+
+
+def test_a_tela_aberta_se_marca_na_navegacao(cliente):
+    """aria-current diz ao leitor de tela onde ele está, não só a cor."""
+    html = cliente.get("/gastos").text
+    assert '<a href="/gastos" aria-current="page">' in html
+    assert '<a href="/notas" aria-current="page">' not in html
+
+
+def test_o_estilo_e_servido_uma_vez(cliente):
+    """Inline em cada página, o navegador reprocessaria o mesmo texto a cada clique."""
+    resposta = cliente.get("/app.css")
+    assert resposta.status_code == 200
+    assert resposta.headers["content-type"].startswith("text/css")
+    assert "--accent:#C4432B" in resposta.text
+    assert '<link rel="stylesheet" href="/app.css">' in cliente.get("/").text
+
+
+def test_o_titulo_da_aba_diz_onde_voce_esta(cliente):
+    assert "<title>Calendário · my-aide</title>" in cliente.get("/calendario").text
+
+
+def test_sem_saldo_anotado_a_lateral_convida_a_anotar(cliente):
+    """Melhor pedir o número do que inventar um."""
+    html = cliente.get("/").text
+    assert "nenhum anotado" in html
+    assert "myaide saldo" in html
+
+
+def test_com_saldo_anotado_a_lateral_mostra(cliente, app):
+    from aide.llm import custo as calculo
+
+    calculo.anotar_saldo(app.state.conn_factory(), 4.22, "2026-09-16T17:00-04:00")
+    html = cliente.get("/").text
+    assert "US$&nbsp;4,22" in html or "4.22" in html
+
+
+def test_saldo_quebrado_nao_derruba_a_pagina(cliente, app, monkeypatch):
+    """A lateral é enfeite perto do conteúdo; ela falha sozinha."""
+    monkeypatch.setattr("aide.llm.custo.saldo_estimado",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("x")))
+    resposta = cliente.get("/")
+    assert resposta.status_code == 200
+    assert "Saldo API" in resposta.text
+
+
+def test_o_texto_da_tela_e_escapado():
+    """Título de nota com < ou & não pode virar marcação."""
+    from aide.web.paginas import cabecalho
+
+    assert "&lt;script&gt;" in cabecalho("<script>")
+
+
+def test_icone_e_desenhado_nao_emoji():
+    """Emoji vira bloco em tema/fonte que não tem o glifo."""
+    from aide.web.icones import icone
+
+    marcacao = icone("gastos")
+    assert marcacao.startswith("<svg")
+    assert "currentColor" in marcacao  # recolore junto com o texto
+
+
+def test_valor_usa_virgula_como_a_pagina_toda():
+    """A interface é em português; 'US$ 4.21' destoa de 'R$ 10,50' no resto."""
+    from aide.web.paginas import usd
+
+    assert usd(4.21) == "US$ 4,21"
+    assert usd(0) == "US$ 0,00"
