@@ -103,3 +103,48 @@ def contagens(conn, agora: datetime) -> dict:
         "lembretes": um("SELECT COUNT(*) FROM reminders WHERE status='pending'"),
         "chamadas": um("SELECT COUNT(*) FROM llm_usage"),
     }
+
+
+def planejado_no_mes(conn, ano: int, mes: int, tz) -> dict[int, list[dict]]:
+    """O que cada dia do mês tem marcado, agrupado por dia.
+
+    Junta as três origens que têm data — tarefa com prazo, evento do feed e
+    lembrete — porque é assim que o dia acontece: você não separa o que veio
+    da agenda do que você anotou.
+    """
+    from calendar import monthrange
+    from datetime import datetime
+
+    primeiro = datetime(ano, mes, 1, tzinfo=tz)
+    ultimo = datetime(ano, mes, monthrange(ano, mes)[1], 23, 59, tzinfo=tz)
+    de, ate = primeiro.isoformat(timespec="minutes"), ultimo.isoformat(timespec="minutes")
+
+    por_dia: dict[int, list[dict]] = {}
+
+    def juntar(quando_iso: str, item: dict) -> None:
+        try:
+            dia = datetime.fromisoformat(quando_iso).astimezone(tz).day
+        except ValueError:
+            return
+        por_dia.setdefault(dia, []).append(item)
+
+    for r in conn.execute(
+        "SELECT id, title, due_at, status FROM tasks WHERE deleted_at IS NULL"
+        " AND due_at BETWEEN ? AND ? ORDER BY due_at", (de, ate)).fetchall():
+        juntar(r["due_at"], {"tipo": "tarefa", "ref": f"#{r['id']}", "texto": r["title"],
+                             "feito": r["status"] == "done", "quando": r["due_at"]})
+
+    for r in conn.execute(
+        "SELECT title, start_at, all_day FROM events WHERE deleted_at IS NULL"
+        " AND start_at BETWEEN ? AND ? ORDER BY start_at", (de, ate)).fetchall():
+        juntar(r["start_at"], {"tipo": "evento", "ref": "", "texto": r["title"],
+                               "feito": False, "quando": r["start_at"],
+                               "dia_inteiro": bool(r["all_day"])})
+
+    for r in conn.execute(
+        "SELECT text, fire_at FROM reminders WHERE status = 'pending'"
+        " AND fire_at BETWEEN ? AND ? ORDER BY fire_at", (de, ate)).fetchall():
+        juntar(r["fire_at"], {"tipo": "lembrete", "ref": "", "texto": r["text"],
+                              "feito": False, "quando": r["fire_at"]})
+
+    return por_dia
