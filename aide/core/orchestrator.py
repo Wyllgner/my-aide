@@ -68,14 +68,21 @@ class Orchestrator:
         ctx = ToolContext(config=self.config, conn=self.conn, actor=self.actor,
                           embedder=self.embedder)
 
-        log.info("[%s] pergunta: %s", self.actor, text)
+        # O conteúdo vai em DEBUG, não em INFO. O daemon roda sob systemd, e o
+        # que sai em INFO acaba no journal — uma segunda cópia da sua conversa,
+        # fora do banco 0600 e sem passar pela marca de `private`. Em INFO fica
+        # só o que serve para acompanhar o serviço; `--log-level DEBUG` traz o
+        # resto quando você estiver depurando.
+        log.info("[%s] mensagem recebida (%s caracteres)", self.actor, len(text))
+        log.debug("[%s] pergunta: %s", self.actor, text)
 
         for _ in range(MAX_ITERATIONS):
             response = self.llm.complete(messages, tools=schemas, purpose="chat")
 
             if not response.tool_calls:
                 reply = response.text.strip()
-                log.info("[%s] resposta: %s", self.actor, reply)
+                log.info("[%s] respondido (%s caracteres)", self.actor, len(reply))
+                log.debug("[%s] resposta: %s", self.actor, reply)
                 self._save(Message(role="assistant", content=reply))
                 return reply
 
@@ -113,8 +120,12 @@ class Orchestrator:
 
         result = self.registry.call(name, args, ctx)
         resumo = result.to_json()
-        log.info("[%s] tool %s(%s) -> %s%s", ctx.actor, name, args,
-                 "ok" if result.ok else "ERRO ", resumo[:300])
+        # nome e desfecho em INFO; argumentos e retorno podem carregar o que a
+        # pessoa escreveu, então descem para DEBUG. A trilha completa continua
+        # na tabela `audit`, que vive dentro do banco fechado.
+        log.info("[%s] tool %s -> %s", ctx.actor, name,
+                 "ok" if result.ok else "ERRO")
+        log.debug("[%s] tool %s(%s) -> %s", ctx.actor, name, args, resumo[:300])
         return Message(role="tool", tool_call_id=call.get("id"), content=resumo)
 
 
