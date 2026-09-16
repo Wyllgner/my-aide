@@ -196,3 +196,45 @@ def test_prazo_sem_fuso_e_lido_como_local():
 
     agora = datetime(2026, 9, 20, 12, 0, tzinfo=ZoneInfo("America/Porto_Velho"))
     assert _fmt_due("2026-09-25T08:00", agora)[0] == "25/09 08:00"
+
+
+# ---------- gastos ----------
+
+def test_gasto_registra_com_texto_solto(run):
+    """O caso que motivou a ferramenta."""
+    saida = run("gasto", "10,50 almoço com a KA").output
+    assert "R$ 10,50" in saida
+    assert "almoço com a KA" in saida
+
+
+def test_gasto_nao_gasta_llm(run, raiz):
+    """Registrar é parse determinístico: sem chave da OpenAI tem de funcionar."""
+    assert "R$ 32,00" in run("gasto", "R$ 32 uber").output
+    import sqlite3
+    conn = sqlite3.connect(raiz / "data" / "aide.db")
+    assert conn.execute("SELECT COUNT(*) FROM llm_usage").fetchone()[0] == 0
+
+
+def test_gasto_sem_valor_explica_o_formato(run):
+    resultado = run("gasto", "almoço com a KA")
+    assert resultado.exit_code == 1
+    assert "10,50 almoço" in resultado.output
+
+
+def test_quanto_soma_o_periodo(run):
+    run("gasto", "10,50 almoço", "-c", "alimentação")
+    run("gasto", "200 mercado", "-c", "mercado")
+    saida = run("quanto", "mes").output
+    assert "R$ 210,50" in saida
+    assert "mercado" in saida
+
+
+def test_gastos_lista_os_lancamentos(run):
+    run("gasto", "10,50 almoço")
+    saida = run("gastos").output
+    assert "almoço" in saida
+    assert "R$ 10,50" in saida
+
+
+def test_quanto_sem_gasto_nenhum(run):
+    assert "Nenhum gasto" in run("quanto", "hoje").output

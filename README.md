@@ -28,6 +28,30 @@ myaide pessoas                       # com quem você combinou de manter contato
 myaide falei Pedro "vai se mudar"    # registra o contato
 ```
 
+### Gastos
+
+```bash
+myaide gasto "10,50 almoço com a KA"      # valor na frente, resto é descrição
+myaide gasto "187,90 mercado" -c mercado
+myaide gastos                             # lançamentos do mês
+myaide quanto mes                         # hoje | ontem | semana | mes | ano | sempre
+myaide quanto mes -c mercado
+```
+
+Por conversa funciona igual, e é o caminho normal no Telegram — ele deduz a
+categoria sozinho:
+
+```
+você: 10,50 almoço com a KA
+ele:  Anotei R$ 10,50 em alimentação (#12).
+
+você: quanto eu gastei esse mês?
+ele:  Você gastou R$ 270,80 este mês, em 5 lançamentos.
+```
+
+O valor é guardado em centavos inteiros — somar float acumula erro até o total
+não bater. Registrar pelo terminal não chama a OpenAI: o parser é determinístico.
+
 ### Notas e memória
 
 ```bash

@@ -40,6 +40,9 @@ def com_segredos(dono, registry):
                                   "value": f"perfil {SEGREDO}", "private": True}, dono)
     registry.call("memory.save", {"kind": "episodic", "key": "e",
                                   "value": f"episódio {SEGREDO}", "private": True}, dono)
+    registry.call("expenses.add", {"amount": "199,90", "description": f"gasto {SEGREDO}",
+                                   "category": "saúde", "private": True}, dono)
+    registry.call("expenses.add", {"amount": "10,50", "description": "almoço"}, dono)
     return dono
 
 
@@ -91,6 +94,25 @@ def test_o_dono_continua_vendo_tudo(com_segredos, registry):
     assert registry.call("memory.list", {"kind": "profile"}, com_segredos).data
 
 
+def test_gasto_privado_fica_fora_da_listagem(com_segredos, modelo, registry):
+    descricoes = [g["description"]
+                  for g in registry.call("expenses.list", {"periodo": "hoje"}, modelo).data]
+    assert descricoes == ["almoço"]
+
+
+def test_gasto_privado_nao_entra_no_total(com_segredos, modelo, registry):
+    """O total é a parte sutil: sem filtrar, a soma denuncia o que a lista escondeu."""
+    resumo = registry.call("expenses.summary", {"periodo": "hoje"}, modelo).data
+    assert resumo["total"] == "R$ 10,50"
+    assert resumo["quantos"] == 1
+    assert "saúde" not in [c["category"] for c in resumo["por_categoria"]]
+
+
+def test_o_dono_ve_o_gasto_privado_no_total(com_segredos, registry):
+    resumo = registry.call("expenses.summary", {"periodo": "hoje"}, com_segredos).data
+    assert resumo["total"] == "R$ 210,40"
+
+
 def test_o_snapshot_do_prompt_nao_leva_privado(com_segredos, ctx):
     from aide.core.context import build, state_snapshot
 
@@ -111,6 +133,7 @@ def test_nenhuma_tool_devolve_conteudo_privado(com_segredos, modelo, registry):
         "id": 1, "task_id": 1, "query": SEGREDO.lower(), "filter": "all",
         "kind": "profile", "name": "k", "key": "k", "status": "all",
         "limit": 50, "dias": 365, "text": "x", "goal": "x", "body": "x",
+        "periodo": "sempre", "amount": "1",
         "when": "2030-01-01T09:00", "value": "x",
     }
 
