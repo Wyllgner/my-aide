@@ -3,6 +3,7 @@
 from aide.tools import (  # noqa: F401
     clock,
     events,
+    expenses,
     memory,
     notes,
     people,
