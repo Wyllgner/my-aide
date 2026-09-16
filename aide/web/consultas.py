@@ -148,3 +148,55 @@ def planejado_no_mes(conn, ano: int, mes: int, tz) -> dict[int, list[dict]]:
                               "feito": False, "quando": r["fire_at"]})
 
     return por_dia
+
+
+def gastos_por_dia(conn, de: str, ate: str, tz) -> list[tuple[str, float]]:
+    """Centavos por dia do período. Dia sem gasto entra como zero."""
+    from datetime import datetime, timedelta
+
+    linhas = dict(conn.execute(
+        "SELECT substr(spent_at, 1, 10) d, SUM(cents) FROM expenses"
+        " WHERE deleted_at IS NULL AND spent_at BETWEEN ? AND ? GROUP BY d",
+        (de, ate)).fetchall())
+
+    inicio = datetime.fromisoformat(de).astimezone(tz).date()
+    fim = datetime.fromisoformat(ate).astimezone(tz).date()
+    dias = (fim - inicio).days + 1
+    return [((inicio + timedelta(days=i)).strftime("%d"),
+             linhas.get((inicio + timedelta(days=i)).isoformat(), 0))
+            for i in range(max(dias, 1))]
+
+
+def acumulado(pares: list[tuple[str, float]]) -> list[tuple[str, float]]:
+    """A mesma série somando — mostra o ritmo, que a barra diária esconde."""
+    total = 0.0
+    saida = []
+    for rotulo, valor in pares:
+        total += valor
+        saida.append((rotulo, total))
+    return saida
+
+
+def custo_por_dia(conn, agora, dias: int = 14, precos: dict | None = None):
+    """Custo estimado por dia, em dólares."""
+    from datetime import timedelta
+
+    desde = _utc(agora.replace(hour=0, minute=0) - timedelta(days=dias - 1))
+    linhas = conn.execute(
+        "SELECT date(ts) d, model, SUM(input_tokens) i, SUM(output_tokens) o"
+        " FROM llm_usage WHERE ts >= ? GROUP BY d, model", (desde,)).fetchall()
+
+    por_dia: dict[str, float] = {}
+    for r in linhas:
+        preco = (precos or {}).get(r["model"])
+        if preco:
+            por_dia[r["d"]] = por_dia.get(r["d"], 0.0) + (
+                r["i"] / 1_000_000 * preco[0] + r["o"] / 1_000_000 * preco[1])
+    return [(d.strftime("%d"), round(por_dia.get(d.strftime("%Y-%m-%d"), 0.0), 6))
+            for d in serie_de_dias(agora, dias)]
+
+
+def uso_por_finalidade(conn, limite: int = 6) -> list[tuple[str, int]]:
+    return [(r["purpose"] or "sem rótulo", r["n"]) for r in conn.execute(
+        "SELECT purpose, COUNT(*) n FROM llm_usage GROUP BY purpose"
+        " ORDER BY n DESC LIMIT ?", (limite,)).fetchall()]
