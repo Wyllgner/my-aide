@@ -79,10 +79,21 @@ def mensagens(conn, sessao: str) -> list[dict]:
         " WHERE session_id = ? ORDER BY id", (sessao,)).fetchall()]
 
 
-def auditoria(conn, limite: int = 120) -> list[dict]:
-    return [dict(r) for r in conn.execute(
-        "SELECT ts, actor, tool, args_json, result_summary, ok FROM audit"
-        " ORDER BY id DESC LIMIT ?", (limite,)).fetchall()]
+def auditoria(conn, limite: int = 150, ator: str | None = None) -> list[dict]:
+    sql = "SELECT ts, actor, tool, args_json, result_summary, ok FROM audit"
+    params: list = []
+    if ator:
+        sql += " WHERE actor = ?"
+        params.append(ator)
+    sql += " ORDER BY id DESC LIMIT ?"
+    params.append(limite)
+    return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+
+def atores_da_auditoria(conn) -> list[tuple[str, int]]:
+    """Quem chamou o quê, no total — não só nas últimas linhas."""
+    return [(r["actor"], r["n"]) for r in conn.execute(
+        "SELECT actor, COUNT(*) n FROM audit GROUP BY actor ORDER BY n DESC").fetchall()]
 
 
 def contagens(conn, agora: datetime) -> dict:
