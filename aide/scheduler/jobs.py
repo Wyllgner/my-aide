@@ -82,10 +82,18 @@ def eval_conditions(deps: JobDeps) -> int:
     if not achados:
         return 0
 
-    corpo = "\n".join(f.summary for f in achados[:5])
+    from aide.channels.formato import Item, Mensagem, Secao
+
+    itens = [Item(texto=f.summary) for f in achados[:5]]
     if len(achados) > 5:
-        corpo += f"\n... e mais {len(achados) - 5}"
-    deps.notifier.send("Precisa de você", corpo, urgency="critical")
+        itens.append(Item(texto=f"e mais {len(achados) - 5}"))
+
+    deps.notifier.enviar(
+        Mensagem(titulo="Precisa de você",
+                 secoes=[Secao("Agora", itens)],
+                 rodape=f"{len(achados)} " + ("item" if len(achados) == 1 else "itens")),
+        urgency="critical",
+    )
     return len(achados)
 
 
@@ -94,7 +102,8 @@ def _briefing_job(deps: JobDeps, tipo: str) -> bool:
     if resultado.vazio:
         log.info("briefing %s sem conteúdo; nada enviado", tipo)
         return False
-    deps.notifier.send(resultado.title, resultado.body, urgency=resultado.urgency)
+    # `enviar` e não `send`: cada canal renderiza a mesma mensagem do seu jeito
+    deps.notifier.enviar(resultado.mensagem, urgency=resultado.urgency)
     return True
 
 
