@@ -28,6 +28,14 @@ URL_CUSTOS = "https://api.openai.com/v1/organization/costs"
 
 
 @dataclass
+class Ancora:
+    """Um saldo lido no painel, com a data em que foi lido."""
+
+    usd: float
+    em: str
+
+
+@dataclass
 class Gasto:
     """Um período fechado. `real` só existe com chave de admin."""
 
@@ -135,3 +143,75 @@ def com_custo_real(gasto: Gasto, config, desde: datetime) -> Gasto:
         gasto.erro_real = f"não consegui consultar ({type(exc).__name__})"
         log.warning("custo real indisponível", exc_info=True)
     return gasto
+
+
+# ---------- saldo ancorado ----------
+
+
+def anotar_saldo(conn, usd: float, quando: str, source: str = "manual") -> Ancora:
+    """Guarda o saldo que você leu no painel. Em centavos, como todo dinheiro aqui."""
+    if usd < 0:
+        raise ValueError("saldo não é negativo")
+    conn.execute(
+        "INSERT INTO api_balance (cents, noted_at, source) VALUES (?, ?, ?)",
+        (round(usd * 100), quando, source))
+    return Ancora(usd=usd, em=quando)
+
+
+def ultima_ancora(conn) -> Ancora | None:
+    linha = conn.execute(
+        "SELECT cents, noted_at FROM api_balance ORDER BY noted_at DESC, id DESC LIMIT 1"
+    ).fetchone()
+    if linha is None:
+        return None
+    return Ancora(usd=linha["cents"] / 100, em=linha["noted_at"])
+
+
+def gasto_desde(conn, config, desde: str) -> float:
+    """Estimativa do que foi consumido depois da âncora."""
+    linhas = conn.execute(
+        "SELECT model, SUM(input_tokens) i, SUM(output_tokens) o FROM llm_usage"
+        " WHERE ts >= ? GROUP BY model", (_para_utc_sqlite(desde),)).fetchall()
+    total = 0.0
+    for r in linhas:
+        preco = config.llm.precos.get(r["model"])
+        if preco:
+            total += (r["i"] / 1_000_000) * preco[0] + (r["o"] / 1_000_000) * preco[1]
+    return total
+
+
+def _para_utc_sqlite(iso_local: str) -> str:
+    """`llm_usage.ts` vem de datetime('now'): UTC, com espaço no lugar do T.
+
+    Comparar com ISO local aqui daria o mesmo bug silencioso que o briefing da
+    noite teve — texto, e " " ordena antes de "T".
+    """
+    momento = datetime.fromisoformat(iso_local)
+    if momento.tzinfo is None:
+        momento = momento.replace(tzinfo=UTC)
+    return momento.astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def saldo_estimado(conn, config) -> dict | None:
+    """Quanto deve restar: a última âncora menos o gasto desde ela.
+
+    É estimativa, e o nome diz isso. Ela só é boa enquanto os preços do
+    `config.yaml` estiverem certos e nada gastar a chave por fora — por isso o
+    resultado carrega há quanto tempo a âncora foi feita, para você saber
+    quando reancorar.
+    """
+    ancora = ultima_ancora(conn)
+    if ancora is None:
+        return None
+
+    consumido = gasto_desde(conn, config, ancora.em)
+    dias = max((datetime.now(UTC) - datetime.fromisoformat(ancora.em)
+                .replace(tzinfo=datetime.fromisoformat(ancora.em).tzinfo or UTC)).days, 0)
+    return {
+        "ancora_usd": ancora.usd,
+        "ancora_em": ancora.em,
+        "dias_desde": dias,
+        "gasto_desde": consumido,
+        "saldo_usd": ancora.usd - consumido,
+        "fracao_usada": min(consumido / ancora.usd, 1.0) if ancora.usd else 0.0,
+    }
