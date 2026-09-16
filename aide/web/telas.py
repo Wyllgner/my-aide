@@ -651,3 +651,195 @@ def auditoria(ctx, registry, agora: datetime, ator: str | None = None) -> str:
 <div style="display:flex;gap:6px;flex-wrap:wrap;margin:-14px 0 16px">{filtros}</div>
 <div class="card"><div>{linhas or '<p class="vazio">Nada deste ator.</p>'}</div></div>
 """
+
+
+# ---------- notas ----------
+
+def notas(ctx, registry, agora: datetime, nota: int | None = None,
+          busca: str | None = None) -> str:
+    if busca:
+        achados = registry.call("notes.search", {"query": busca, "limit": 20}, ctx)
+        lista = [{"id": a.get("id"), "title": a.get("title", ""), "tags": a.get("tags"),
+                  "trecho": a.get("trecho", ""), "tipo": a.get("tipo", "nota")}
+                 for a in (achados.data or []) if a.get("id")]
+    else:
+        lista = [dict(n, trecho="", tipo="nota")
+                 for n in (registry.call("notes.list", {"limit": 60}, ctx).data or [])]
+
+    escolhida = nota if any(n["id"] == nota for n in lista) else (lista[0]["id"] if lista else None)
+
+    itens = ""
+    for n in lista:
+        ativa = n["id"] == escolhida
+        fundo = "background:var(--soft);" if ativa else ""
+        cor = "var(--accent)" if ativa else "var(--ink)"
+        alvo = f"/notas?nota={n['id']}" + (f"&busca={escape(busca)}" if busca else "")
+        etiquetas = ""
+        if n.get("tags"):
+            # bloco, não inline: coladas ao título elas viram parte dele
+            etiquetas = (f'<p style="margin:4px 0 0;font-size:11px;color:var(--faint)">'
+                         f'{escape(str(n["tags"]))}</p>')
+        trecho = ""
+        if n.get("trecho"):
+            trecho = (f'<p style="margin:4px 0 0;font-size:12px;color:var(--faint);'
+                      f'line-height:1.4">{escape(n["trecho"][:110])}</p>')
+        itens += (f'<a href="{alvo}" style="display:block;padding:11px 12px;'
+                  f'border-radius:var(--r-inner);{fundo}color:{cor}">'
+                  f'<span style="font-size:13.5px;font-weight:{"600" if ativa else "450"};'
+                  f'display:block">{escape(n["title"])}</span>{etiquetas}{trecho}</a>')
+
+    if escolhida is None:
+        corpo = ('<p class="vazio">Nenhuma nota. Escreva com '
+                 '<span class="mono">myaide nota "Título" "corpo"</span>.</p>')
+    else:
+        lida = registry.call("notes.read", {"id": escolhida}, ctx)
+        if lida.ok:
+            corpo = (f'<h2 style="margin:0 0 4px;font-size:20px;font-weight:600">'
+                     f'{escape(lida.data["title"])}</h2>'
+                     f'<p class="mono" style="margin:0 0 18px;font-size:11.5px;'
+                     f'color:var(--faint)">#{lida.data["id"]}'
+                     f'{" · " + escape(str(lida.data["tags"])) if lida.data["tags"] else ""}</p>'
+                     f'<div style="font-size:14.5px;line-height:1.7;white-space:pre-wrap">'
+                     f'{escape(lida.data["body"])}</div>')
+        else:
+            corpo = f'<p class="vazio">{escape(lida.error)}</p>'
+
+    return f"""
+{cabecalho("Notas", f"{len(lista)} nota(s)" + (f' para "{escape(busca)}"' if busca else ""),
+           f'<form method="get" action="/notas" style="display:flex;gap:6px">'
+           f'<input name="busca" value="{escape(busca or "")}" placeholder="buscar por significado"'
+           f' style="font:inherit;font-size:13px;padding:7px 13px;border:1px solid var(--line);'
+           f'border-radius:var(--r-pill);background:var(--surface);width:230px">'
+           f'</form>')}
+<div style="display:grid;grid-template-columns:300px minmax(0,1fr);gap:20px;align-items:start">
+  <div class="card" style="padding:10px;display:flex;flex-direction:column;gap:2px;
+                           max-height:74vh;overflow:auto">
+    {itens or '<p class="vazio">Nada encontrado.</p>'}</div>
+  <div class="card" style="padding:26px 28px;max-height:74vh;overflow:auto">{corpo}</div>
+</div>
+"""
+
+
+# ---------- memória ----------
+
+def memoria(ctx, registry, agora: datetime) -> str:
+    def bloco(kind: str, titulo: str, vazio: str) -> str:
+        fatos = registry.call("memory.list", {"kind": kind}, ctx).data or []
+        linhas = ""
+        for f in fatos:
+            incerto = ""
+            if f.get("confidence", 1) < 1:
+                incerto = (f'<span class="quando mono" style="font-size:11.5px">'
+                           f'incerto {f["confidence"]:.1f}</span>')
+            linhas += (
+                f'<div class="linha" style="padding:11px 18px;align-items:baseline">'
+                f'<span class="mono" style="font-size:12.5px;color:var(--muted);width:150px;'
+                f'flex-shrink:0">{escape(f["key"])}</span>'
+                f'<span style="font-size:14px;line-height:1.5">{escape(f["value"])}</span>'
+                f'{incerto}</div>')
+        vazio_html = f'<p class="vazio">{escape(vazio)}</p>'
+        return (f'<div class="card"><div style="padding:16px 20px 12px;display:flex;'
+                f'justify-content:space-between;align-items:baseline">'
+                f'<span class="eyebrow">{escape(titulo)}</span>'
+                f'<span class="mono" style="font-size:12px;color:var(--faint)">'
+                f'{len(fatos)}</span></div>'
+                f'<div style="border-top:1px solid var(--line-soft)">'
+                f'{linhas or vazio_html}</div></div>')
+
+    return f"""
+{cabecalho("Memória", "o que ele sabe sobre você",
+           '<p style="margin:0;font-size:12.5px;color:var(--faint);max-width:40ch;'
+           'text-align:right;line-height:1.5">O perfil vai inteiro em toda conversa. '
+           'O que está marcado como privado não sai desta máquina.</p>')}
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;
+            align-items:start">
+  {bloco("profile", "Perfil", "Nada guardado ainda.")}
+  {bloco("episodic", "Episódico", "Nenhum episódio registrado.")}
+</div>
+"""
+
+
+# ---------- pessoas ----------
+
+def pessoas(ctx, registry, agora: datetime) -> str:
+    gente = registry.call("people.list", {}, ctx).data or []
+    if not gente:
+        return (cabecalho("Pessoas")
+                + '<p class="vazio">Ninguém registrado. Peça a ele: '
+                  '"passa a acompanhar o Pedro, falo a cada 14 dias".</p>')
+
+    linhas = ""
+    for p in gente:
+        dias = p.get("dias_sem_falar")
+        atraso = p.get("atrasado")
+        texto = "—" if dias is None else f"{dias}d"
+        cor = "var(--accent)" if atraso else "var(--ink)"
+        combinado = (f'a cada {p["cadence_days"]}d' if p.get("cadence_days")
+                     else "sem cobrança")
+        linhas += (
+            f'<div class="linha">'
+            f'<span style="font-size:14.5px;width:160px;flex-shrink:0">{escape(p["name"])}</span>'
+            f'<span style="font-size:12.5px;color:var(--faint);width:120px;flex-shrink:0">'
+            f'{escape(p.get("relation") or "")}</span>'
+            f'<span class="mono" style="font-size:13px;color:{cor};width:70px">{texto}</span>'
+            f'<span class="quando">{escape(combinado)}</span></div>')
+
+    atrasados = sum(1 for p in gente if p.get("atrasado"))
+    return f"""
+{cabecalho("Pessoas", f"{len(gente)} acompanhada(s)",
+           f'<p style="margin:0;font-size:13px;color:'
+           f'{"var(--accent)" if atrasados else "var(--muted)"}">'
+           f'{atrasados} em atraso</p>')}
+<div class="card">{linhas}</div>
+"""
+
+
+# ---------- fila ----------
+
+ROTULO_STATUS = {"open": "esperando", "claimed": "em curso",
+                 "done": "concluída", "dropped": "descartada"}
+
+
+def fila(ctx, registry, agora: datetime) -> str:
+    ordens = registry.call("work_orders.list", {"status": "all", "limit": 60}, ctx).data or []
+    if not ordens:
+        return (cabecalho("Fila de trabalho")
+                + '<p class="vazio">Fila vazia. Enfileire com '
+                  '<span class="mono">myaide enfileirar "objetivo"</span>.</p>')
+
+    por_status: dict[str, int] = {}
+    for o in ordens:
+        por_status[o["status"]] = por_status.get(o["status"], 0) + 1
+
+    cartoes = ""
+    for o in ordens:
+        aberta = o["status"] in ("open", "claimed")
+        cor = "var(--accent)" if aberta else "var(--faint)"
+        resultado = ""
+        if o.get("result_summary"):
+            resultado = (f'<div style="margin-top:12px;padding-top:12px;'
+                         f'border-top:1px solid var(--line-soft);font-size:13.5px;'
+                         f'line-height:1.6;white-space:pre-wrap;color:var(--muted)">'
+                         f'{escape(o["result_summary"][:900])}</div>')
+        contexto_txt = ""
+        if o.get("context"):
+            contexto_txt = (f'<p style="margin:6px 0 0;font-size:13px;color:var(--faint);'
+                            f'line-height:1.5">{escape(o["context"])}</p>')
+        cartoes += (
+            f'<div class="card" style="padding:18px 20px">'
+            f'<div style="display:flex;align-items:baseline;gap:10px">'
+            f'<span class="mono" style="font-size:12px;color:var(--faint)">#{o["id"]}</span>'
+            f'<span style="font-size:15px;font-weight:500">{escape(o["goal"])}</span>'
+            f'<span style="margin-left:auto;font-size:11px;color:{cor};background:'
+            f'{"var(--soft)" if aberta else "#F5F6F8"};padding:3px 9px;'
+            f'border-radius:var(--r-pill)">{escape(ROTULO_STATUS.get(o["status"], o["status"]))}'
+            f'</span></div>{contexto_txt}{resultado}</div>')
+
+    resumo = " · ".join(f'{n} {ROTULO_STATUS.get(s, s)}' for s, n in por_status.items())
+    return f"""
+{cabecalho("Fila de trabalho", resumo,
+           '<p style="margin:0;font-size:12.5px;color:var(--faint);max-width:44ch;'
+           'text-align:right;line-height:1.5">O daemon enfileira; um executor externo '
+           'faz por MCP e grava o resultado de volta aqui.</p>')}
+<div style="display:flex;flex-direction:column;gap:14px">{cartoes}</div>
+"""

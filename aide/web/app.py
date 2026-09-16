@@ -97,12 +97,15 @@ def criar_app(config=None, conn_factory=None):
     MONTADORES = {"painel": conteudo.painel, "hoje": conteudo.hoje,
                   "calendario": conteudo.calendario, "gastos": conteudo.gastos,
                   "custo": conteudo.custo, "conversas": conteudo.conversas,
-                  "ferramentas": conteudo.ferramentas, "auditoria": conteudo.auditoria}
+                  "ferramentas": conteudo.ferramentas, "auditoria": conteudo.auditoria, "notas": conteudo.notas,
+                  "memoria": conteudo.memoria, "pessoas": conteudo.pessoas,
+                  "fila": conteudo.fila}
 
     def _registrar(tela):
         @app.get(tela.caminho, response_class=HTMLResponse, name=tela.slug)
         def ver(periodo: str = "mes", sessao: str | None = None,
-                ator: str | None = None) -> str:
+                ator: str | None = None, nota: int | None = None,
+                busca: str | None = None) -> str:
             montar = MONTADORES.get(tela.slug)
             if montar is None:
                 return render(cabecalho(tela.rotulo) + em_breve(tela.rotulo), tela.slug)
@@ -117,6 +120,8 @@ def criar_app(config=None, conn_factory=None):
                 extra = {"sessao": sessao}
             elif tela.slug == "auditoria":
                 extra = {"ator": ator}
+            elif tela.slug == "notas":
+                extra = {"nota": nota, "busca": busca}
             return render(montar(ctx, toolbelt, agora, **extra), tela.slug)
 
     for tela in TELAS:
