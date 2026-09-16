@@ -9,6 +9,7 @@ from aide.tools import (  # noqa: F401
     people,
     reminders,
     tasks,
+    usage,
     work_orders,
 )
 from aide.tools.registry import Registry, Tool, ToolContext, ToolResult, registry

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 import typer
 from rich.table import Table
 
@@ -182,3 +184,67 @@ def version() -> None:
 
 if __name__ == "__main__":
     app()
+
+
+@app.command()
+def custo(dias: int = typer.Option(0, "--dias", "-d",
+                                   help="Janela em dias. Padrão: mês corrente.")) -> None:
+    """Quanto o assessor está custando, e quanto ainda cabe no mês.
+
+    Saldo da conta não aparece aqui porque a OpenAI não expõe por API: os
+    endpoints de billing exigem a sessão do navegador. O que dá para saber é
+    quanto foi gasto — e, contra o orçamento do config.yaml, quanto sobra.
+    """
+    from aide.llm import custo as calculo
+
+    config, conn = _open_db()
+    agora = now_in(config.timezone)
+
+    if dias:
+        gasto = calculo.estimar(conn, config, dias=dias)
+        desde = agora - timedelta(days=dias)
+        titulo = f"Custo — {dias} dias"
+    else:
+        gasto = calculo.mes_corrente(conn, config, agora)
+        desde = agora.replace(day=1, hour=0, minute=0)
+        titulo = f"Custo — desde {gasto.desde}"
+
+    gasto = calculo.com_custo_real(gasto, config, desde)
+
+    if not gasto.chamadas:
+        console.print("[dim]Nenhuma chamada registrada nesse período.[/]")
+        return
+
+    tabela = Table(title=titulo, box=None, title_justify="left")
+    for coluna in ("modelo", "chamadas", "entrada", "saída", "US$"):
+        tabela.add_column(coluna, justify="left" if coluna == "modelo" else "right")
+    for m in gasto.por_modelo:
+        tabela.add_row(m["model"], f"{m['chamadas']:,}".replace(",", "."),
+                       f"{m['entrada']:,}".replace(",", "."),
+                       f"{m['saida']:,}".replace(",", "."),
+                       f"{m['usd']:.4f}" if m["usd"] is not None else "[yellow]sem preço[/]")
+    tabela.add_row("", "", "", "[dim]estimado[/]", f"[bold]{gasto.estimado_usd:.4f}[/]")
+    console.print(tabela)
+
+    if gasto.sem_preco:
+        console.print(f"[yellow]sem preço em config.yaml:[/] {', '.join(gasto.sem_preco)}")
+
+    if gasto.real_usd is not None:
+        console.print(f"\n[bold]US$ {gasto.real_usd:.4f}[/] cobrados pela OpenAI "
+                      f"[dim](real, não estimativa)[/]")
+    elif gasto.erro_real:
+        console.print(f"\n[yellow]custo real indisponível:[/] {gasto.erro_real}")
+
+    sobra = calculo.restante(gasto, config.llm.orcamento_mensal_usd)
+    if sobra is None:
+        console.print("\n[dim]Defina llm.orcamento_mensal_usd no config.yaml "
+                      "para acompanhar quanto ainda cabe.[/]")
+        return
+
+    cheio = round(24 * sobra["fracao"])
+    cor = "red" if sobra["fracao"] >= 0.9 else "yellow" if sobra["fracao"] >= 0.7 else "green"
+    console.print(f"\n[{cor}]{'█' * cheio}[/][dim]{'░' * (24 - cheio)}[/] "
+                  f"{sobra['fracao'] * 100:.0f}% de US$ {sobra['orcamento']:.2f}")
+    fonte = "estimado" if sobra["estimado"] else "real"
+    console.print(f"[bold]US$ {sobra['sobra']:.2f}[/] ainda cabem no mês "
+                  f"[dim]({fonte})[/]")
