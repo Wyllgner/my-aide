@@ -215,14 +215,15 @@ def test_briefing_noite_fecha_o_dia(ctx, registry):
     registry.call("tasks.complete", {"id": feita["id"]}, ctx)
     registry.call("tasks.create", {"title": "Boleto", "due": "2020-01-01T09:00"}, ctx)
 
-    llm = FakeLLM()
-    deps = jobs.JobDeps(config=ctx.config, llm=llm, notifier=FakeNotifier(), conn=ctx.conn)
+    deps = jobs.JobDeps(config=ctx.config, llm=FakeLLM(), notifier=FakeNotifier(),
+                        conn=ctx.conn)
     notifier = deps.notifier
     assert jobs.briefing_noite(deps) is True
 
     titulo, corpo, urgencia = notifier.sent[0]
     assert titulo == "Fechando o dia"
-    assert corpo == "Resumo curto."
+    assert "Entregue hoje" in corpo
+    assert "Boleto" in corpo
     # O briefing da noite nunca sobe para 'critical': a urgência olha a chave
     # "atrasadas", que só o coletor da manhã produz — à noite o mesmo material
     # aparece como "ficaram para trás". Faz sentido para um resumo de fim de
@@ -231,22 +232,20 @@ def test_briefing_noite_fecha_o_dia(ctx, registry):
     assert urgencia == "normal"
 
 
-def test_briefing_noite_usa_o_modelo_barato(ctx, registry):
-    """Roda todo dia sobre dado já estruturado; modelo caro aqui é dinheiro fora."""
+def test_briefing_noite_nao_chama_a_llm(ctx, registry):
+    """Roda todo dia sobre dado já estruturado; a montagem virou determinística."""
     chamadas = []
 
     class Espiao(FakeLLM):
         def complete(self, messages, *, fast=False, tools=None, purpose="chat"):
-            chamadas.append({"fast": fast, "purpose": purpose})
+            chamadas.append(purpose)
             return super().complete(messages, fast=fast, tools=tools, purpose=purpose)
 
     registry.call("tasks.create", {"title": "X", "due": "2020-01-01T09:00"}, ctx)
     deps = jobs.JobDeps(config=ctx.config, llm=Espiao(), notifier=FakeNotifier(),
                         conn=ctx.conn)
-    jobs.briefing_noite(deps)
-
-    assert chamadas[0]["fast"] is True
-    assert chamadas[0]["purpose"] == "briefing_noite"
+    assert jobs.briefing_noite(deps) is True
+    assert chamadas == []
 
 
 def test_briefing_noite_sem_nada_nao_notifica(ctx):

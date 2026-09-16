@@ -181,11 +181,11 @@ def test_prazo_aparece_no_fuso_de_hoje():
 
     # 08:00 em São Paulo (-03) são 07:00 em Porto Velho (-04)
     texto, cor = _fmt_due("2026-09-04T08:00-03:00", agora)
-    assert texto == "04/09 07:00"
+    assert texto == "04/09 (há 16 dias)"
     assert cor == "red"  # já venceu
 
-    # gravado no fuso local, aparece como está
-    assert _fmt_due("2026-09-25T08:00-04:00", agora)[0] == "25/09 08:00"
+    # gravado no fuso local, aparece na hora de lá
+    assert _fmt_due("2026-09-21T08:00-04:00", agora)[0] == "21/09 (amanhã 08:00)"
 
 
 def test_prazo_sem_fuso_e_lido_como_local():
@@ -195,7 +195,7 @@ def test_prazo_sem_fuso_e_lido_como_local():
     from aide.comandos.base import _fmt_due
 
     agora = datetime(2026, 9, 20, 12, 0, tzinfo=ZoneInfo("America/Porto_Velho"))
-    assert _fmt_due("2026-09-25T08:00", agora)[0] == "25/09 08:00"
+    assert _fmt_due("2026-09-25T08:00", agora)[0] == "25/09 (sexta 08:00)"
 
 
 # ---------- gastos ----------
