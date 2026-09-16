@@ -80,7 +80,7 @@ def painel(ctx, registry, agora: datetime) -> str:
 
 <div style="display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:16px;margin-top:16px">
   {_cartao("Chamadas de LLM por dia",
-           graficos.area([v for _, v in consultas.chamadas_por_dia(conn, agora)], 620, 122,
+           graficos.area(consultas.chamadas_por_dia(conn, agora), 620, 96,
                          vazio="nenhuma chamada nos últimos 14 dias"))}
   {_cartao("Uso das ferramentas",
            graficos.barras(consultas.uso_das_ferramentas(conn), rotulo_px=104,
@@ -171,4 +171,99 @@ def hoje(ctx, registry, agora: datetime) -> str:
     </div>
   </div>
 </div>
+"""
+
+
+# ---------- calendário ----------
+
+DIAS_CURTOS = ("seg", "ter", "qua", "qui", "sex", "sáb", "dom")
+MESES = ("janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho",
+         "agosto", "setembro", "outubro", "novembro", "dezembro")
+ITENS_POR_DIA = 3
+
+
+def _etiqueta(item: dict, atrasado: bool) -> str:
+    """Uma marca dentro do quadrado do dia. Curta: o dia tem 3 linhas úteis."""
+    if item["feito"]:
+        fundo, cor, risco = "#F3F4F6", "var(--faint)", "text-decoration:line-through;"
+    elif atrasado:
+        fundo, cor, risco = "var(--soft)", "var(--accent)", ""
+    else:
+        fundo, cor, risco = "#F5F6F8", "#4A505C", ""
+
+    hora = ""
+    if item["tipo"] != "tarefa" or not item.get("dia_inteiro"):
+        parte = item["quando"].partition("T")[2][:5]
+        if parte and parte != "00:00":
+            hora = f"{parte} "
+    return (f'<div style="background:{fundo};color:{cor};font-size:11px;font-weight:500;'
+            f'padding:3px 7px;border-radius:6px;white-space:nowrap;overflow:hidden;'
+            f'text-overflow:ellipsis;{risco}" title="{escape(item["texto"])}">'
+            f'{escape(hora)}{escape(item["texto"])}</div>')
+
+
+def calendario(ctx, registry, agora: datetime, ano: int | None = None,
+               mes: int | None = None) -> str:
+    from calendar import Calendar
+
+    ano = ano or agora.year
+    mes = mes or agora.month
+    por_dia = consultas.planejado_no_mes(ctx.conn, ano, mes, agora.tzinfo)
+    hoje = agora.day if (ano, mes) == (agora.year, agora.month) else None
+
+    semanas = Calendar(firstweekday=0).monthdayscalendar(ano, mes)
+    celulas = []
+    for semana in semanas:
+        for dia in semana:
+            if dia == 0:
+                celulas.append('<div style="background:var(--paper);border-radius:12px"></div>')
+                continue
+
+            itens = por_dia.get(dia, [])
+            eh_hoje = dia == hoje
+            no_passado = hoje is not None and dia < hoje
+            marcas = "".join(_etiqueta(i, atrasado=no_passado and not i["feito"])
+                             for i in itens[:ITENS_POR_DIA])
+            if len(itens) > ITENS_POR_DIA:
+                marcas += (f'<div style="font-size:10.5px;color:var(--faint);padding:1px 7px">'
+                           f'+{len(itens) - ITENS_POR_DIA}</div>')
+
+            borda = "var(--accent)" if eh_hoje else "var(--line)"
+            cor_num = "var(--accent)" if eh_hoje else "var(--ink)"
+            peso = "600" if eh_hoje else "450"
+            celulas.append(
+                # min-width:0 é o que deixa o quadrado encolher: item de grid
+                # nasce com min-width:auto, que é a largura do texto sem quebra,
+                # e aí a grade transborda e o domingo sai da tela.
+                f'<div style="background:var(--surface);border:1px solid {borda};'
+                f'border-radius:12px;padding:9px 10px;display:flex;flex-direction:column;'
+                f'gap:4px;min-width:0;min-height:0;overflow:hidden">'
+                f'<span class="mono" style="font-size:12px;color:{cor_num};font-weight:{peso}">'
+                f'{dia}</span>{marcas}</div>')
+
+    legenda = "".join(
+        f'<span style="display:flex;align-items:center;gap:7px">'
+        f'<span style="width:9px;height:9px;border-radius:3px;background:{fundo};'
+        f'{borda}"></span>{rotulo}</span>'
+        for rotulo, fundo, borda in (
+            ("atrasado", "var(--soft)", "border:1px solid var(--accent)"),
+            ("planejado", "#F5F6F8", ""), ("feito", "#F3F4F6", "")))
+
+    total = sum(len(v) for v in por_dia.values())
+    cabeca = "".join(
+        f'<div style="text-align:center;font-size:11px;letter-spacing:.07em;'
+        f'text-transform:uppercase;color:var(--faint);font-weight:600">{d}</div>'
+        for d in DIAS_CURTOS)
+
+    return f"""
+{cabecalho(MESES[mes - 1].capitalize(), str(ano),
+           f'<div style="display:flex;align-items:center;gap:18px;font-size:13px;'
+           f'color:var(--muted)">{legenda}</div>')}
+<p style="margin:-14px 0 16px;font-size:13px;color:var(--muted)">
+  {total} compromisso(s) no mês</p>
+<div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;margin-bottom:6px">
+  {cabeca}
+</div>
+<div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));
+            grid-auto-rows:minmax(104px,1fr);gap:8px">{"".join(celulas)}</div>
 """

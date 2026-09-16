@@ -38,11 +38,30 @@ def _sem_dado(largura: int, altura: int, texto: str) -> str:
             f'<p style="margin:6px 0 0;font-size:11.5px;color:{FRACO}">{escape(texto)}</p>')
 
 
-def area(serie: list[float], largura: int = 600, altura: int = 120,
+def _eixo(rotulos: list[str], passo: int = 1) -> str:
+    """Rótulos sob o gráfico, distribuídos como as colunas ficam.
+
+    Com muitos pontos eles se encavalam, então só um a cada `passo` aparece —
+    melhor um eixo esparso e legível que um borrão de números.
+    """
+    celulas = "".join(
+        f'<span class="mono" style="flex:1;text-align:center;font-size:9px;'
+        f'color:{FRACO}">{escape(r) if i % passo == 0 else ""}</span>'
+        for i, r in enumerate(rotulos))
+    return f'<div style="display:flex;margin-top:2px">{celulas}</div>'
+
+
+def area(pares: list[tuple[str, float]], largura: int = 600, altura: int = 96,
          vazio: str = "sem uso registrado ainda") -> str:
-    """Área com linha. Uma série, um tom — identidade vem do título."""
+    """Área com linha e eixo de rótulos. Uma série, um tom.
+
+    A altura é modesta de propósito: uma série quase toda em zero com muito
+    espaço em cima vira um cartão vazio com um risco no pé.
+    """
+    rotulos = [r for r, _ in pares]
+    serie = [v for _, v in pares]
     if not serie or max(serie) <= 0:
-        return _sem_dado(largura, altura, vazio)
+        return _sem_dado(largura, altura, vazio) + (_eixo(rotulos, 2) if rotulos else "")
 
     pad = 6
     n = len(serie)
@@ -52,17 +71,23 @@ def area(serie: list[float], largura: int = 600, altura: int = 120,
 
     pontos = " ".join(f"{px(i):.1f},{py(v):.1f}" for i, v in enumerate(serie))
     grad = _id("g")
+    marcas = "".join(
+        f'<circle cx="{px(i):.1f}" cy="{py(v):.1f}" r="2.5" fill="{ACENTO}" '
+        f'opacity=".55"><title>{escape(r)}: {v:g}</title></circle>'
+        for i, (r, v) in enumerate(pares) if v)
     ultimo = f'<circle cx="{px(n - 1):.1f}" cy="{py(serie[-1]):.1f}" r="3.5" ' \
              f'fill="{ACENTO}" stroke="#FFF" stroke-width="2"/>'
-    return (
-        f'<svg width="100%" height="{altura}" viewBox="0 0 {largura} {altura}" role="img">'
+    svg = (
+        f'<svg width="100%" height="{altura}" viewBox="0 0 {largura} {altura}" role="img" '
+        f'preserveAspectRatio="none">'
         f'<defs><linearGradient id="{grad}" x1="0" y1="0" x2="0" y2="1">'
         f'<stop offset="0" stop-color="{ACENTO}" stop-opacity=".16"/>'
         f'<stop offset="1" stop-color="{ACENTO}" stop-opacity="0"/></linearGradient></defs>'
         f'<polygon points="{pad},{altura - pad} {pontos} {largura - pad},{altura - pad}" '
         f'fill="url(#{grad})"/>'
         f'<polyline points="{pontos}" fill="none" stroke="{ACENTO}" stroke-width="2" '
-        f'stroke-linejoin="round" stroke-linecap="round"/>{ultimo}</svg>')
+        f'stroke-linejoin="round" stroke-linecap="round"/>{marcas}{ultimo}</svg>')
+    return svg + _eixo(rotulos, 2 if n > 10 else 1)
 
 
 def colunas(pares: list[tuple[str, float]], largura: int = 600, altura: int = 96,
