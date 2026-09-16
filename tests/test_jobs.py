@@ -205,3 +205,64 @@ def test_reindex_sobrevive_a_arquivo_sumido(ctx, registry, tmp_path):
     nota = _nota_no_vault(ctx, registry, tmp_path)
     Path(nota["path"]).unlink()
     assert jobs.reindex_vault(_deps(ctx)) == 0  # não levanta
+
+
+# ---------- briefing_noite e revisao_semanal ----------
+
+def test_briefing_noite_fecha_o_dia(ctx, registry):
+    """Fecha com o que foi feito e o que ficou; sem isso o resumo é só cobrança."""
+    feita = registry.call("tasks.create", {"title": "Entregue hoje"}, ctx).data
+    registry.call("tasks.complete", {"id": feita["id"]}, ctx)
+    registry.call("tasks.create", {"title": "Boleto", "due": "2020-01-01T09:00"}, ctx)
+
+    llm = FakeLLM()
+    deps = jobs.JobDeps(config=ctx.config, llm=llm, notifier=FakeNotifier(), conn=ctx.conn)
+    notifier = deps.notifier
+    assert jobs.briefing_noite(deps) is True
+
+    titulo, corpo, urgencia = notifier.sent[0]
+    assert titulo == "Fechando o dia"
+    assert corpo == "Resumo curto."
+    # O briefing da noite nunca sobe para 'critical': a urgência olha a chave
+    # "atrasadas", que só o coletor da manhã produz — à noite o mesmo material
+    # aparece como "ficaram para trás". Faz sentido para um resumo de fim de
+    # dia, quando não há mais o que fazer; fica registrado para a diferença
+    # não passar por acidente.
+    assert urgencia == "normal"
+
+
+def test_briefing_noite_usa_o_modelo_barato(ctx, registry):
+    """Roda todo dia sobre dado já estruturado; modelo caro aqui é dinheiro fora."""
+    chamadas = []
+
+    class Espiao(FakeLLM):
+        def complete(self, messages, *, fast=False, tools=None, purpose="chat"):
+            chamadas.append({"fast": fast, "purpose": purpose})
+            return super().complete(messages, fast=fast, tools=tools, purpose=purpose)
+
+    registry.call("tasks.create", {"title": "X", "due": "2020-01-01T09:00"}, ctx)
+    deps = jobs.JobDeps(config=ctx.config, llm=Espiao(), notifier=FakeNotifier(),
+                        conn=ctx.conn)
+    jobs.briefing_noite(deps)
+
+    assert chamadas[0]["fast"] is True
+    assert chamadas[0]["purpose"] == "briefing_noite"
+
+
+def test_briefing_noite_sem_nada_nao_notifica(ctx):
+    notifier = FakeNotifier()
+    assert jobs.briefing_noite(_deps(ctx, notifier)) is False
+    assert notifier.sent == []
+
+
+def test_revisao_semanal_junta_o_que_precisa_de_atencao(ctx, registry):
+    registry.call("tasks.create", {"title": "Sem prazo há tempos"}, ctx)
+    notifier = FakeNotifier()
+    assert jobs.revisao_semanal(_deps(ctx, notifier)) is True
+    assert notifier.sent[0][0] == "Revisão da semana"
+
+
+def test_revisao_semanal_sem_nada_nao_notifica(ctx):
+    notifier = FakeNotifier()
+    assert jobs.revisao_semanal(_deps(ctx, notifier)) is False
+    assert notifier.sent == []
