@@ -480,3 +480,98 @@ def test_o_valor_da_barra_usa_virgula():
                             formatar=lambda v: f"{v:.4f}".replace(".", ","))
     assert "0,0406" in saida
     assert "0.0406" not in saida
+
+
+# ---------- conversas ----------
+
+@pytest.fixture
+def com_conversa(app):
+    conn = app.state.conn_factory()
+    for papel, texto, chamadas in (
+        ("user", "o que está atrasado?", None),
+        ("assistant", "", '[{"function":{"name":"tasks_list","arguments":"{\\"filter\\":\\"overdue\\"}"}}]'),
+        ("assistant", "Quatro coisas passaram do prazo.", None),
+    ):
+        conn.execute("INSERT INTO messages (session_id, role, content, tool_calls)"
+                     " VALUES ('s1', ?, ?, ?)", (papel, texto, chamadas))
+    conn.execute("INSERT INTO messages (session_id, role, content) VALUES ('tg9-1', 'user', 'oi')")
+    return app
+
+
+def test_conversas_lista_as_sessoes(cliente, com_conversa):
+    html = cliente.get("/conversas").text
+    assert "o que está atrasado?" in html
+    assert "telegram" in html and "aqui" in html
+
+
+def test_a_chamada_de_tool_aparece_no_meio_da_conversa(cliente, com_conversa):
+    """É onde ela acontece; separá-la esconderia por que ele respondeu aquilo."""
+    html = cliente.get("/conversas?sessao=s1").text
+    assert "tasks_list" in html
+    assert "Quatro coisas passaram do prazo." in html
+
+
+def test_sessao_desconhecida_cai_na_mais_recente(cliente, com_conversa):
+    assert cliente.get("/conversas?sessao=nao-existe").status_code == 200
+
+
+def test_sem_conversa_nenhuma_diz_onde_falar(cliente):
+    html = cliente.get("/conversas").text
+    assert "Nenhuma conversa ainda" in html
+    assert "myaide chat" in html
+
+
+def test_mensagem_com_html_e_escapada(cliente, app):
+    """O conteúdo vem do que você digitou e do que o modelo escreveu."""
+    app.state.conn_factory().execute(
+        "INSERT INTO messages (session_id, role, content)"
+        " VALUES ('x', 'user', '<img src=x onerror=alert(1)>')")
+    html = cliente.get("/conversas").text
+    assert "<img src=x" not in html
+    assert "&lt;img" in html
+
+
+# ---------- ferramentas ----------
+
+def test_ferramentas_lista_todas_as_familias(cliente, registry):
+    html = cliente.get("/ferramentas").text
+    assert f"{len(registry.names())} registradas" in html
+    for familia in ("tasks", "notes", "expenses", "usage"):
+        assert familia in html
+
+
+def test_toda_familia_tem_icone_proprio(registry):
+    """A família é nome técnico e o ícone tem nome de tela; sem o mapa,
+    metade dos cartões cai no traço genérico."""
+    from aide.web.telas import ICONE_DA_FAMILIA
+
+    familias = {n.split(".")[0] for n in registry.names()}
+    assert familias <= set(ICONE_DA_FAMILIA), familias - set(ICONE_DA_FAMILIA)
+
+
+def test_a_tool_que_pede_confirmacao_e_marcada(cliente):
+    html = cliente.get("/ferramentas").text
+    assert "confirma" in html
+    assert "não são expostas por MCP" in html
+
+
+# ---------- auditoria ----------
+
+def test_auditoria_mostra_e_filtra_por_ator(cliente, app, registry):
+    ctx = app.state.contexto()
+    registry.call("tasks.create", {"title": "X"}, ctx)
+    html = cliente.get("/auditoria").text
+    assert "tasks.create" in html
+    assert "web" in html
+
+    so_web = cliente.get("/auditoria?ator=web").text
+    assert "tasks.create" in so_web
+
+
+def test_ator_inexistente_volta_para_todos(cliente, app, registry):
+    registry.call("tasks.create", {"title": "X"}, app.state.contexto())
+    assert cliente.get("/auditoria?ator=fulano").status_code == 200
+
+
+def test_auditoria_vazia_nao_quebra(cliente):
+    assert "Nada registrado ainda" in cliente.get("/auditoria").text
