@@ -18,6 +18,13 @@ log = logging.getLogger(__name__)
 BACKOFF_INICIAL = 5
 BACKOFF_MAXIMO = 300
 
+# Quanto tempo uma confirmação pendente vale. Passado isso ela caduca: um "sim"
+# solto meia hora depois não pode apagar algo que você já esqueceu ter pedido.
+VALIDADE_CONFIRMACAO = 120
+
+SIM = {"sim", "s", "confirmo", "confirmar", "pode", "pode apagar", "isso",
+       "ok", "claro", "apaga", "apagar"}
+
 AJUDA = """Comandos:
 /hoje - o que precisa de você hoje
 /atrasadas - o que passou do prazo
@@ -36,6 +43,7 @@ Fora isso, é só falar normalmente:
 "10,50 almoço com a KA"
 "quanto gastei esse mês?"
 "anota que decidimos cortar 20% da nuvem"
+"apaga a tarefa do IPVA"   (ele pergunta antes)
 "o que eu tinha anotado sobre o carro?"
 """
 
@@ -53,6 +61,8 @@ class TelegramBot:
         self._parar = threading.Event()
         self._sessoes: dict[int, str] = {}
         self._recusados: set[int] = set()
+        # chat -> (nome da tool, argumentos, quando foi pedida)
+        self._pendentes: dict[int, tuple[str, dict, float]] = {}
         self._conn = None
 
     # ---------- ciclo de vida ----------
@@ -134,12 +144,74 @@ class TelegramBot:
             log.warning("chat não autorizado %s tentou falar com o bot", chat_id)
 
     def _resolver(self, chat_id: int, texto: str) -> str:
+        pendente = self._pendente_valido(chat_id)
+        if pendente and not texto.startswith("/"):
+            return self._responder_confirmacao(chat_id, texto, pendente)
+
         if texto.startswith("/"):
             partes = texto.split(maxsplit=1)
             nome = partes[0].lstrip("/").lower()
             resto = partes[1].strip() if len(partes) > 1 else ""
             return self._comando(chat_id, nome, resto)
-        return self._agente(chat_id).ask(texto)
+
+        resposta = self._agente(chat_id).ask(texto)
+        pedido = self._pendentes.get(chat_id)
+        if pedido:
+            # O modelo recebeu "não autorizado" e vai dizer isso. Quem responde
+            # aqui é a pergunta, que é o que faltava: a tool exige um "tem
+            # certeza?" de gente, e conversa é justamente onde dá para pedir.
+            return self._perguntar(pedido)
+        return resposta
+
+    # ---------- confirmação em dois passos ----------
+
+    def _pendente_valido(self, chat_id: int):
+        pedido = self._pendentes.get(chat_id)
+        if not pedido:
+            return None
+        if time.time() - pedido[2] > VALIDADE_CONFIRMACAO:
+            self._pendentes.pop(chat_id, None)
+            return None
+        return pedido
+
+    def _anotar_confirmacao(self, chat_id: int, nome: str, args: dict) -> bool:
+        """Chamado pelo orquestrador. Sempre nega agora e guarda para perguntar."""
+        self._pendentes[chat_id] = (nome, dict(args), time.time())
+        return False
+
+    def _descrever(self, nome: str, args: dict) -> str:
+        """O que vai ser apagado, em palavras — não `tasks.drop {'id': 4}`."""
+        alvo = args.get("id") or args.get("name") or args.get("key")
+        tabela = {"tasks.drop": ("tasks", "title"), "notes.delete": ("notes", "title"),
+                  "expenses.delete": ("expenses", "description"),
+                  "work_orders.drop": ("work_orders", "goal")}.get(nome)
+        if tabela and isinstance(alvo, int):
+            coluna = tabela[1]
+            linha = self._db().execute(
+                f"SELECT {coluna} FROM {tabela[0]} WHERE id = ?", (alvo,)).fetchone()
+            if linha:
+                return f'"{linha[coluna]}" (#{alvo})'
+        return f"{alvo}" if alvo else nome
+
+    def _perguntar(self, pedido: tuple[str, dict, float]) -> str:
+        nome, args, _ = pedido
+        verbo = {"memory.forget": "esquecer", "people.remove": "parar de acompanhar"}.get(
+            nome, "apagar")
+        return (f"Quer mesmo {verbo} {self._descrever(nome, args)}?\n"
+                f"Responda sim para confirmar. Qualquer outra coisa cancela.")
+
+    def _responder_confirmacao(self, chat_id: int, texto: str, pedido) -> str:
+        nome, args, _ = pedido
+        self._pendentes.pop(chat_id, None)
+
+        if texto.strip().lower().rstrip("!.") not in SIM:
+            return "Cancelado, não apaguei nada."
+
+        resultado = self.registry.call(nome, args, self._ctx(chat_id))
+        if not resultado.ok:
+            return f"Não deu: {resultado.error}"
+        log.info("[telegram:%s] %s confirmado e executado", chat_id, nome)
+        return f"Pronto, apaguei {self._descrever(nome, args)}."
 
     def _ctx(self, chat_id: int):
         from aide.tools.registry import ToolContext
@@ -215,8 +287,9 @@ class TelegramBot:
         return Orchestrator(
             self.config, self._db(), self.llm, session_id=session_id,
             registry=self.registry, actor=f"telegram:{chat_id}", embedder=self.embedder,
-            # sem confirmação interativa por aqui: tool 'confirm' é recusada
-            confirm=lambda name, args: False,
+            # nega agora e guarda o pedido: a pergunta vai na resposta, e a
+            # execução espera o "sim" da próxima mensagem
+            confirm=lambda nome, args: self._anotar_confirmacao(chat_id, nome, args),
         )
 
     def _responder(self, chat_id: int, texto: str) -> None:
