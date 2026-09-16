@@ -126,7 +126,8 @@ def search(ctx: ToolContext, query: str, kind: str | None = None,
     },
 )
 def list_memory(ctx: ToolContext, kind: str = "profile") -> list[dict]:
-    return [dict(r) for r in _vigentes(ctx.conn, kind)]
+    return [dict(r) for r in _vigentes(ctx.conn, kind,
+                                       incluir_privadas=ctx.ver_privado)]
 
 
 @registry.register(

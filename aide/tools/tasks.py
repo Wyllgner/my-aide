@@ -51,11 +51,22 @@ def _row(r) -> dict:
 
 
 def _require(ctx: ToolContext, task_id: int):
+    """Busca a tarefa por id. É por aqui que passam update, complete, snooze e drop.
+
+    O guard de privacidade fica aqui, e não em cada tool: qualquer uma delas
+    devolve a linha inteira, então bastava uma esquecer para o título privado
+    chegar ao modelo. Foi assim que `tasks.complete` vazou.
+    """
     row = ctx.conn.execute(
-        f"SELECT {FIELDS} FROM tasks WHERE id = ? AND deleted_at IS NULL", (task_id,)
+        f"SELECT {FIELDS}, private FROM tasks WHERE id = ? AND deleted_at IS NULL",
+        (task_id,)
     ).fetchone()
     if row is None:
         raise ValueError(f"tarefa {task_id} não existe")
+    if row["private"] and not ctx.ver_privado:
+        # a mesma frase de "não existe" seria mais discreta, mas mentir para o
+        # modelo o faz recriar a tarefa; melhor dizer que existe e não é dele.
+        raise ValueError(f"tarefa {task_id} é privada; ela não sai desta máquina")
     return row
 
 
@@ -156,6 +167,9 @@ def list_tasks(ctx: ToolContext, filter: str = "today", project: str | None = No
     if query:
         where.append("title LIKE ?")
         params.append(f"%{query}%")
+
+    if not ctx.ver_privado:
+        where.append("private = 0")
 
     rows = ctx.conn.execute(
         f"SELECT {FIELDS} FROM tasks WHERE {' AND '.join(where)}"

@@ -53,8 +53,11 @@ def _embedder(config, conn_or_factory):
 
 def _ctx() -> tuple[object, sqlite3.Connection, ToolContext]:
     config, conn = _open_db()
+    # ver_privado só aqui: é o dono, no terminal dele, olhando a própria
+    # máquina. Todo outro caminho — modelo, MCP, Telegram, GUI — fica no padrão.
     return config, conn, ToolContext(config=config, conn=conn, actor="cli",
-                                     embedder=_embedder(config, conn))
+                                     embedder=_embedder(config, conn),
+                                     ver_privado=True)
 
 
 def _confirm(name: str, args: dict) -> bool:

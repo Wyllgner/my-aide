@@ -109,6 +109,8 @@ def append(ctx: ToolContext, body: str, id: int | None = None,
         raise ValueError("informe id ou title")
 
     row = _nota(ctx, id if id is not None else title)
+    if row["private"] and not ctx.ver_privado:
+        raise ValueError("essa nota é privada; ela não sai desta máquina")
     caminho = Path(row["path"])
     if not caminho.exists():
         raise ValueError(f"o arquivo da nota sumiu: {caminho}")
@@ -134,6 +136,8 @@ def read(ctx: ToolContext, id: int | None = None, title: str | None = None) -> d
         raise ValueError("informe id ou title")
 
     row = _nota(ctx, id if id is not None else title)
+    if row["private"] and not ctx.ver_privado:
+        raise ValueError("essa nota é privada; ela não sai desta máquina")
     caminho = Path(row["path"])
     if not caminho.exists():
         raise ValueError(f"o arquivo da nota sumiu: {caminho}")
@@ -153,6 +157,8 @@ def read(ctx: ToolContext, id: int | None = None, title: str | None = None) -> d
 def list_notes(ctx: ToolContext, limit: int = 20, tag: str | None = None) -> list[dict]:
     sql = "SELECT id, title, tags, updated_at FROM notes WHERE deleted_at IS NULL"
     params: list = []
+    if not ctx.ver_privado:
+        sql += " AND private = 0"
     if tag:
         sql += " AND tags LIKE ?"
         params.append(f"%{tag}%")
