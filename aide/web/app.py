@@ -30,7 +30,7 @@ PORTA_PADRAO = 8787
 def criar_app(config=None, conn_factory=None):
     """Monta a aplicação. Recebe as dependências para poder ser testada."""
     from fastapi import FastAPI
-    from fastapi.responses import HTMLResponse
+    from fastapi.responses import HTMLResponse, Response
 
     from aide.config import load_config
 
@@ -57,14 +57,45 @@ def criar_app(config=None, conn_factory=None):
 
     app.state.contexto = contexto
 
+    def saldo_atual() -> dict | None:
+        """O rodapé da lateral. Falhar aqui não pode derrubar a página inteira."""
+        from aide.llm import custo as calculo
+
+        try:
+            return calculo.saldo_estimado(conn_factory(), config)
+        except Exception:
+            log.warning("não consegui ler o saldo para a lateral", exc_info=True)
+            return None
+
+    def render(corpo: str, ativo: str) -> str:
+        from aide.web.paginas import pagina
+
+        return pagina(corpo, ativo=ativo, saldo=saldo_atual())
+
+    app.state.render = render
+
     @app.get("/saude")
     def saude() -> dict:
         return {"ok": True, "escutando": ENDERECO}
 
-    @app.get("/", response_class=HTMLResponse)
-    def raiz() -> str:
-        from aide.web.paginas import esqueleto
+    @app.get("/app.css")
+    def folha_de_estilo() -> Response:
+        from aide.web.estilo import CSS
 
-        return esqueleto()
+        return Response(CSS, media_type="text/css",
+                        headers={"cache-control": "max-age=300"})
+
+    # Uma rota por tela. As que ainda não têm conteúdo respondem a moldura com
+    # um aviso — assim a navegação inteira já é navegável e testável.
+    from aide.web.paginas import TELAS, cabecalho, em_breve
+
+    def _registrar(tela):
+        @app.get(tela.caminho, response_class=HTMLResponse, name=tela.slug)
+        def ver() -> str:
+            corpo = cabecalho(tela.rotulo) + em_breve(tela.rotulo)
+            return render(corpo, tela.slug)
+
+    for tela in TELAS:
+        _registrar(tela)
 
     return app
