@@ -575,3 +575,87 @@ def test_ator_inexistente_volta_para_todos(cliente, app, registry):
 
 def test_auditoria_vazia_nao_quebra(cliente):
     assert "Nada registrado ainda" in cliente.get("/auditoria").text
+
+
+# ---------- notas, memória, pessoas, fila ----------
+
+@pytest.fixture
+def com_nota(app, registry, tmp_path):
+    ctx = app.state.contexto()
+    object.__setattr__(ctx.config, "vault_dir", tmp_path / "v")
+    registry.call("notes.create", {"title": "Manutenção do carro",
+                                   "body": "trocar o óleo antes da viagem",
+                                   "tags": "carro,viagem"}, ctx)
+    registry.call("notes.create", {"title": "Reunião de orçamento",
+                                   "body": "cortar 20% da nuvem"}, ctx)
+    return app
+
+
+def test_notas_lista_e_abre_o_conteudo(cliente, com_nota):
+    html = cliente.get("/notas").text
+    assert "Manutenção do carro" in html
+    assert "trocar o óleo antes da viagem" in html
+
+
+def test_abrir_outra_nota_pela_url(cliente, com_nota):
+    html = cliente.get("/notas?nota=2").text
+    assert "cortar 20% da nuvem" in html
+
+
+def test_nota_inexistente_cai_na_primeira(cliente, com_nota):
+    assert cliente.get("/notas?nota=999").status_code == 200
+
+
+def test_a_busca_e_um_get(cliente, com_nota):
+    """Formulário GET: continua leitura, e o resultado tem URL própria."""
+    html = cliente.get("/notas").text
+    assert 'method="get"' in html
+    assert cliente.get("/notas?busca=carro").status_code == 200
+
+
+def test_nota_privada_aparece_para_o_dono(cliente, app, registry, tmp_path):
+    ctx = app.state.contexto()
+    object.__setattr__(ctx.config, "vault_dir", tmp_path / "v")
+    registry.call("notes.create", {"title": "Laudo", "body": "SEGREDO",
+                                   "private": True}, ctx)
+    assert "SEGREDO" in cliente.get("/notas").text
+
+
+def test_memoria_separa_perfil_de_episodico(cliente, app, registry):
+    ctx = app.state.contexto()
+    registry.call("memory.save", {"kind": "profile", "key": "treino",
+                                  "value": "todo dia às 6h"}, ctx)
+    registry.call("memory.save", {"kind": "episodic", "key": "pedro",
+                                  "value": "vai se mudar"}, ctx)
+    html = cliente.get("/memoria").text
+    assert "Perfil" in html and "Episódico" in html
+    assert "todo dia às 6h" in html and "vai se mudar" in html
+
+
+def test_pessoas_marca_quem_esta_em_atraso(cliente, app):
+    app.state.conn_factory().execute(
+        "INSERT INTO people (name, relation, cadence_days, last_contact_at)"
+        " VALUES ('Pedro', 'irmão', 7, '2020-01-01T10:00')")
+    html = cliente.get("/pessoas").text
+    assert "Pedro" in html
+    assert "1 em atraso" in html
+
+
+def test_sem_pessoa_nenhuma_diz_como_registrar(cliente):
+    assert "Ninguém registrado" in cliente.get("/pessoas").text
+
+
+def test_a_fila_mostra_o_resultado_gravado(cliente, app, registry):
+    """É o que faz trabalho feito fora virar memória aqui."""
+    ctx = app.state.contexto()
+    ordem = registry.call("work_orders.create", {"goal": "Triar atrasadas"}, ctx).data
+    registry.call("work_orders.complete",
+                  {"id": ordem["id"], "result_summary": "Quatro itens revisados."}, ctx)
+    html = cliente.get("/fila").text
+    assert "Triar atrasadas" in html
+    assert "Quatro itens revisados." in html
+    assert "concluída" in html
+
+
+def test_fila_vazia_diz_como_enfileirar(cliente):
+    assert "myaide enfileirar" in cliente.get("/fila").text
