@@ -139,9 +139,14 @@ def planejado_no_mes(conn, ano: int, mes: int, tz) -> dict[int, list[dict]]:
             return
         por_dia.setdefault(dia, []).append(item)
 
+    # `status <> 'dropped'` e não só `deleted_at IS NULL`: descartar uma tarefa
+    # marca o status, não apaga a linha, e sem isto ela seguia ocupando o dia
+    # no calendário depois de você tê-la descartado. Concluída fica — riscada,
+    # porque saber o que foi feito naquele dia é metade do que o mês conta.
     for r in conn.execute(
         "SELECT id, title, due_at, status FROM tasks WHERE deleted_at IS NULL"
-        " AND due_at BETWEEN ? AND ? ORDER BY due_at", (de, ate)).fetchall():
+        " AND status <> 'dropped' AND due_at BETWEEN ? AND ? ORDER BY due_at",
+        (de, ate)).fetchall():
         juntar(r["due_at"], {"tipo": "tarefa", "ref": f"#{r['id']}", "texto": r["title"],
                              "feito": r["status"] == "done", "quando": r["due_at"]})
 
