@@ -77,6 +77,11 @@ def _fmt_due(due: str | None, now: datetime) -> tuple[str, str]:
     moment = datetime.fromisoformat(due)
     if moment.tzinfo is None:
         moment = moment.replace(tzinfo=now.tzinfo)
+    # Converte para o fuso de hoje antes de mostrar. Um prazo gravado noutro
+    # fuso — porque você mudou de cidade, ou porque veio de um feed iCal —
+    # apareceria com a hora de lá, e você leria o horário errado achando que
+    # está certo. A comparação abaixo sempre esteve correta: ela usa o instante.
+    moment = moment.astimezone(now.tzinfo)
     if moment < now:
         return moment.strftime("%d/%m %H:%M"), "red"
     if moment.date() == now.date():

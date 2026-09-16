@@ -164,3 +164,35 @@ def test_mcp_config_aponta_para_um_binario_que_existe(run):
 
     bloco = json.loads(re.search(r"\{.*\}", run("mcp-config").output, re.DOTALL).group())
     assert pathlib.Path(bloco["mcpServers"]["my-aide"]["command"]).exists()
+
+
+# ---------- fuso ----------
+
+def test_prazo_aparece_no_fuso_de_hoje():
+    """Prazo gravado noutro fuso — mudança de cidade, ou feed iCal — precisa
+    ser convertido antes de exibir, senão você lê a hora de lá achando que é a
+    sua. A comparação de atraso sempre usou o instante e não depende disto."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from aide.comandos.base import _fmt_due
+
+    agora = datetime(2026, 9, 20, 12, 0, tzinfo=ZoneInfo("America/Porto_Velho"))
+
+    # 08:00 em São Paulo (-03) são 07:00 em Porto Velho (-04)
+    texto, cor = _fmt_due("2026-09-04T08:00-03:00", agora)
+    assert texto == "04/09 07:00"
+    assert cor == "red"  # já venceu
+
+    # gravado no fuso local, aparece como está
+    assert _fmt_due("2026-09-25T08:00-04:00", agora)[0] == "25/09 08:00"
+
+
+def test_prazo_sem_fuso_e_lido_como_local():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from aide.comandos.base import _fmt_due
+
+    agora = datetime(2026, 9, 20, 12, 0, tzinfo=ZoneInfo("America/Porto_Velho"))
+    assert _fmt_due("2026-09-25T08:00", agora)[0] == "25/09 08:00"
