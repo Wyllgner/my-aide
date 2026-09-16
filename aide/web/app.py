@@ -87,12 +87,22 @@ def criar_app(config=None, conn_factory=None):
 
     # Uma rota por tela. As que ainda não têm conteúdo respondem a moldura com
     # um aviso — assim a navegação inteira já é navegável e testável.
+    from aide.core.context import now_in
+    from aide.tools import registry as toolbelt
+    from aide.web import telas as conteudo
     from aide.web.paginas import TELAS, cabecalho, em_breve
+
+    # Cada tela é uma função (ctx, registry, agora) -> html. A que ainda não
+    # existe cai no aviso dentro da moldura, em vez de deixar a rota em 404.
+    MONTADORES = {"painel": conteudo.painel, "hoje": conteudo.hoje}
 
     def _registrar(tela):
         @app.get(tela.caminho, response_class=HTMLResponse, name=tela.slug)
         def ver() -> str:
-            corpo = cabecalho(tela.rotulo) + em_breve(tela.rotulo)
+            montar = MONTADORES.get(tela.slug)
+            if montar is None:
+                return render(cabecalho(tela.rotulo) + em_breve(tela.rotulo), tela.slug)
+            corpo = montar(contexto(), toolbelt, now_in(config.timezone))
             return render(corpo, tela.slug)
 
     for tela in TELAS:
