@@ -165,3 +165,79 @@ def test_a_tool_informa_o_que_ainda_cabe(com_uso, registry):
     resposta = registry.call("usage.cost", {}, com_uso).data
     assert resposta["ainda_cabe_usd"] == 3.55
     assert resposta["usado_do_orcamento"] == "29%"
+
+
+# ---------- saldo ancorado ----------
+
+def test_sem_ancora_nao_ha_saldo(ctx):
+    """Sem um número lido no painel, não há resposta honesta para 'quanto tenho'."""
+    assert calculo.saldo_estimado(ctx.conn, ctx.config) is None
+
+
+def test_saldo_e_a_ancora_menos_o_gasto_depois_dela(ctx):
+    ctx.conn.execute(
+        "INSERT INTO llm_usage (ts, model, purpose, input_tokens, output_tokens)"
+        " VALUES (datetime('now','-2 days'), 'gpt-5.6-luna', 'chat', 1000000, 0)")
+    calculo.anotar_saldo(ctx.conn, 4.22, "2026-09-16T17:00-04:00")
+    # depois da âncora: 1M de entrada no luna = US$ 0,20
+    ctx.conn.execute(
+        "INSERT INTO llm_usage (model, purpose, input_tokens, output_tokens)"
+        " VALUES ('gpt-5.6-luna', 'chat', 1000000, 0)")
+
+    saldo = calculo.saldo_estimado(ctx.conn, ctx.config)
+    assert saldo["ancora_usd"] == 4.22
+    assert round(saldo["gasto_desde"], 4) == 0.20
+    assert round(saldo["saldo_usd"], 2) == 4.02
+
+
+def test_gasto_anterior_a_ancora_nao_e_descontado(ctx):
+    """A âncora já reflete o que foi gasto antes dela; descontar de novo cobraria duas vezes."""
+    ctx.conn.execute(
+        "INSERT INTO llm_usage (ts, model, purpose, input_tokens, output_tokens)"
+        " VALUES (datetime('now','-5 days'), 'gpt-5.6-luna', 'chat', 5000000, 0)")
+    calculo.anotar_saldo(ctx.conn, 4.22, "2026-09-16T17:00-04:00")
+
+    assert calculo.saldo_estimado(ctx.conn, ctx.config)["gasto_desde"] == 0.0
+
+
+def test_a_ancora_mais_recente_manda(ctx):
+    calculo.anotar_saldo(ctx.conn, 10.0, "2026-09-01T10:00-04:00")
+    calculo.anotar_saldo(ctx.conn, 4.22, "2026-09-16T17:00-04:00")
+    assert calculo.saldo_estimado(ctx.conn, ctx.config)["ancora_usd"] == 4.22
+
+
+def test_historico_de_ancoras_e_guardado(ctx):
+    """Duas âncoras permitem conferir se a estimativa acompanha a cobrança real."""
+    calculo.anotar_saldo(ctx.conn, 10.0, "2026-09-01T10:00-04:00")
+    calculo.anotar_saldo(ctx.conn, 4.22, "2026-09-16T17:00-04:00")
+    assert ctx.conn.execute("SELECT COUNT(*) c FROM api_balance").fetchone()["c"] == 2
+
+
+def test_saldo_e_guardado_em_centavos_inteiros(ctx):
+    calculo.anotar_saldo(ctx.conn, 4.22, "2026-09-16T17:00-04:00")
+    assert ctx.conn.execute("SELECT cents FROM api_balance").fetchone()["cents"] == 422
+
+
+def test_saldo_negativo_e_recusado(ctx):
+    with pytest.raises(ValueError, match="negativo"):
+        calculo.anotar_saldo(ctx.conn, -1, "2026-09-16T17:00-04:00")
+
+
+def test_a_tool_diz_que_o_saldo_e_estimativa(ctx, registry):
+    """Sem isso o modelo apresenta o número como se fosse o saldo real da conta."""
+    calculo.anotar_saldo(ctx.conn, 4.22, "2026-09-16T17:00-04:00")
+    resposta = registry.call("usage.cost", {}, ctx).data
+    assert resposta["saldo_estimado_usd"] == 4.22
+    assert "estimativa" in resposta["sobre_o_saldo"]
+
+
+def test_a_tool_admite_nao_saber_o_saldo(ctx, registry):
+    resposta = registry.call("usage.cost", {}, ctx).data
+    assert "não sei" in resposta["saldo_da_conta"]
+    assert "myaide saldo" in resposta["saldo_da_conta"]
+
+
+def test_a_tool_anota_o_saldo_que_a_pessoa_falou(ctx, registry):
+    """Pelo Telegram é assim que o número entra: falando."""
+    assert registry.call("usage.set_balance", {"usd": "4,22"}, ctx).data["saldo_anotado_usd"] == 4.22
+    assert registry.call("usage.cost", {}, ctx).data["saldo_estimado_usd"] == 4.22

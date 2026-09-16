@@ -166,8 +166,21 @@ myaide custo -d 7     # últimos 7 dias
 Por conversa também: "quanto de API eu já gastei esse mês?".
 
 **Saldo da conta a OpenAI não expõe por API** — os endpoints de billing exigem a
-sessão do navegador e recusam chave de API com 403. Então "quanto ainda tenho" é
-medido contra um teto que você define:
+sessão do navegador e recusam chave de API com 403. O jeito de acompanhar é
+ancorar: você lê o saldo no painel uma vez, anota, e o assessor desconta o gasto
+a partir dali.
+
+```bash
+myaide saldo 4.22     # o que o painel mostra
+myaide saldo          # quanto deve restar hoje
+```
+
+Por conversa funciona igual: "meu saldo da API é 4,22" anota, "quanto ainda
+tenho de crédito?" responde. É estimativa, e ele diz que é — reancore quando
+passar do painel de novo. Depois de um mês sem reancorar, ele lembra você.
+
+Há também um teto mensal opcional, para quem prefere limitar o ritmo em vez de
+acompanhar o saldo:
 
 ```yaml
 llm:
