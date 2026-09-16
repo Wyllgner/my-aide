@@ -286,7 +286,7 @@ def test_a_confirmacao_caduca(ctx, tmp_path):
     bot = _bot(ctx, tmp_path)
     conn = bot._db()
     conn.execute("INSERT INTO tasks (id, title) VALUES (1, 'Pagar o IPVA')")
-    bot._pendentes[42] = ("tasks.drop", {"id": 1}, time.time() - 999)
+    bot._pendentes[42] = ([("tasks.drop", {"id": 1})], time.time() - 999)
 
     bot._tratar(_msg("sim"))
     assert conn.execute("SELECT status FROM tasks WHERE id = 1").fetchone()["status"] == "open"
@@ -321,3 +321,79 @@ def test_a_pergunta_diz_o_que_vai_sumir(ctx, tmp_path):
     bot._db().execute("INSERT INTO notes (id, title, path) VALUES (7, 'Laudo médico', '/x')")
     _pedir_para_apagar(bot, "notes.delete", {"id": 7})
     assert "Laudo médico" in bot._perguntar(bot._pendentes[42])
+
+
+def test_apaga_varias_de_uma_vez(ctx, tmp_path):
+    """Uma volta do modelo pode pedir várias exclusões; guardar só a última
+    apagaria uma e perderia as outras caladamente."""
+    bot = _bot(ctx, tmp_path)
+    conn = bot._db()
+    for i, nome in ((1, "Pagar o IPVA"), (2, "Renovar a CNH"), (3, "Levar o carro")):
+        conn.execute("INSERT INTO tasks (id, title) VALUES (?, ?)", (i, nome))
+
+    for i in (1, 2, 3):
+        bot._anotar_confirmacao(42, "tasks.drop", {"id": i})
+
+    pergunta = bot._perguntar(bot._pendentes[42])
+    assert "3 coisas" in pergunta
+    for nome in ("Pagar o IPVA", "Renovar a CNH", "Levar o carro"):
+        assert nome in pergunta
+
+    bot._tratar(_msg("sim"))
+    status = [r["status"] for r in conn.execute("SELECT status FROM tasks ORDER BY id")]
+    assert status == ["dropped", "dropped", "dropped"]
+    assert "Pagar o IPVA" in bot.enviadas[-1][1]
+
+
+def test_o_nao_cancela_o_lote_inteiro(ctx, tmp_path):
+    bot = _bot(ctx, tmp_path)
+    conn = bot._db()
+    conn.execute("INSERT INTO tasks (id, title) VALUES (1, 'A')")
+    conn.execute("INSERT INTO tasks (id, title) VALUES (2, 'B')")
+    bot._anotar_confirmacao(42, "tasks.drop", {"id": 1})
+    bot._anotar_confirmacao(42, "tasks.drop", {"id": 2})
+
+    bot._tratar(_msg("não"))
+    assert [r["status"] for r in conn.execute("SELECT status FROM tasks")] == ["open", "open"]
+
+
+def test_o_que_falhou_no_lote_e_dito(ctx, tmp_path):
+    """Calar a falha faria você achar que apagou tudo."""
+    bot = _bot(ctx, tmp_path)
+    bot._db().execute("INSERT INTO tasks (id, title) VALUES (1, 'Existe')")
+    bot._anotar_confirmacao(42, "tasks.drop", {"id": 1})
+    bot._anotar_confirmacao(42, "tasks.drop", {"id": 999})
+
+    bot._tratar(_msg("sim"))
+    resposta = bot.enviadas[-1][1]
+    assert "Existe" in resposta
+    assert "Não consegui" in resposta
+    assert "999" in resposta
+
+
+def test_o_mesmo_pedido_duas_vezes_conta_uma(ctx, tmp_path):
+    bot = _bot(ctx, tmp_path)
+    bot._db().execute("INSERT INTO tasks (id, title) VALUES (1, 'A')")
+    bot._anotar_confirmacao(42, "tasks.drop", {"id": 1})
+    bot._anotar_confirmacao(42, "tasks.drop", {"id": 1})
+    assert len(bot._pendentes[42][0]) == 1
+
+
+def test_o_lote_tem_teto(ctx, tmp_path):
+    """Um 'sim' não deveria varrer a base, e ninguém lê trinta itens antes de responder."""
+    from aide.channels.telegram_bot import LIMITE_CONFIRMACAO
+
+    bot = _bot(ctx, tmp_path)
+    for i in range(LIMITE_CONFIRMACAO + 8):
+        bot._anotar_confirmacao(42, "tasks.drop", {"id": i})
+    assert len(bot._pendentes[42][0]) == LIMITE_CONFIRMACAO
+
+
+def test_a_descricao_e_feita_antes_de_apagar(ctx, tmp_path):
+    """Depois de apagada a linha some, e a resposta viraria 'apaguei 1'."""
+    bot = _bot(ctx, tmp_path)
+    bot._db().execute("INSERT INTO notes (id, title, path) VALUES (1, 'Laudo', '/x')")
+    bot._anotar_confirmacao(42, "notes.delete", {"id": 1})
+
+    bot._tratar(_msg("sim"))
+    assert "Laudo" in bot.enviadas[-1][1]
