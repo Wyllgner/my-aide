@@ -51,9 +51,13 @@ def criar_app(config=None, conn_factory=None):
 
         A mesma decisão do terminal. O que a sustenta é o bind — se um dia a
         página escutar fora daqui, isto precisa mudar junto.
+
+        `auditar=False` porque abrir uma tela não é um acontecimento: a trilha
+        registra o que mudou, e aqui nada muda. Vale enquanto não houver rota
+        de escrita, e é isso que `test_nenhuma_rota_escreve` protege.
         """
         return ToolContext(config=config, conn=conn_factory(), actor="web",
-                           ver_privado=True)
+                           ver_privado=True, auditar=False)
 
     app.state.contexto = contexto
 

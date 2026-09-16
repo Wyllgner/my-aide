@@ -30,6 +30,15 @@ class ToolContext:
     # do dono pede. Isto não é argumento de tool: se estivesse no schema, o
     # próprio modelo poderia ligar.
     ver_privado: bool = False
+    # A trilha em `audit` existe para registrar o que *aconteceu*. Uma
+    # interface de leitura que recarrega sozinha enche a tabela de "olhou a
+    # lista de tarefas" e soterra as ações que importam — a GUI antiga chegou
+    # a responder por 413 de 572 linhas. Quem só lê desliga isto.
+    #
+    # Não é um interruptor geral de auditoria: quem escreve mantém `True`, e a
+    # web só pode desligá-lo porque não tem nenhuma rota de escrita — o que
+    # `test_nenhuma_rota_escreve` garante.
+    auditar: bool = True
 
 
 @dataclass
@@ -119,7 +128,8 @@ class Registry:
         except Exception as exc:  # noqa: BLE001 - o loop precisa continuar vivo
             result = ToolResult(False, error=f"{type(exc).__name__}: {exc}")
 
-        self._audit(ctx, name, args, result)
+        if ctx.auditar:
+            self._audit(ctx, name, args, result)
         return result
 
     @staticmethod
