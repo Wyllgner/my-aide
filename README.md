@@ -23,7 +23,8 @@ myaide ls overdue                    # today | overdue | week | inbox | done | a
 myaide chat                          # conversa; ele cria e altera tarefas sozinho
 myaide checar                        # o que as regras de condição estão vendo
 myaide status                        # retrato geral: estado, cobranças e custo
-myaide usage                         # quanto de LLM foi consumido
+mymyaide custo                       # quanto a API custou e quanto ainda cabe no mês
+myaide usage                       # quanto de LLM foi consumido
 myaide pessoas                       # com quem você combinou de manter contato
 myaide falei Pedro "vai se mudar"    # registra o contato
 ```
@@ -154,6 +155,30 @@ myaide job queue_work          # roda agora o que o daemon faria
 
 No executor, comece por `work_orders_list`; ao terminar, `work_orders_complete`
 grava o resultado aqui — é assim que o trabalho feito lá fora vira memória.
+
+## Quanto custa
+
+```bash
+myaide custo          # mês corrente, com barra do orçamento
+myaide custo -d 7     # últimos 7 dias
+```
+
+Por conversa também: "quanto de API eu já gastei esse mês?".
+
+**Saldo da conta a OpenAI não expõe por API** — os endpoints de billing exigem a
+sessão do navegador e recusam chave de API com 403. Então "quanto ainda tenho" é
+medido contra um teto que você define:
+
+```yaml
+llm:
+  orcamento_mensal_usd: 5.0    # 0 desliga
+```
+
+O número padrão é estimado dos tokens registrados vezes os preços do
+`config.yaml`. Para ver o **custo real** cobrado pela OpenAI, crie uma chave de
+admin (platform.openai.com > Settings > Organization > Admin keys) com o escopo
+`api.usage.read` e ponha em `.env` como `OPENAI_ADMIN_KEY`. É outro tipo de
+credencial: a chave normal da API não serve.
 
 ## Configuração
 
