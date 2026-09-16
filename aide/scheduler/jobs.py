@@ -188,7 +188,8 @@ def reindex_vault(deps: JobDeps) -> int:
                 log.warning("embedding da nota %s falhou", row["id"], exc_info=True)
                 vetor = None
             if vetor:
-                guardar_vetor(conn, "note", row["id"], f"{row['title']}\n\n{corpo}", vetor)
+                guardar_vetor(conn, "note", row["id"], f"{row['title']}\n\n{corpo}", vetor,
+                              embedder.modelo)
 
         reindexadas += 1
         log.info("nota %s reindexada (arquivo mudou)", row["id"])

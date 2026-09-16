@@ -32,7 +32,8 @@ def _indexar_tudo(ctx: ToolContext, note_id: int, title: str, body: str) -> None
         log.warning("não consegui gerar embedding da nota %s", note_id, exc_info=True)
         return
     if vetor:
-        guardar_vetor(ctx.conn, "note", note_id, f"{title}\n\n{body}", vetor)
+        guardar_vetor(ctx.conn, "note", note_id, f"{title}\n\n{body}", vetor,
+                      embedder.modelo)
 
 
 def _nota(ctx: ToolContext, id_ou_titulo):
