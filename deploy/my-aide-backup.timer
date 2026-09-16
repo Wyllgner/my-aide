@@ -1,0 +1,11 @@
+[Unit]
+Description=my-aide - backup diário
+
+[Timer]
+OnCalendar=daily
+# a máquina não fica ligada 24h; sem isto, um backup perdido nunca é recuperado
+Persistent=true
+RandomizedDelaySec=15m
+
+[Install]
+WantedBy=timers.target

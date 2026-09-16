@@ -1,0 +1,13 @@
+# Cópia diária de data/ e vault/. Disparado pelo my-aide-backup.timer.
+#
+#   cp deploy/my-aide-backup.{service,timer} ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now my-aide-backup.timer
+#   systemctl --user start my-aide-backup    # rodar agora, para testar
+
+[Unit]
+Description=my-aide - backup de data/ e vault/
+
+[Service]
+Type=oneshot
+ExecStart=%h/Documentos/acessor/deploy/backup.sh
