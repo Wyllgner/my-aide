@@ -134,7 +134,7 @@ def doctor() -> None:
         ("tools", bool(registry.names()), f"{len(registry.names())} registradas"),
         ("telegram", config.telegram.usable,
          "configurado" if config.telegram.usable
-         else "desligado (opcional — veja 'aide telegram-id')"),
+         else "desligado (opcional — veja 'myaide telegram-id')"),
     ]
     table = Table(show_header=False, box=None)
     for name, ok, detail in checks:
@@ -442,7 +442,7 @@ def mcp_config() -> None:
     import sys
     from pathlib import Path
 
-    binario = str(Path(sys.executable).parent / "aide-mcp")
+    binario = str(Path(sys.executable).parent / "myaide-mcp")
     bloco = {"mcpServers": {"my-aide": {"command": binario, "args": []}}}
     console.print(json.dumps(bloco, indent=2))
     console.print("\n[dim]Cole em claude_desktop_config.json (ou no cliente MCP que usar).[/]")

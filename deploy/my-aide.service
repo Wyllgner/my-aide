@@ -16,7 +16,7 @@ After=graphical-session.target
 [Service]
 Type=simple
 WorkingDirectory=%h/Documentos/acessor
-ExecStart=%h/Documentos/acessor/.venv/bin/aide serve
+ExecStart=%h/Documentos/acessor/.venv/bin/myaide serve
 Restart=on-failure
 RestartSec=10
 # notify-send precisa alcançar a sessão gráfica
