@@ -32,11 +32,12 @@ def list_events(ctx: ToolContext, dias: int = 7) -> list[dict]:
     agora = now_in(ctx.config.timezone)
     limite = (agora + timedelta(days=dias)).isoformat(timespec="minutes")
     rows = ctx.conn.execute(
-        "SELECT id, title, start_at, end_at, location FROM events"
+        "SELECT id, title, start_at, end_at, location, all_day FROM events"
         " WHERE deleted_at IS NULL AND start_at BETWEEN ? AND ? ORDER BY start_at",
         (agora.replace(hour=0, minute=0).isoformat(timespec="minutes"), limite),
     ).fetchall()
-    return [dict(r) for r in rows]
+    # `dia_inteiro` é o nome que ical.conflitos() espera; a coluna é all_day.
+    return [{**dict(r), "dia_inteiro": bool(r["all_day"])} for r in rows]
 
 
 @registry.register(
@@ -76,9 +77,10 @@ def sincronizar(conn, config, url: str | None = None) -> dict:
     conn.execute("DELETE FROM events WHERE source = 'ical'")
     for evento in eventos:
         conn.execute(
-            "INSERT INTO events (title, start_at, end_at, location, source, external_id)"
-            " VALUES (?, ?, ?, ?, 'ical', ?)",
+            "INSERT INTO events (title, start_at, end_at, location, source, external_id,"
+            " all_day) VALUES (?, ?, ?, ?, 'ical', ?, ?)",
             (evento["title"], evento["start_at"], evento.get("end_at"),
-             evento.get("location"), evento.get("external_id")),
+             evento.get("location"), evento.get("external_id"),
+             int(bool(evento.get("dia_inteiro")))),
         )
     return {"importados": len(eventos)}
