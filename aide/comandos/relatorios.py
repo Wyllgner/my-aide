@@ -235,10 +235,18 @@ def custo(dias: int = typer.Option(0, "--dias", "-d",
     elif gasto.erro_real:
         console.print(f"\n[yellow]custo real indisponível:[/] {gasto.erro_real}")
 
+    # o saldo ancorado responde melhor "quanto ainda tenho" do que um teto
+    # inventado, então ele vem primeiro quando existe
+    estimado = calculo.saldo_estimado(conn, config)
+    if estimado is not None:
+        console.print()
+        _mostrar_saldo(estimado)
+        return
+
     sobra = calculo.restante(gasto, config.llm.orcamento_mensal_usd)
     if sobra is None:
-        console.print("\n[dim]Defina llm.orcamento_mensal_usd no config.yaml "
-                      "para acompanhar quanto ainda cabe.[/]")
+        console.print("\n[dim]Anote o saldo do painel com [/][bold]myaide saldo 4.22[/]"
+                      "[dim] para acompanhar quanto ainda resta.[/]")
         return
 
     cheio = round(24 * sobra["fracao"])
@@ -248,3 +256,55 @@ def custo(dias: int = typer.Option(0, "--dias", "-d",
     fonte = "estimado" if sobra["estimado"] else "real"
     console.print(f"[bold]US$ {sobra['sobra']:.2f}[/] ainda cabem no mês "
                   f"[dim]({fonte})[/]")
+
+
+@app.command()
+def saldo(valor: str = typer.Argument(None, help='O que o painel da OpenAI mostra, ex. "4.22"')) -> None:
+    """Anota o saldo da API, ou mostra o estimado.
+
+    A OpenAI não expõe saldo por API — os endpoints de billing exigem a sessão
+    do navegador. Então você lê no painel, anota aqui, e o assessor desconta o
+    gasto a partir daí.
+    """
+    from aide.llm import custo as calculo
+
+    config, conn = _open_db()
+    agora = now_in(config.timezone)
+
+    if valor:
+        from aide.tools.expenses import parse_valor
+
+        try:
+            usd = parse_valor(valor) / 100
+        except ValueError as exc:
+            console.print(f"[red]{exc}[/]")
+            raise typer.Exit(1) from exc
+        calculo.anotar_saldo(conn, usd, agora.isoformat(timespec="minutes"))
+        console.print(f"[green]anotado[/] US$ {usd:.2f} em {agora.strftime('%d/%m %H:%M')}")
+        return
+
+    estimado = calculo.saldo_estimado(conn, config)
+    if estimado is None:
+        console.print("[dim]Nenhum saldo anotado ainda.[/]\n"
+                      "Veja em platform.openai.com > Settings > Billing e rode:\n"
+                      "  [bold]myaide saldo 4.22[/]")
+        return
+
+    _mostrar_saldo(estimado)
+
+
+def _mostrar_saldo(e: dict) -> None:
+    fracao = e["fracao_usada"]
+    cheio = round(24 * fracao)
+    cor = "red" if fracao >= 0.9 else "yellow" if fracao >= 0.7 else "green"
+    dias = e["dias_desde"]
+    quando = "hoje" if dias == 0 else "ontem" if dias == 1 else f"há {dias} dias"
+
+    console.print(f"[{cor}]{'█' * cheio}[/][dim]{'░' * (24 - cheio)}[/]")
+    console.print(f"[bold]US$ {e['saldo_usd']:.2f}[/] estimados")
+    console.print(f"[dim]US$ {e['ancora_usd']:.2f} anotados {quando} "
+                  f"− US$ {e['gasto_desde']:.4f} gastos desde então[/]")
+
+    if dias >= 30:
+        console.print("\n[yellow]a âncora tem mais de um mês.[/] Confira no painel e "
+                      "rode [bold]myaide saldo <valor>[/] de novo.")

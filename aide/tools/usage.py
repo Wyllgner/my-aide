@@ -15,10 +15,10 @@ from aide.tools.registry import ToolContext, registry
 @registry.register(
     name="usage.cost",
     description=(
-        "Quanto a API da OpenAI custou no período e quanto ainda cabe no "
-        "orçamento do mês. Use para 'quanto você já me custou', 'quanto gastei "
-        "de API', 'ainda tenho crédito?'. Não é o saldo da conta: a OpenAI não "
-        "expõe saldo por API, então diga isso se perguntarem por saldo."
+        "Quanto a API da OpenAI custou e quanto de saldo deve restar. Use para "
+        "'quanto você já me custou', 'quanto gastei de API', 'quanto ainda tenho "
+        "de crédito'. O saldo é estimado a partir do último valor anotado do "
+        "painel; diga que é estimativa ao responder."
     ),
     parameters={
         "type": "object",
@@ -50,10 +50,23 @@ def cost(ctx: ToolContext, dias: int | None = None) -> dict:
              "usd": round(m["usd"], 4) if m["usd"] is not None else None}
             for m in gasto.por_modelo
         ],
-        "saldo_da_conta": (
-            "indisponível: a OpenAI não expõe saldo por API, só pelo painel"
-        ),
     }
+
+    saldo = calculo.saldo_estimado(ctx.conn, ctx.config)
+    if saldo:
+        resposta["saldo_estimado_usd"] = round(saldo["saldo_usd"], 2)
+        resposta["saldo_anotado_usd"] = saldo["ancora_usd"]
+        resposta["saldo_anotado_ha_dias"] = saldo["dias_desde"]
+        resposta["sobre_o_saldo"] = (
+            "estimativa: o saldo anotado no painel menos o gasto calculado desde "
+            "então. A OpenAI não expõe saldo por API. Se a âncora tiver mais de "
+            "um mês, sugira conferir no painel e rodar `myaide saldo <valor>`."
+        )
+    else:
+        resposta["saldo_da_conta"] = (
+            "não sei: a OpenAI não expõe saldo por API e nenhum foi anotado. "
+            "Sugira `myaide saldo <valor>` com o que o painel mostra."
+        )
     if gasto.real_usd is not None:
         resposta["real_usd"] = round(gasto.real_usd, 4)
     if gasto.erro_real:
@@ -65,3 +78,29 @@ def cost(ctx: ToolContext, dias: int | None = None) -> dict:
     else:
         resposta["orcamento"] = "não definido em config.yaml (llm.orcamento_mensal_usd)"
     return resposta
+
+
+@registry.register(
+    name="usage.set_balance",
+    description=(
+        "Anota o saldo da API que a pessoa leu no painel da OpenAI. Use quando "
+        "ela disser quanto tem — 'tenho 4,22 na API', 'meu saldo é 10 dólares'. "
+        "A partir daí o saldo estimado parte desse número."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "usd": {"type": "string",
+                    "description": "Em dólares, como a pessoa falou: '4.22', '4,22', '10'."},
+        },
+        "required": ["usd"],
+    },
+)
+def set_balance(ctx: ToolContext, usd: str) -> dict:
+    from aide.tools.expenses import parse_valor
+
+    valor = parse_valor(usd) / 100
+    agora = now_in(ctx.config.timezone)
+    calculo.anotar_saldo(ctx.conn, valor, agora.isoformat(timespec="minutes"))
+    return {"saldo_anotado_usd": valor, "em": agora.isoformat(timespec="minutes"),
+            "nota": "daqui em diante o saldo estimado desconta o gasto a partir deste valor"}

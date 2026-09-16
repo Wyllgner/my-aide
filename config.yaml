@@ -17,10 +17,10 @@ llm:
   max_retries: 3
   # US$ por 1M de tokens [entrada, saída], para o `aide status` estimar o custo.
   # Confira em developers.openai.com/api/docs/pricing — muda de tempos em tempos.
-  # Teto que você se dá por mês, em US$. O saldo da conta a OpenAI não expõe
-  # por API (os endpoints de billing exigem a sessão do navegador), então
-  # "quanto ainda tenho" é medido contra este número. 0 desliga.
-  orcamento_mensal_usd: 5.0
+  # Teto mensal opcional, em US$. Fica 0 porque o saldo real, anotado com
+  # `myaide saldo`, responde melhor "quanto ainda tenho" do que um teto
+  # inventado. Ligue se quiser também um limite de ritmo por mês.
+  orcamento_mensal_usd: 0
 
   precos:
     gpt-5.6-luna: [0.20, 1.20]
