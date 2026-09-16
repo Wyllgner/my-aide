@@ -17,10 +17,27 @@ class Notifier(ABC):
     def send(self, title: str, body: str, urgency: str = "normal") -> bool:
         """True se a mensagem saiu."""
 
+    def enviar(self, mensagem, urgency: str = "normal") -> bool:
+        """Manda uma `Mensagem` estruturada, renderizada para este canal.
+
+        O padrão serve qualquer canal de texto puro; quem sabe formatar
+        sobrescreve. É isto que impede uma coluna alinhada no terminal de
+        chegar embaralhada no celular.
+        """
+        from aide.channels.formato import para_desktop
+
+        return self.send(mensagem.titulo, para_desktop(mensagem), urgency)
+
 
 class ConsoleNotifier(Notifier):
     def send(self, title: str, body: str, urgency: str = "normal") -> bool:
         print(f"\n── {title} ──\n{body}\n")
+        return True
+
+    def enviar(self, mensagem, urgency: str = "normal") -> bool:
+        from aide.channels.formato import para_terminal
+
+        print("\n" + para_terminal(mensagem) + "\n")
         return True
 
 
@@ -55,6 +72,9 @@ class MultiNotifier(Notifier):
         # a lista é proposital: com gerador, any() pararia no primeiro canal
         # que desse certo e os outros nunca receberiam a mensagem.
         return any([c.send(title, body, urgency) for c in self.channels])  # noqa: C419
+
+    def enviar(self, mensagem, urgency: str = "normal") -> bool:
+        return any([c.enviar(mensagem, urgency) for c in self.channels])  # noqa: C419
 
 
 def build_notifier(config) -> Notifier:

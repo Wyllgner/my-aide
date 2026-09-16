@@ -75,11 +75,14 @@ class TelegramClient:
     def me(self) -> dict:
         return self.call("getMe")
 
-    def send_message(self, chat_id: int | str, text: str) -> dict:
+    def send_message(self, chat_id: int | str, text: str, markdown: bool = False) -> dict:
         # o Telegram corta em 4096; melhor cortar avisando do que perder o fim
         if len(text) > LIMITE_MENSAGEM:
             text = text[: LIMITE_MENSAGEM - 20] + "\n[...cortado]"
-        return self.call("sendMessage", {"chat_id": chat_id, "text": text})
+        payload = {"chat_id": chat_id, "text": text}
+        if markdown:
+            payload["parse_mode"] = "Markdown"
+        return self.call("sendMessage", payload)
 
     def get_updates(self, offset: int | None = None, timeout: int = 25) -> list[dict]:
         """Long polling: a chamada fica aberta até chegar mensagem ou estourar."""
@@ -98,8 +101,16 @@ class TelegramNotifier(Notifier):
 
     def send(self, title: str, body: str, urgency: str = "normal") -> bool:
         texto = f"{title}\n\n{body}" if body else title
+        return self._mandar(texto)
+
+    def enviar(self, mensagem, urgency: str = "normal") -> bool:
+        from aide.channels.formato import para_telegram
+
+        return self._mandar(para_telegram(mensagem), markdown=True)
+
+    def _mandar(self, texto: str, markdown: bool = False) -> bool:
         try:
-            self.client.send_message(self.chat_id, texto)
+            self.client.send_message(self.chat_id, texto, markdown=markdown)
         except TelegramError as exc:
             log.warning("telegram não entregou: %s", exc)
             return False
