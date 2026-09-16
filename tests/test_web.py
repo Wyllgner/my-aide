@@ -390,3 +390,93 @@ def test_mes_sem_nada_ainda_desenha_a_grade(cliente):
     html = cliente.get("/calendario").text
     assert "0 compromisso(s) no mês" in html
     assert html.count("border-radius:12px") > 20
+
+
+# ---------- gastos ----------
+
+def test_gastos_soma_o_periodo(cliente, app, registry):
+    ctx = app.state.contexto()
+    registry.call("expenses.add", {"amount": "10,50", "description": "almoço",
+                                   "category": "alimentação"}, ctx)
+    registry.call("expenses.add", {"amount": "200", "description": "mercado",
+                                   "category": "mercado"}, ctx)
+    html = cliente.get("/gastos").text
+    assert "R$ 210,50" in html
+    assert "almoço" in html and "mercado" in html
+
+
+def test_o_periodo_vem_da_url_e_volta_no_historico(cliente):
+    """Link, não botão: a página é de leitura e o voltar do navegador funciona."""
+    html = cliente.get("/gastos?periodo=ano").text
+    assert 'href="/gastos?periodo=hoje"' in html
+    assert cliente.get("/gastos?periodo=hoje").status_code == 200
+
+
+def test_periodo_invalido_cai_no_mes_em_vez_de_quebrar(cliente):
+    assert cliente.get("/gastos?periodo=decada").status_code == 200
+
+
+def test_o_periodo_e_escrito_por_extenso(cliente):
+    """'2026/09/01 a 2026/09/16' é formato de máquina."""
+    html = cliente.get("/gastos").text
+    assert "2026/09/01" not in html
+    assert " de " in html
+
+
+def test_gastos_vazio_mantem_os_graficos(cliente):
+    """Decisão do dono: a moldura fica para não mudar de forma quando encher."""
+    html = cliente.get("/gastos").text
+    assert "Por categoria" in html
+    assert "R$ 0,00" in html
+    assert "Nenhum gasto neste período" in html
+
+
+def test_gasto_privado_aparece_para_o_dono(cliente, app, registry):
+    """A web é o dono na máquina dele: ver_privado é True, como no terminal."""
+    ctx = app.state.contexto()
+    registry.call("expenses.add", {"amount": "199,90", "description": "SEGREDO",
+                                   "private": True}, ctx)
+    assert "SEGREDO" in cliente.get("/gastos").text
+
+
+def test_o_acumulado_soma_a_serie():
+    from aide.web.consultas import acumulado
+
+    assert acumulado([("1", 10), ("2", 0), ("3", 5)]) == [("1", 10), ("2", 10), ("3", 15)]
+
+
+# ---------- custo e saldo ----------
+
+def test_custo_mostra_modelo_e_finalidade(cliente, app):
+    app.state.conn_factory().execute(
+        "INSERT INTO llm_usage (model, purpose, input_tokens, output_tokens)"
+        " VALUES ('gpt-5-nano', 'chat', 1000000, 0)")
+    html = cliente.get("/custo").text
+    assert "gpt-5-nano" in html
+    assert "Para quê" in html
+
+
+def test_sem_saldo_anotado_explica_por_que(cliente):
+    """A OpenAI não expõe saldo; dizer isso é melhor que mostrar um número falso."""
+    html = cliente.get("/custo").text
+    assert "não expõe saldo" in html
+    assert "myaide saldo" in html
+
+
+def test_com_saldo_anotado_mostra_a_estimativa(cliente, app):
+    from aide.llm import custo as calculo
+
+    calculo.anotar_saldo(app.state.conn_factory(), 4.22, "2026-09-16T17:00-04:00")
+    html = cliente.get("/custo").text
+    assert "Saldo estimado" in html
+    assert "estimativa" in html
+
+
+def test_o_valor_da_barra_usa_virgula():
+    """0.0406 ao lado de US$ 4,21 é o mesmo defeito que a data em inglês."""
+    from aide.web import graficos
+
+    saida = graficos.barras([("gpt-5-nano", 0.0406)],
+                            formatar=lambda v: f"{v:.4f}".replace(".", ","))
+    assert "0,0406" in saida
+    assert "0.0406" not in saida
