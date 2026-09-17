@@ -75,8 +75,39 @@ def conversas(conn, limite: int = 40) -> list[dict]:
 
 def mensagens(conn, sessao: str) -> list[dict]:
     return [dict(r) for r in conn.execute(
-        "SELECT role, content, tool_calls, created_at FROM messages"
+        "SELECT id, role, content, tool_calls, created_at FROM messages"
         " WHERE session_id = ? ORDER BY id", (sessao,)).fetchall()]
+
+
+def custo_por_turno(conn, sessao: str, precos: dict) -> dict[int, dict]:
+    """Quanto custou cada volta da conversa.
+
+    A chave é o id da mensagem do usuário que abriu a volta. Uma pergunta pode
+    gerar várias chamadas — o laço de tools —, e todas contam para ela: separar
+    por chamada diria quanto custou um passo, e o que interessa é quanto custou
+    a pergunta.
+
+    Volta anterior a 16/09 não tem `turn_id`: a coluna não existia. Some do
+    resultado em vez de virar zero, para não afirmar que foi de graça.
+    """
+    linhas = conn.execute(
+        "SELECT turn_id, model, SUM(input_tokens) i, SUM(output_tokens) o, COUNT(*) n"
+        " FROM llm_usage WHERE session_id = ? AND turn_id IS NOT NULL"
+        " GROUP BY turn_id, model", (sessao,)).fetchall()
+
+    por_turno: dict[int, dict] = {}
+    for r in linhas:
+        alvo = por_turno.setdefault(r["turn_id"],
+                                    {"tokens": 0, "usd": 0.0, "chamadas": 0,
+                                     "sem_preco": False})
+        alvo["tokens"] += r["i"] + r["o"]
+        alvo["chamadas"] += r["n"]
+        preco = precos.get(r["model"])
+        if preco:
+            alvo["usd"] += r["i"] / 1_000_000 * preco[0] + r["o"] / 1_000_000 * preco[1]
+        else:
+            alvo["sem_preco"] = True
+    return por_turno
 
 
 def auditoria(conn, limite: int = 150, ator: str | None = None) -> list[dict]:

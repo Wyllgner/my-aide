@@ -545,6 +545,36 @@ def _hora_curta(iso: str, agora: datetime) -> str:
     return momento.strftime("%d/%m")
 
 
+def _milhar(n: int) -> str:
+    return f"{n:,}".replace(",", ".")
+
+
+def _dolar(v: float) -> str:
+    """4 casas e vírgula, como o resto da página. `usd()` arredonda em 2."""
+    return f"US$ {v:.4f}".replace(".", ",")
+
+
+def _selo_custo(gasto: dict | None) -> str:
+    """Tokens e custo da volta, ao lado da resposta que eles produziram.
+
+    Discreto de propósito: é informação de apoio, não o conteúdo. Fica em
+    cinza fraco, abaixo da bolha, e some quando não há dado — antes de 16/09 a
+    chamada não era ligada à conversa, e inventar zero ali seria mentir.
+    """
+    if not gasto:
+        return ""
+    tokens = _milhar(gasto["tokens"])
+    if gasto["sem_preco"]:
+        valor = "sem preço no config"
+    elif gasto["usd"] < 0.0001:
+        valor = "menos de US$ 0,0001"
+    else:
+        valor = _dolar(gasto["usd"])
+    chamadas = "" if gasto["chamadas"] == 1 else f" · {gasto['chamadas']} chamadas"
+    return (f'<p class="mono" style="margin:2px 0 0;font-size:10.5px;color:var(--faint);'
+            f'align-self:flex-start">{tokens} tokens · {escape(valor)}{chamadas}</p>')
+
+
 def _bolha_tool(chamada: dict) -> str:
     """A chamada de ferramenta aparece no meio da conversa, que é onde ela acontece."""
     fn = chamada.get("function") or {}
@@ -587,9 +617,16 @@ def conversas(ctx, registry, agora: datetime, sessao: str | None = None) -> str:
             f'<p style="margin:3px 0 0;font-size:12.5px;color:{fraco}">'
             f'{escape(s["canal"])} · {s["mensagens"]} mensagem(ns)</p></a>')
 
+    por_turno = consultas.custo_por_turno(ctx.conn, escolhida, ctx.config.llm.precos)
+    total_usd = sum(g["usd"] for g in por_turno.values())
+    total_tokens = sum(g["tokens"] for g in por_turno.values())
+
     baloes = ""
+    turno_atual = None
     for m in consultas.mensagens(ctx.conn, escolhida):
         if m["role"] == "user":
+            # a volta é a pergunta: tudo que vier até a próxima pertence a ela
+            turno_atual = m["id"]
             baloes += (f'<div style="align-self:flex-end;max-width:62%;background:var(--ink);'
                        f'color:#FFF;padding:12px 16px;border-radius:16px 16px 4px 16px;'
                        f'font-size:14.5px;line-height:1.5;white-space:pre-wrap">'
@@ -606,7 +643,8 @@ def conversas(ctx, registry, agora: datetime, sessao: str | None = None) -> str:
                 baloes += (f'<div class="card" style="align-self:flex-start;max-width:74%;'
                            f'padding:14px 18px;border-radius:16px 16px 16px 4px;'
                            f'font-size:14.5px;line-height:1.55;white-space:pre-wrap">'
-                           f'{escape(m["content"])}</div>')
+                           f'{escape(m["content"])}</div>'
+                           + _selo_custo(por_turno.get(turno_atual)))
 
     return f"""
 {cabecalho("Conversas", f"{len(sessoes)} sessão(ões)")}
@@ -616,7 +654,7 @@ def conversas(ctx, registry, agora: datetime, sessao: str | None = None) -> str:
   <div class="card" style="padding:24px;display:flex;flex-direction:column;gap:14px;
                            max-height:74vh;overflow:auto">
     <p class="mono" style="margin:0;font-size:11.5px;color:var(--faint)">
-      sessão {escape(escolhida)}</p>
+      sessão {escape(escolhida)}{f" · {_milhar(total_tokens)} tokens · {_dolar(total_usd)}" if por_turno else ""}</p>
     {baloes or '<p class="vazio">Sessão sem mensagens legíveis.</p>'}
     <p style="margin:auto 0 0;padding-top:14px;border-top:1px solid var(--line);
               font-size:12.5px;color:var(--faint)">
