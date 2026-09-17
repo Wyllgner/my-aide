@@ -20,18 +20,45 @@ CAMPOS = "id, cents, description, category, spent_at, method"
 # "10,50 almoço com a KA" — valor na frente, resto é descrição.
 _LANCAMENTO = re.compile(r"^\s*(?:R\$\s*)?([\d.,]+)\s+(.*\S)\s*$", re.IGNORECASE)
 
+# "10 reais almoço": a moeda dita em palavra fica entre o valor e a descrição,
+# e sem tirá-la o almoço vira "reais almoço".
+_MOEDA_ESCRITA = re.compile(r"^(?:reais?|conto?s?|pila|pau|mangos?|brl)\b[\s,]*",
+                            re.IGNORECASE)
+
+
+# O número, com os separadores que ele possa ter. Tudo em volta é palavra.
+_NUMERO = re.compile(r"\d[\d.,]*")
+
 
 def parse_valor(texto: str) -> int:
     """Texto em centavos. Aceita o jeito brasileiro e o jeito de máquina.
 
-    A ambiguidade é só uma: um ponto sozinho. Em "10.50" ele separa centavos,
-    em "1.234" separa milhar. Decide pelo número de casas depois dele, que é
-    como um humano lê.
+    Pega o número de dentro da frase em vez de exigir que ela seja só o
+    número. A descrição da tool promete "o valor como a pessoa falou", e ela
+    recusava "10 reais" — quebrando a própria promessa e obrigando a pessoa a
+    repetir o valor num formato que o programa aceitasse.
+
+    Uma frase com dois números é recusada de propósito: em "10 reais e 50
+    centavos" adivinhar qual é o valor erraria calado, e num lançamento de
+    dinheiro errar calado é o pior desfecho.
+
+    A ambiguidade que sobra é uma: um ponto sozinho. Em "10.50" ele separa
+    centavos, em "1.234" separa milhar. Decide pelo número de casas depois
+    dele, que é como um humano lê.
     """
-    # "R$", "r$" e "  32 " — a pessoa escreve do jeito dela
-    limpo = re.sub(r"(?i)r\$", "", str(texto)).strip().replace(" ", "")
-    if not limpo:
+    bruto = str(texto).strip()
+    if not bruto:
         raise ValueError("valor vazio")
+
+    negativo = bruto.lstrip().startswith("-")
+    achados = _NUMERO.findall(bruto)
+    if not achados:
+        raise ValueError(f"não achei nenhum valor em {texto!r}")
+    if len(achados) > 1:
+        raise ValueError(
+            f"achei mais de um número em {texto!r}; diga só o valor, como \"10,50\"")
+
+    limpo = achados[0]
 
     if "," in limpo and "." in limpo:
         # 1.234,56 — ponto é milhar, vírgula é decimal
@@ -50,7 +77,7 @@ def parse_valor(texto: str) -> int:
     except ValueError as exc:
         raise ValueError(f"não entendi o valor {texto!r}") from exc
 
-    if reais < 0:
+    if negativo or reais < 0:
         raise ValueError("gasto não é negativo; registre o valor gasto")
     # round e não int(): 19.99 * 100 dá 1998.9999... em binário
     return round(reais * 100)
@@ -64,7 +91,13 @@ def parse_lancamento(texto: str) -> tuple[int, str]:
             f"não consegui separar valor e descrição em {texto!r}. "
             'Escreva o valor na frente, como "10,50 almoço com a KA".'
         )
-    return parse_valor(casou.group(1)), casou.group(2).strip()
+    descricao = _MOEDA_ESCRITA.sub("", casou.group(2).strip()).strip()
+    if not descricao:
+        raise ValueError(
+            f"faltou dizer o que foi o gasto em {texto!r}. "
+            'Escreva assim: "10,50 almoço com a KA".'
+        )
+    return parse_valor(casou.group(1)), descricao
 
 
 def formatar(cents: int) -> str:
