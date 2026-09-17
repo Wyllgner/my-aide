@@ -63,7 +63,7 @@ def buscar(consulta: str, limite: int = typer.Option(5, "--limite", "-n")) -> No
 def perfil() -> None:
     """Mostra o que o assessor sabe sobre você."""
     _, _, ctx = _ctx()
-    fatos = registry.call("memory.list", {}, ctx).data
+    fatos = registry.call("memory.list", {"kind": "profile"}, ctx).data
     if not fatos:
         console.print("[dim]Ele ainda não sabe nada sobre você.[/]")
         return

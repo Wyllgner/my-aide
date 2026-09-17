@@ -118,14 +118,27 @@ def search(ctx: ToolContext, query: str, kind: str | None = None,
 
 @registry.register(
     name="memory.list",
-    description="Lista o perfil — tudo que o assessor considera estável sobre a pessoa.",
+    description=(
+        "Tudo que o assessor guardou sobre a pessoa: o perfil (o que é estável) "
+        "e o episódico (o que aconteceu em uma data). Sem `kind`, devolve os "
+        "dois — só filtre quando a pergunta for claramente sobre um deles."
+    ),
     parameters={
         "type": "object",
-        "properties": {"kind": {"type": "string", "enum": ["profile", "episodic"]}},
+        "properties": {
+            "kind": {"type": "string", "enum": ["profile", "episodic"],
+                     "description": "Opcional. Sem isto, vêm os dois tipos."},
+        },
         "required": [],
     },
 )
-def list_memory(ctx: ToolContext, kind: str = "profile") -> list[dict]:
+def list_memory(ctx: ToolContext, kind: str | None = None) -> list[dict]:
+    """Sem `kind`, os dois tipos.
+
+    O padrão era só o perfil, e o episódico sumia sem aviso: perguntado se
+    havia mais alguma memória, o assessor respondia que não — com convicção,
+    e errado. Um padrão que esconde metade do dado é pior que nenhum padrão.
+    """
     return [dict(r) for r in _vigentes(ctx.conn, kind,
                                        incluir_privadas=ctx.ver_privado)]
 
