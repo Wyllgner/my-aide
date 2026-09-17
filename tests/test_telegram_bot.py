@@ -22,7 +22,9 @@ def _bot(ctx, tmp_path, permitidos=(42,), llm=None):
     migrate(connect(caminho))
     bot = TelegramBot(ctx.config, lambda: connect(caminho), llm or FakeLLM(), tool_registry)
     bot.enviadas = []
-    bot.client.send_message = lambda chat_id, text: bot.enviadas.append((chat_id, text))
+    # aceita markdown=: o bot manda formatado e cai para texto puro se recusarem
+    bot.client.send_message = (
+        lambda chat_id, text, markdown=False: bot.enviadas.append((chat_id, text)))
     return bot
 
 
@@ -397,3 +399,29 @@ def test_a_descricao_e_feita_antes_de_apagar(ctx, tmp_path):
 
     bot._tratar(_msg("sim"))
     assert "Laudo" in bot.enviadas[-1][1]
+
+
+def test_a_resposta_vai_formatada(ctx, tmp_path):
+    bot = _bot(ctx, tmp_path, llm=FakeLLM("#10 Pagar o IPVA (hoje)"))
+    bot._tratar(_msg("o que tenho?"))
+    assert "`#10`" in bot.enviadas[-1][1]
+
+
+def test_se_o_telegram_recusar_a_formatacao_manda_sem(ctx, tmp_path):
+    """Perder a resposta por causa do negrito seria trocar conteúdo por aparência."""
+    from aide.channels.telegram import TelegramError
+
+    bot = _bot(ctx, tmp_path, llm=FakeLLM("#10 Pagar o IPVA (hoje)"))
+    tentativas = []
+
+    def recusar_markdown(chat_id, text, markdown=False):
+        tentativas.append(markdown)
+        if markdown:
+            raise TelegramError("400 can't parse entities")
+        bot.enviadas.append((chat_id, text))
+
+    bot.client.send_message = recusar_markdown
+    bot._tratar(_msg("o que tenho?"))
+
+    assert tentativas == [True, False]
+    assert bot.enviadas[-1][1] == "#10 Pagar o IPVA (hoje)"

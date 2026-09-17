@@ -122,3 +122,45 @@ def test_telegram_escapa_o_que_quebraria_a_formatacao():
 
 def test_escapar_deixa_o_texto_normal_em_paz():
     assert escapar("Pagar o IPVA") == "Pagar o IPVA"
+
+
+# ---------- resposta de conversa no Telegram ----------
+
+def test_a_lista_de_tarefas_ganha_relevo():
+    """O modelo escreve texto puro porque a mesma frase vai para um terminal;
+    quem sabe que o destino é o Telegram é o formatador."""
+    from aide.channels.formato import conversa_para_telegram
+
+    saida = conversa_para_telegram(
+        "Suas tarefas abertas:\n#10 Marcar reunião com o contador (04/09, há 12 dias)")
+    assert "Suas tarefas abertas:" in saida
+    assert "`#10`" in saida
+    assert "*Marcar reunião com o contador*" in saida
+    assert "_04/09, há 12 dias_" in saida
+
+
+def test_linha_sem_id_passa_inteira():
+    from aide.channels.formato import conversa_para_telegram
+
+    assert conversa_para_telegram("Você tem 5 tarefas abertas.") == "Você tem 5 tarefas abertas."
+
+
+def test_item_sem_prazo_nao_inventa_travessao():
+    from aide.channels.formato import conversa_para_telegram
+
+    saida = conversa_para_telegram("#14 Pagar o condomínio")
+    assert saida == "`#14` *Pagar o condomínio*"
+
+
+def test_titulo_com_caractere_de_markdown_e_escapado():
+    """Sem escapar, um título com _ quebra a formatação da mensagem inteira."""
+    from aide.channels.formato import conversa_para_telegram
+
+    saida = conversa_para_telegram("#7 relatorio_final (hoje)")
+    assert r"relatorio\_final" in saida
+
+
+def test_texto_livre_tambem_e_escapado():
+    from aide.channels.formato import conversa_para_telegram
+
+    assert r"\*" in conversa_para_telegram("isso é *importante*")
