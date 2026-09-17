@@ -169,3 +169,54 @@ def test_apagado_some_da_conta(ctx, registry):
     gasto = registry.call("expenses.add", {"amount": "10", "description": "engano"}, ctx).data
     registry.call("expenses.delete", {"id": gasto["id"]}, ctx)
     assert registry.call("expenses.summary", {"periodo": "hoje"}, ctx).data["quantos"] == 0
+
+
+# ---------- o valor como a pessoa fala ----------
+
+@pytest.mark.parametrize("texto,centavos", [
+    ("10 reais", 1000),
+    ("10 REAIS", 1000),
+    ("10,50 reais", 1050),
+    ("35 conto", 3500),
+    ("uns 30 pila", 3000),
+    ("BRL 12", 1200),
+    ("1.234,56 reais", 123456),
+])
+def test_aceita_o_valor_dito_em_palavras(texto, centavos):
+    """A descrição da tool promete "o valor como a pessoa falou" e ela recusava
+    "10 reais" — quebrando a própria promessa e obrigando a repetir o valor
+    num formato que o programa aceitasse."""
+    assert parse_valor(texto) == centavos
+
+
+def test_frase_com_dois_numeros_e_recusada():
+    """Em "10 reais e 50 centavos", adivinhar erraria calado — e num
+    lançamento de dinheiro, errar calado é o pior desfecho."""
+    with pytest.raises(ValueError, match="mais de um número"):
+        parse_valor("10 reais e 50 centavos")
+
+
+def test_frase_sem_numero_diz_o_que_faltou():
+    with pytest.raises(ValueError, match="não achei nenhum valor"):
+        parse_valor("uns trocados")
+
+
+def test_negativo_escrito_por_extenso_tambem_e_recusado():
+    with pytest.raises(ValueError, match="negativo"):
+        parse_valor("-10 reais")
+
+
+@pytest.mark.parametrize("texto,esperado", [
+    ("10 reais almoço", (1000, "almoço")),
+    ("35 conto gasolina", (3500, "gasolina")),
+    ("12 pila cerveja", (1200, "cerveja")),
+    ("10,50 almoço com a KA", (1050, "almoço com a KA")),
+])
+def test_a_moeda_dita_nao_vira_parte_da_descricao(texto, esperado):
+    """Sem tirá-la, "10 reais almoço" registrava o gasto como "reais almoço"."""
+    assert parse_lancamento(texto) == esperado
+
+
+def test_valor_sozinho_pede_a_descricao():
+    with pytest.raises(ValueError, match="faltou dizer o que foi"):
+        parse_lancamento("10 reais")
