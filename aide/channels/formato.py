@@ -9,6 +9,7 @@ exatamente a bagunça que este módulo existe para evitar.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -168,3 +169,33 @@ _ESCAPAR = str.maketrans({"*": r"\*", "_": r"\_", "`": r"\`", "[": r"\["})
 def escapar(texto: str) -> str:
     """Um título com _ ou * quebraria a formatação da mensagem inteira."""
     return texto.translate(_ESCAPAR)
+
+
+# ---------- resposta de conversa no Telegram ----------
+
+_ITEM = re.compile(r"^(\s*)#(\d+)\s+(.+?)(\s*\(([^)]*)\))?\s*$")
+
+
+def conversa_para_telegram(texto: str) -> str:
+    """Dá relevo à resposta do modelo sem pedir que ele escreva markdown.
+
+    O prompt manda escrever texto puro, porque a mesma frase vai para um
+    terminal. Quem sabe que o destino é o Telegram é este módulo, então a
+    formatação entra aqui: id em monoespaçado, assunto em negrito, prazo em
+    itálico. O resto do texto passa escapado.
+
+    Formatar no prompt seria pior de duas formas: markdown cru apareceria no
+    terminal, e um título com `_` quebraria a mensagem inteira.
+    """
+    linhas = []
+    for linha in (texto or "").splitlines():
+        casou = _ITEM.match(linha)
+        if not casou:
+            linhas.append(escapar(linha))
+            continue
+        recuo, ident, assunto, _, prazo = casou.groups()
+        pedaco = f"{recuo}`#{ident}` *{escapar(assunto.rstrip())}*"
+        if prazo:
+            pedaco += f" — _{escapar(prazo)}_"
+        linhas.append(pedaco)
+    return "\n".join(linhas)
