@@ -64,6 +64,31 @@ def quando(iso: str | None, agora: datetime) -> str:
     return f"{data} (em {dias} dias)"
 
 
+def data_curta(iso: str | None, agora: datetime) -> str:
+    """Só o dia: 'hoje', 'ontem', 'há 5 dias', '04/09'.
+
+    `quando()` traz data e hora porque um prazo precisa das duas. Para algo que
+    só foi escrito — uma nota, um lançamento — a hora é ruído, e "16/09 (hoje
+    21:47)" diz duas vezes a mesma coisa.
+    """
+    if not iso:
+        return ""
+    try:
+        momento = datetime.fromisoformat(iso)
+    except ValueError:
+        return iso
+    if momento.tzinfo is None:
+        momento = momento.replace(tzinfo=agora.tzinfo)
+    dias = (agora.date() - momento.astimezone(agora.tzinfo).date()).days
+    if dias == 0:
+        return "hoje"
+    if dias == 1:
+        return "ontem"
+    if 1 < dias < 7:
+        return f"há {dias} dias"
+    return momento.astimezone(agora.tzinfo).strftime("%d/%m")
+
+
 def atraso(iso: str, agora: datetime) -> str:
     """Só o quanto, para a coluna estreita: '12 dias', '1 dia', 'hoje'."""
     momento = datetime.fromisoformat(iso)

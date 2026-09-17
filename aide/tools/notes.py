@@ -155,6 +155,15 @@ def read(ctx: ToolContext, id: int | None = None, title: str | None = None) -> d
     },
 )
 def list_notes(ctx: ToolContext, limit: int = 20, tag: str | None = None) -> list[dict]:
+    """Devolve também a data escrita por extenso.
+
+    `updated_at` sozinho é carimbo de máquina — "2026-09-04 02:34:24". O modelo
+    até sabe convertê-lo, mas converter é onde ele erra de fuso; e sem uma data
+    pronta a resposta sai sem data nenhuma, que foi o que acontecia.
+
+    Só o dia, sem hora: para uma nota, saber que foi "ontem" basta, e a hora
+    exata só ocupa a linha.
+    """
     sql = "SELECT id, title, tags, updated_at FROM notes WHERE deleted_at IS NULL"
     params: list = []
     if not ctx.ver_privado:
@@ -164,7 +173,17 @@ def list_notes(ctx: ToolContext, limit: int = 20, tag: str | None = None) -> lis
         params.append(f"%{tag}%")
     sql += " ORDER BY updated_at DESC LIMIT ?"
     params.append(limit)
-    return [dict(r) for r in ctx.conn.execute(sql, params).fetchall()]
+
+    from aide.channels.formato import data_curta
+
+    agora = now_in(ctx.config.timezone)
+    saida = []
+    for r in ctx.conn.execute(sql, params).fetchall():
+        linha = dict(r)
+        # o updated_at vem do datetime('now'): UTC, com espaço no lugar do T
+        linha["quando"] = data_curta(linha["updated_at"].replace(" ", "T") + "+00:00", agora)
+        saida.append(linha)
+    return saida
 
 
 @registry.register(
