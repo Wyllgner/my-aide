@@ -775,3 +775,76 @@ def test_fila_sem_nada_esperando_explica(cliente, app, registry):
     html = cliente.get("/fila").text
     assert "Nada esperando" in html
     assert "0 esperando · 1 no histórico" in html
+
+
+# ---------- navegar no calendário ----------
+
+def test_da_para_ir_e_voltar_de_mes(cliente):
+    setembro = cliente.get("/calendario?ano=2026&mes=9").text
+    assert "Setembro" in setembro
+    assert "ano=2026&mes=8" in setembro   # anterior
+    assert "ano=2026&mes=10" in setembro  # próximo
+
+    assert "Outubro" in cliente.get("/calendario?ano=2026&mes=10").text
+
+
+def test_a_virada_do_ano_anda_certo():
+    """Dezembro → janeiro do ano seguinte, e janeiro → dezembro do anterior."""
+    from aide.web.telas import _mes_vizinho
+
+    assert _mes_vizinho(2026, 12, 1) == (2027, 1)
+    assert _mes_vizinho(2026, 1, -1) == (2025, 12)
+    assert _mes_vizinho(2026, 9, 1) == (2026, 10)
+
+
+def test_fora_do_mes_atual_aparece_o_atalho_para_hoje(cliente):
+    assert ">hoje</a>" in cliente.get("/calendario?ano=2026&mes=10").text
+    assert ">hoje</a>" not in cliente.get("/calendario").text
+
+
+def test_mes_ou_ano_sem_sentido_cai_no_atual(cliente):
+    for bagunca in ("?mes=99", "?mes=0", "?ano=99999", "?ano=abc"):
+        assert cliente.get("/calendario" + bagunca).status_code in (200, 422)
+
+
+def test_clicar_no_dia_abre_o_detalhe(cliente, app, registry):
+    ctx = app.state.contexto()
+    registry.call("tasks.create", {"title": "Reunião com o contador",
+                                   "due": "2026-09-20T14:30"}, ctx)
+
+    html = cliente.get("/calendario?ano=2026&mes=9&dia=20").text
+    assert "20/09/2026" in html
+    assert "Reunião com o contador" in html
+    assert "14:30" in html
+    assert "tarefa" in html
+
+
+def test_o_dia_inteiro_e_clicavel_nao_so_a_etiqueta(cliente):
+    """Mirar numa tarja de 11px é pior do que não poder clicar."""
+    html = cliente.get("/calendario?ano=2026&mes=9").text
+    assert 'href="/calendario?ano=2026&mes=9&dia=1"' in html
+
+
+def test_dia_sem_nada_diz_que_esta_livre(cliente):
+    html = cliente.get("/calendario?ano=2026&mes=9&dia=7").text
+    assert "Nada marcado neste dia" in html
+
+
+def test_dia_que_nao_existe_no_mes_e_ignorado(cliente):
+    """31 de setembro não existe; melhor mostrar o mês que estourar."""
+    html = cliente.get("/calendario?ano=2026&mes=9&dia=31").text
+    assert html.count("Nada marcado neste dia") == 0
+    assert "Setembro" in html
+
+
+def test_o_detalhe_diz_de_onde_o_item_veio(cliente, app):
+    """Tarefa, agenda e lembrete caem no mesmo dia; qual é qual importa."""
+    conn = app.state.conn_factory()
+    conn.execute("INSERT INTO events (title, start_at, source) "
+                 "VALUES ('Dentista', '2026-09-21T15:00-04:00', 'ical')")
+    conn.execute("INSERT INTO reminders (text, fire_at) "
+                 "VALUES ('Ligar para a KA', '2026-09-21T18:00-04:00')")
+
+    html = cliente.get("/calendario?ano=2026&mes=9&dia=21").text
+    assert "agenda" in html and "lembrete" in html
+    assert "Dentista" in html and "Ligar para a KA" in html
