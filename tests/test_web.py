@@ -848,3 +848,28 @@ def test_o_detalhe_diz_de_onde_o_item_veio(cliente, app):
     html = cliente.get("/calendario?ano=2026&mes=9&dia=21").text
     assert "agenda" in html and "lembrete" in html
     assert "Dentista" in html and "Ligar para a KA" in html
+
+
+def test_a_semana_comeca_no_domingo(cliente):
+    """Como se lê calendário no Brasil."""
+    html = cliente.get("/calendario?ano=2026&mes=9").text
+    ordem = [d for d in ("dom", "seg", "ter", "qua", "qui", "sex", "sáb")]
+    posicoes = [html.index(f">{d}<") for d in ordem]
+    assert posicoes == sorted(posicoes), "o cabeçalho não está em ordem"
+
+
+def test_o_cabecalho_gira_junto_com_a_grade():
+    """O `calendar` conta a semana da segunda; trocar um e esquecer o outro
+    põe cada dia na coluna errada, e sem erro nenhum."""
+    import datetime
+    from calendar import Calendar
+
+    from aide.web.telas import DIAS_CURTOS, PRIMEIRO_DIA
+
+    nomes = ("seg", "ter", "qua", "qui", "sex", "sáb", "dom")
+    semanas = Calendar(firstweekday=PRIMEIRO_DIA).monthdayscalendar(2026, 9)
+    for semana in semanas:
+        for coluna, dia in enumerate(semana):
+            if dia:
+                real = nomes[datetime.date(2026, 9, dia).weekday()]
+                assert DIAS_CURTOS[coluna] == real, f"dia {dia} na coluna errada"
