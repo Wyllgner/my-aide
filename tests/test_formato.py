@@ -164,3 +164,23 @@ def test_texto_livre_tambem_e_escapado():
     from aide.channels.formato import conversa_para_telegram
 
     assert r"\*" in conversa_para_telegram("isso é *importante*")
+
+
+@pytest.mark.parametrize("iso,esperado", [
+    ("2026-09-16T21:47-04:00", "hoje"),
+    ("2026-09-15T10:00-04:00", "ontem"),
+    ("2026-09-13T10:00-04:00", "há 3 dias"),
+    ("2026-09-04T10:00-04:00", "04/09"),
+])
+def test_data_curta_diz_o_dia_sem_a_hora(iso, esperado):
+    """Para uma nota, saber que foi ontem basta; '16/09 (hoje 21:47)' diz duas
+    vezes a mesma coisa e come a linha."""
+    from aide.channels.formato import data_curta
+
+    assert data_curta(iso, AGORA) == esperado
+
+
+def test_data_curta_aceita_vazio():
+    from aide.channels.formato import data_curta
+
+    assert data_curta(None, AGORA) == ""

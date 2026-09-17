@@ -179,3 +179,14 @@ def test_lista_esconde_nota_apagada(ctx, registry, tmp_path):
     registry.call("notes.create", {"title": "Alvo", "body": "x"}, ctx)
     ctx.conn.execute("UPDATE notes SET deleted_at = datetime('now')")
     assert registry.call("notes.list", {}, ctx).data == []
+
+
+def test_a_listagem_traz_a_data_pronta(ctx, registry, tmp_path):
+    """Sem uma data pronta a resposta saía sem data nenhuma — `updated_at` é
+    carimbo de máquina, e converter é onde o modelo erra de fuso."""
+    object.__setattr__(ctx.config, "vault_dir", tmp_path / "v")
+    registry.call("notes.create", {"title": "Deploy", "body": "x"}, ctx)
+
+    nota = registry.call("notes.list", {}, ctx).data[0]
+    assert nota["quando"] == "hoje"
+    assert ":" not in nota["quando"]  # sem hora
