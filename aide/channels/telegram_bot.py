@@ -162,13 +162,18 @@ class TelegramBot:
             resto = partes[1].strip() if len(partes) > 1 else ""
             return self._comando(chat_id, nome, resto)
 
-        resposta = self._agente(chat_id).ask(texto)
+        agente = self._agente(chat_id)
+        resposta = agente.ask(texto)
         pedido = self._pendentes.get(chat_id)
         if pedido:
             # O modelo recebeu "não autorizado" e vai dizer isso. Quem responde
             # aqui é a pergunta, que é o que faltava: a tool exige um "tem
             # certeza?" de gente, e conversa é justamente onde dá para pedir.
-            return self._perguntar(pedido)
+            pergunta = self._perguntar(pedido)
+            # e o histórico guarda a pergunta, não o texto descartado: senão o
+            # modelo lê depois que apagar falhou e para de tentar
+            agente.corrigir_ultima_resposta(pergunta)
+            return pergunta
         return resposta
 
     # ---------- confirmação em dois passos ----------
@@ -232,7 +237,7 @@ class TelegramBot:
         self._pendentes.pop(chat_id, None)
 
         if texto.strip().lower().rstrip("!.") not in SIM:
-            return "Cancelado, não apaguei nada."
+            return self._registrar_desfecho(chat_id, texto, "Cancelado, não apaguei nada.")
 
         feitas, falhas = [], []
         for nome, args in acoes:
@@ -254,7 +259,23 @@ class TelegramBot:
             # o que deu certo já está feito; calar as falhas faria você achar
             # que apagou tudo
             partes.append("Não consegui:\n" + "\n".join(f"· {f}" for f in falhas))
-        return "\n\n".join(partes) if partes else "Nada a fazer."
+        return self._registrar_desfecho(
+            chat_id, texto, "\n\n".join(partes) if partes else "Nada a fazer.")
+
+    def _registrar_desfecho(self, chat_id: int, pedido_do_usuario: str, resposta: str) -> str:
+        """O sim e o que veio dele entram na conversa.
+
+        Sem isto o transcrito fica com uma pergunta e nenhuma resposta, e na
+        volta seguinte o modelo não sabe se a exclusão aconteceu.
+        """
+        sessao = self._sessoes.get(chat_id)
+        if sessao:
+            conn = self._db()
+            for papel, conteudo in (("user", pedido_do_usuario), ("assistant", resposta)):
+                conn.execute(
+                    "INSERT INTO messages (session_id, role, content) VALUES (?, ?, ?)",
+                    (sessao, papel, conteudo))
+        return resposta
 
     def _ctx(self, chat_id: int):
         from aide.tools.registry import ToolContext
@@ -307,7 +328,8 @@ class TelegramBot:
                 for a in achados
             )
         if nome == "perfil":
-            fatos = self.registry.call("memory.list", {}, self._ctx(chat_id)).data
+            fatos = self.registry.call(
+                "memory.list", {"kind": "profile"}, self._ctx(chat_id)).data
             if not fatos:
                 return "Ainda não sei nada sobre você."
             return "\n".join(f"{f['key']}: {f['value']}" for f in fatos)

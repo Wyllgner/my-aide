@@ -52,6 +52,23 @@ class Orchestrator:
             out.append(Message(role=r["role"], content=r["content"]))
         return out
 
+    def corrigir_ultima_resposta(self, texto: str) -> None:
+        """Substitui a última fala do assistente pelo que foi mesmo enviado.
+
+        Um canal pode trocar a resposta antes de entregá-la — o Telegram faz
+        isso ao perguntar "tem certeza?" no lugar do texto do modelo. Se o
+        histórico guardar a versão descartada, o modelo lê nas voltas seguintes
+        uma fala que ele nunca disse, e aprende com ela. Foi assim que ele
+        passou a responder "não foi possível apagar" sem sequer tentar: estava
+        imitando um erro que só existia no transcrito.
+        """
+        linha = self.conn.execute(
+            "SELECT id FROM messages WHERE session_id = ? AND role = 'assistant'"
+            " ORDER BY id DESC LIMIT 1", (self.session_id,)).fetchone()
+        if linha:
+            self.conn.execute("UPDATE messages SET content = ? WHERE id = ?",
+                              (texto, linha["id"]))
+
     def _save(self, message: Message) -> None:
         self.conn.execute(
             "INSERT INTO messages (session_id, role, content, tool_calls) VALUES (?, ?, ?, ?)",
