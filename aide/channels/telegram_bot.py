@@ -336,6 +336,21 @@ class TelegramBot:
         )
 
     def _responder(self, chat_id: int, texto: str) -> None:
+        """Manda com relevo; se o Telegram recusar a formatação, manda sem.
+
+        O Markdown legado dele é frágil: um caractere escapado fora de hora faz
+        a mensagem inteira ser recusada com 400. Perder a resposta por causa do
+        negrito seria trocar o conteúdo pela aparência, então a segunda
+        tentativa vai em texto puro.
+        """
+        from aide.channels.formato import conversa_para_telegram
+
+        try:
+            self.client.send_message(chat_id, conversa_para_telegram(texto), markdown=True)
+            return
+        except TelegramError as exc:
+            log.info("telegram recusou a formatação (%s); reenviando sem", exc)
+
         try:
             self.client.send_message(chat_id, texto)
         except TelegramError as exc:
