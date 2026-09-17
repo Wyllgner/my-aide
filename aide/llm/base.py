@@ -49,5 +49,12 @@ class LLMProvider(ABC):
         fast: bool = False,
         tools: list[dict[str, Any]] | None = None,
         purpose: str = "chat",
+        sessao: str | None = None,
+        turno: int | None = None,
     ) -> LLMResponse:
-        """Uma chamada ao modelo. `fast=True` usa o modelo barato."""
+        """Uma chamada ao modelo. `fast=True` usa o modelo barato.
+
+        `sessao` e `turno` só servem ao registro de uso: passá-los como
+        argumento, e não guardá-los no provedor, é o que deixa o mesmo provedor
+        atender o bot e o daemon em threads diferentes sem trocar as contas.
+        """

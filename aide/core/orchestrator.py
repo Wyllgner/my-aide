@@ -69,17 +69,19 @@ class Orchestrator:
             self.conn.execute("UPDATE messages SET content = ? WHERE id = ?",
                               (texto, linha["id"]))
 
-    def _save(self, message: Message) -> None:
-        self.conn.execute(
+    def _save(self, message: Message) -> int:
+        """Devolve o id: a volta inteira é atribuída à mensagem que a abriu."""
+        cursor = self.conn.execute(
             "INSERT INTO messages (session_id, role, content, tool_calls) VALUES (?, ?, ?, ?)",
             (self.session_id, message.role, message.content,
              json.dumps(message.tool_calls) if message.tool_calls else None),
         )
+        return cursor.lastrowid
 
     # ---------- loop ----------
 
     def ask(self, text: str) -> str:
-        self._save(Message(role="user", content=text))
+        turno = self._save(Message(role="user", content=text))
         messages = context.build(self.config, self.history(), conn=self.conn)
         schemas = self.registry.schemas()
         ctx = ToolContext(config=self.config, conn=self.conn, actor=self.actor,
@@ -94,7 +96,8 @@ class Orchestrator:
         log.debug("[%s] pergunta: %s", self.actor, text)
 
         for _ in range(MAX_ITERATIONS):
-            response = self.llm.complete(messages, tools=schemas, purpose="chat")
+            response = self.llm.complete(messages, tools=schemas, purpose="chat",
+                                         sessao=self.session_id, turno=turno)
 
             if not response.tool_calls:
                 reply = response.text.strip()
@@ -153,15 +156,16 @@ def record_usage(conn_or_factory):
     dentro de worker threads, onde a conexão do processo principal não vale.
     """
 
-    def sink(model, purpose, input_tokens, output_tokens, latency_ms):
+    def sink(model, purpose, input_tokens, output_tokens, latency_ms,
+             sessao=None, turno=None):
         # sqlite3.Connection tem __call__, então callable() não serve para
         # distinguir uma conexão de uma fábrica de conexões.
         conn = (conn_or_factory if isinstance(conn_or_factory, sqlite3.Connection)
                 else conn_or_factory())
         conn.execute(
-            "INSERT INTO llm_usage (model, purpose, input_tokens, output_tokens, latency_ms)"
-            " VALUES (?, ?, ?, ?, ?)",
-            (model, purpose, input_tokens, output_tokens, latency_ms),
+            "INSERT INTO llm_usage (model, purpose, input_tokens, output_tokens,"
+            " latency_ms, session_id, turn_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (model, purpose, input_tokens, output_tokens, latency_ms, sessao, turno),
         )
 
     return sink

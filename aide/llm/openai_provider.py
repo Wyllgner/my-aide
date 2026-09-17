@@ -47,6 +47,8 @@ class OpenAIProvider(LLMProvider):
         fast: bool = False,
         tools: list[dict[str, Any]] | None = None,
         purpose: str = "chat",
+        sessao: str | None = None,
+        turno: int | None = None,
     ) -> LLMResponse:
         model = self.cfg.model_fast if fast else self.cfg.model_chat
         payload: dict[str, Any] = {
@@ -77,9 +79,9 @@ class OpenAIProvider(LLMProvider):
         )
 
         if self.usage_sink:
-            self.usage_sink(
-                model, purpose, response.input_tokens, response.output_tokens, latency_ms
-            )
+            self.usage_sink(model, purpose, response.input_tokens,
+                            response.output_tokens, latency_ms,
+                            sessao=sessao, turno=turno)
         return response
 
     def _call_with_retry(self, payload: dict[str, Any]):
