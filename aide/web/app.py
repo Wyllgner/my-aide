@@ -109,7 +109,8 @@ def criar_app(config=None, conn_factory=None):
         @app.get(tela.caminho, response_class=HTMLResponse, name=tela.slug)
         def ver(periodo: str = "mes", sessao: str | None = None,
                 ator: str | None = None, nota: int | None = None,
-                busca: str | None = None) -> str:
+                busca: str | None = None, ano: int | None = None,
+                mes: int | None = None, dia: int | None = None) -> str:
             montar = MONTADORES.get(tela.slug)
             if montar is None:
                 return render(cabecalho(tela.rotulo) + em_breve(tela.rotulo), tela.slug)
@@ -126,6 +127,8 @@ def criar_app(config=None, conn_factory=None):
                 extra = {"ator": ator}
             elif tela.slug == "notas":
                 extra = {"nota": nota, "busca": busca}
+            elif tela.slug == "calendario":
+                extra = {"ano": ano, "mes": mes, "dia": dia}
             return render(montar(ctx, toolbelt, agora, **extra), tela.slug)
 
     for tela in TELAS:

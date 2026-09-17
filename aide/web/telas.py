@@ -203,44 +203,91 @@ def _etiqueta(item: dict, atrasado: bool) -> str:
             f'{escape(hora)}{escape(item["texto"])}</div>')
 
 
-def calendario(ctx, registry, agora: datetime, ano: int | None = None,
-               mes: int | None = None) -> str:
-    from calendar import Calendar
+def _mes_vizinho(ano: int, mes: int, passo: int) -> tuple[int, int]:
+    indice = (ano * 12 + (mes - 1)) + passo
+    return indice // 12, indice % 12 + 1
 
-    ano = ano or agora.year
-    mes = mes or agora.month
+
+def _detalhe_do_dia(itens: list[dict], dia: int, mes: int, ano: int) -> str:
+    """O que o quadrado não cabe: título inteiro, hora e de onde veio."""
+    if not itens:
+        return (f'<div class="card" style="padding:22px 24px">'
+                f'<p class="eyebrow" style="margin-bottom:8px">{dia:02d}/{mes:02d}</p>'
+                f'<p style="margin:0;color:var(--muted)">Nada marcado neste dia.</p></div>')
+
+    de_onde = {"tarefa": "tarefa", "evento": "agenda", "lembrete": "lembrete"}
+    linhas = ""
+    for i in itens:
+        hora = i["quando"].partition("T")[2][:5]
+        quando_txt = "dia inteiro" if (i.get("dia_inteiro") or hora in ("", "00:00")) else hora
+        risco = "text-decoration:line-through;color:var(--faint);" if i["feito"] else ""
+        linhas += (
+            f'<div class="linha" style="padding:12px 20px">'
+            f'<span class="mono" style="font-size:12.5px;color:var(--faint);width:78px;'
+            f'flex-shrink:0">{escape(quando_txt)}</span>'
+            f'<span style="font-size:14.5px;{risco}">{escape(i["texto"])}</span>'
+            f'<span class="quando" style="font-size:11px;background:#F5F6F8;'
+            f'padding:2px 9px;border-radius:var(--r-pill)">'
+            f'{escape(de_onde.get(i["tipo"], i["tipo"]))}'
+            f'{" · " + escape(i["ref"]) if i["ref"] else ""}</span></div>')
+
+    return (f'<div class="card">'
+            f'<div style="padding:16px 20px 12px;display:flex;align-items:baseline;gap:10px">'
+            f'<span class="eyebrow">{dia:02d}/{mes:02d}/{ano}</span>'
+            f'<span style="font-size:12.5px;color:var(--faint)">{len(itens)} item(ns)</span>'
+            f'<a href="/calendario?ano={ano}&mes={mes}" style="margin-left:auto;'
+            f'font-size:12.5px">fechar</a></div>'
+            f'<div style="border-top:1px solid var(--line-soft)">{linhas}</div></div>')
+
+
+def calendario(ctx, registry, agora: datetime, ano: int | None = None,
+               mes: int | None = None, dia: int | None = None) -> str:
+    from calendar import Calendar, monthrange
+
+    ano = ano if ano and 1970 <= ano <= 2999 else agora.year
+    mes = mes if mes and 1 <= mes <= 12 else agora.month
     por_dia = consultas.planejado_no_mes(ctx.conn, ano, mes, agora.tzinfo)
     hoje = agora.day if (ano, mes) == (agora.year, agora.month) else None
 
-    semanas = Calendar(firstweekday=0).monthdayscalendar(ano, mes)
+    if dia is not None and not (1 <= dia <= monthrange(ano, mes)[1]):
+        dia = None
+
+    base = f"/calendario?ano={ano}&mes={mes}"
     celulas = []
-    for semana in semanas:
-        for dia in semana:
-            if dia == 0:
+    for semana in Calendar(firstweekday=0).monthdayscalendar(ano, mes):
+        for numero in semana:
+            if numero == 0:
                 celulas.append('<div style="background:var(--paper);border-radius:12px"></div>')
                 continue
 
-            itens = por_dia.get(dia, [])
-            eh_hoje = dia == hoje
-            no_passado = hoje is not None and dia < hoje
+            itens = por_dia.get(numero, [])
+            eh_hoje = numero == hoje
+            escolhido = numero == dia
+            no_passado = hoje is not None and numero < hoje
             marcas = "".join(_etiqueta(i, atrasado=no_passado and not i["feito"])
                              for i in itens[:ITENS_POR_DIA])
             if len(itens) > ITENS_POR_DIA:
                 marcas += (f'<div style="font-size:10.5px;color:var(--faint);padding:1px 7px">'
                            f'+{len(itens) - ITENS_POR_DIA}</div>')
 
-            borda = "var(--accent)" if eh_hoje else "var(--line)"
+            if escolhido:
+                borda, fundo = "var(--ink)", "var(--paper)"
+            elif eh_hoje:
+                borda, fundo = "var(--accent)", "var(--surface)"
+            else:
+                borda, fundo = "var(--line)", "var(--surface)"
             cor_num = "var(--accent)" if eh_hoje else "var(--ink)"
-            peso = "600" if eh_hoje else "450"
+            peso = "600" if eh_hoje or escolhido else "450"
+
+            # o dia inteiro é o alvo do clique, não cada etiqueta: mirar numa
+            # tarja de 11px é pior do que não poder clicar
             celulas.append(
-                # min-width:0 é o que deixa o quadrado encolher: item de grid
-                # nasce com min-width:auto, que é a largura do texto sem quebra,
-                # e aí a grade transborda e o domingo sai da tela.
-                f'<div style="background:var(--surface);border:1px solid {borda};'
-                f'border-radius:12px;padding:9px 10px;display:flex;flex-direction:column;'
-                f'gap:4px;min-width:0;min-height:0;overflow:hidden">'
+                f'<a href="{base}&dia={numero}" style="background:{fundo};'
+                f'border:1px solid {borda};border-radius:12px;padding:9px 10px;display:flex;'
+                f'flex-direction:column;gap:4px;min-width:0;min-height:0;overflow:hidden;'
+                f'color:inherit">'
                 f'<span class="mono" style="font-size:12px;color:{cor_num};font-weight:{peso}">'
-                f'{dia}</span>{marcas}</div>')
+                f'{numero}</span>{marcas}</a>')
 
     legenda = "".join(
         f'<span style="display:flex;align-items:center;gap:7px">'
@@ -250,23 +297,45 @@ def calendario(ctx, registry, agora: datetime, ano: int | None = None,
             ("atrasado", "var(--soft)", "border:1px solid var(--accent)"),
             ("planejado", "#F5F6F8", ""), ("feito", "#F3F4F6", "")))
 
+    ant_ano, ant_mes = _mes_vizinho(ano, mes, -1)
+    prox_ano, prox_mes = _mes_vizinho(ano, mes, 1)
+    seta = ("display:inline-flex;align-items:center;justify-content:center;width:30px;"
+            "height:30px;border:1px solid var(--line);border-radius:9px;"
+            "background:var(--surface);color:var(--muted);font-size:15px")
+    voltar_hoje = "" if hoje else (
+        '<a href="/calendario" style="font-size:12.5px;padding:6px 13px;'
+        'border-radius:var(--r-pill);background:var(--soft);color:var(--accent);'
+        'font-weight:600">hoje</a>')
+    navegacao = (
+        f'<div style="display:flex;align-items:center;gap:8px">'
+        f'<a href="/calendario?ano={ant_ano}&mes={ant_mes}" style="{seta}" '
+        f'title="{MESES[ant_mes - 1]} de {ant_ano}">&lsaquo;</a>'
+        f'<a href="/calendario?ano={prox_ano}&mes={prox_mes}" style="{seta}" '
+        f'title="{MESES[prox_mes - 1]} de {prox_ano}">&rsaquo;</a>{voltar_hoje}'
+        f'<div style="display:flex;align-items:center;gap:18px;font-size:13px;'
+        f'color:var(--muted);margin-left:10px">{legenda}</div></div>')
+
     total = sum(len(v) for v in por_dia.values())
     cabeca = "".join(
         f'<div style="text-align:center;font-size:11px;letter-spacing:.07em;'
         f'text-transform:uppercase;color:var(--faint);font-weight:600">{d}</div>'
         for d in DIAS_CURTOS)
 
+    detalhe = ""
+    if dia is not None:
+        detalhe = (f'<div style="margin-top:18px">'
+                   f'{_detalhe_do_dia(por_dia.get(dia, []), dia, mes, ano)}</div>')
+
     return f"""
-{cabecalho(MESES[mes - 1].capitalize(), str(ano),
-           f'<div style="display:flex;align-items:center;gap:18px;font-size:13px;'
-           f'color:var(--muted)">{legenda}</div>')}
+{cabecalho(MESES[mes - 1].capitalize(), str(ano), navegacao)}
 <p style="margin:-14px 0 16px;font-size:13px;color:var(--muted)">
-  {total} compromisso(s) no mês</p>
+  {total} compromisso(s) no mês{" · clique num dia para ver" if total else ""}</p>
 <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;margin-bottom:6px">
   {cabeca}
 </div>
 <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));
             grid-auto-rows:minmax(104px,1fr);gap:8px">{"".join(celulas)}</div>
+{detalhe}
 """
 
 
