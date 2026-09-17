@@ -425,3 +425,48 @@ def test_se_o_telegram_recusar_a_formatacao_manda_sem(ctx, tmp_path):
 
     assert tentativas == [True, False]
     assert bot.enviadas[-1][1] == "#10 Pagar o IPVA (hoje)"
+
+
+def test_o_historico_guarda_a_pergunta_e_nao_o_texto_descartado(ctx, tmp_path):
+    """O modelo recebe 'não autorizado' e escreve 'não foi possível apagar'. Se
+    isso ficar no histórico, na volta seguinte ele lê a própria fala, conclui
+    que apagar não funciona e para de chamar a tool — foi o que aconteceu."""
+    class LLMQueTentaApagar(FakeLLM):
+        def __init__(self):
+            super().__init__("Não foi possível apagar: ação não autorizada.")
+            self.voltas = 0
+
+        def complete(self, messages, *, fast=False, tools=None, purpose="chat"):
+            self.voltas += 1
+            if self.voltas == 1:
+                from aide.llm.base import LLMResponse
+                return LLMResponse(text="", model="fake", tool_calls=[
+                    {"id": "1", "function": {"name": "tasks_drop",
+                                             "arguments": '{"id": 1}'}}])
+            return super().complete(messages, fast=fast, tools=tools, purpose=purpose)
+
+    bot = _bot(ctx, tmp_path, llm=LLMQueTentaApagar())
+    conn = bot._db()
+    conn.execute("INSERT INTO tasks (id, title) VALUES (1, 'Pagar o IPVA')")
+
+    bot._tratar(_msg("apaga o IPVA"))
+
+    gravadas = [r["content"] for r in conn.execute(
+        "SELECT content FROM messages WHERE role = 'assistant' ORDER BY id")]
+    assert any("Quer mesmo" in c for c in gravadas)
+    assert not any("não foi possível" in c.lower() for c in gravadas)
+
+
+def test_o_sim_e_o_desfecho_entram_na_conversa(ctx, tmp_path):
+    """Sem isto o transcrito fica com uma pergunta e nenhuma resposta."""
+    bot = _bot(ctx, tmp_path)
+    conn = bot._db()
+    conn.execute("INSERT INTO tasks (id, title) VALUES (1, 'Pagar o IPVA')")
+    bot._sessoes[42] = "s-teste"
+    bot._anotar_confirmacao(42, "tasks.drop", {"id": 1})
+
+    bot._tratar(_msg("sim"))
+    falas = [(r["role"], r["content"]) for r in conn.execute(
+        "SELECT role, content FROM messages WHERE session_id = 's-teste' ORDER BY id")]
+    assert ("user", "sim") in falas
+    assert any(papel == "assistant" and "apaguei" in texto for papel, texto in falas)

@@ -104,3 +104,24 @@ def test_incerteza_e_marcada_no_prompt(ctx, registry):
     registry.call("memory.save", {"kind": "profile", "key": "aniversario",
                                   "value": "12 de maio", "confidence": 0.6}, ctx)
     assert "incerto" in perfil_para_prompt(ctx.conn, ctx.config)
+
+
+def test_memoria_sem_filtro_traz_os_dois_tipos(ctx, registry):
+    """O padrão era só o perfil, e o episódico sumia sem aviso: perguntado se
+    havia mais alguma memória, o assessor respondia que não — e errado."""
+    registry.call("memory.save", {"kind": "profile", "key": "treino",
+                                  "value": "6h todo dia"}, ctx)
+    registry.call("memory.save", {"kind": "episodic", "key": "pedro",
+                                  "value": "vai se mudar"}, ctx)
+
+    tudo = registry.call("memory.list", {}, ctx).data
+    assert {f["kind"] for f in tudo} == {"profile", "episodic"}
+
+    so_perfil = registry.call("memory.list", {"kind": "profile"}, ctx).data
+    assert {f["kind"] for f in so_perfil} == {"profile"}
+
+
+def test_a_descricao_avisa_que_sem_filtro_vem_tudo(registry):
+    """Se a descrição não disser, o modelo filtra à toa e perde metade."""
+    descricao = registry.get("memory.list").description
+    assert "os dois" in descricao
