@@ -17,7 +17,7 @@ class FakeNotifier(Notifier):
 
 
 class FakeLLM(LLMProvider):
-    def complete(self, messages, *, fast=False, tools=None, purpose="chat"):
+    def complete(self, messages, *, fast=False, tools=None, purpose="chat", **extra):
         return LLMResponse(text="Resumo curto.", model="fake")
 
 
@@ -237,9 +237,9 @@ def test_briefing_noite_nao_chama_a_llm(ctx, registry):
     chamadas = []
 
     class Espiao(FakeLLM):
-        def complete(self, messages, *, fast=False, tools=None, purpose="chat"):
+        def complete(self, messages, *, fast=False, tools=None, purpose="chat", **extra):
             chamadas.append(purpose)
-            return super().complete(messages, fast=fast, tools=tools, purpose=purpose)
+            return super().complete(messages, fast=fast, tools=tools, purpose=purpose, **extra)
 
     registry.call("tasks.create", {"title": "X", "due": "2020-01-01T09:00"}, ctx)
     deps = jobs.JobDeps(config=ctx.config, llm=Espiao(), notifier=FakeNotifier(),

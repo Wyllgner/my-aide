@@ -873,3 +873,78 @@ def test_o_cabecalho_gira_junto_com_a_grade():
             if dia:
                 real = nomes[datetime.date(2026, 9, dia).weekday()]
                 assert DIAS_CURTOS[coluna] == real, f"dia {dia} na coluna errada"
+
+
+# ---------- custo por mensagem ----------
+
+def _gravar_uso(conn, sessao, turno, modelo="gpt-5-nano", entrada=1_000_000, saida=0):
+    conn.execute(
+        "INSERT INTO llm_usage (model, purpose, input_tokens, output_tokens,"
+        " session_id, turn_id) VALUES (?, 'chat', ?, ?, ?, ?)",
+        (modelo, entrada, saida, sessao, turno))
+
+
+def test_a_volta_inteira_conta_para_a_pergunta(app):
+    """Uma pergunta gera várias chamadas — o laço de tools. Separar por chamada
+    diria quanto custou um passo; o que interessa é quanto custou a pergunta."""
+    from aide.web import consultas
+
+    conn = app.state.conn_factory()
+    _gravar_uso(conn, "s1", 10)
+    _gravar_uso(conn, "s1", 10)
+    _gravar_uso(conn, "s1", 20)
+
+    por_turno = consultas.custo_por_turno(conn, "s1", app.state.config.llm.precos)
+    assert por_turno[10]["chamadas"] == 2
+    assert por_turno[10]["tokens"] == 2_000_000
+    assert por_turno[20]["chamadas"] == 1
+
+
+def test_o_selo_aparece_ao_lado_da_resposta(cliente, app):
+    conn = app.state.conn_factory()
+    conn.execute("INSERT INTO messages (id, session_id, role, content)"
+                 " VALUES (10, 's1', 'user', 'quantas tarefas?')")
+    conn.execute("INSERT INTO messages (session_id, role, content)"
+                 " VALUES ('s1', 'assistant', 'Você tem 5.')")
+    _gravar_uso(conn, "s1", 10)
+
+    html = cliente.get("/conversas?sessao=s1").text
+    assert "1.000.000 tokens" in html
+    assert "US$ 0,0500" in html  # nano: 0,05 por 1M de entrada
+
+
+def test_conversa_antiga_nao_ganha_custo_zero(cliente, app):
+    """Antes de 16/09 a chamada não era ligada à conversa. Zero ali afirmaria
+    que foi de graça; some é honesto."""
+    conn = app.state.conn_factory()
+    conn.execute("INSERT INTO messages (id, session_id, role, content)"
+                 " VALUES (10, 's1', 'user', 'oi')")
+    conn.execute("INSERT INTO messages (session_id, role, content)"
+                 " VALUES ('s1', 'assistant', 'olá')")
+    conn.execute("INSERT INTO llm_usage (model, purpose, input_tokens, output_tokens)"
+                 " VALUES ('gpt-5-nano', 'chat', 500, 0)")  # sem sessão nem turno
+
+    html = cliente.get("/conversas?sessao=s1").text
+    assert "tokens" not in html
+
+
+def test_modelo_sem_preco_e_dito_em_vez_de_virar_zero(cliente, app):
+    conn = app.state.conn_factory()
+    conn.execute("INSERT INTO messages (id, session_id, role, content)"
+                 " VALUES (10, 's1', 'user', 'oi')")
+    conn.execute("INSERT INTO messages (session_id, role, content)"
+                 " VALUES ('s1', 'assistant', 'olá')")
+    _gravar_uso(conn, "s1", 10, modelo="modelo-novo")
+
+    assert "sem preço no config" in cliente.get("/conversas?sessao=s1").text
+
+
+def test_valor_minusculo_nao_vira_zero_redondo(cliente, app):
+    conn = app.state.conn_factory()
+    conn.execute("INSERT INTO messages (id, session_id, role, content)"
+                 " VALUES (10, 's1', 'user', 'oi')")
+    conn.execute("INSERT INTO messages (session_id, role, content)"
+                 " VALUES ('s1', 'assistant', 'olá')")
+    _gravar_uso(conn, "s1", 10, entrada=100)
+
+    assert "menos de US$ 0,0001" in cliente.get("/conversas?sessao=s1").text

@@ -10,7 +10,7 @@ class FakeLLM(LLMProvider):
         self.text = text
         self.vistas = []
 
-    def complete(self, messages, *, fast=False, tools=None, purpose="chat"):
+    def complete(self, messages, *, fast=False, tools=None, purpose="chat", **extra):
         self.vistas.append(messages)
         return LLMResponse(text=self.text, model="fake")
 
@@ -436,14 +436,14 @@ def test_o_historico_guarda_a_pergunta_e_nao_o_texto_descartado(ctx, tmp_path):
             super().__init__("Não foi possível apagar: ação não autorizada.")
             self.voltas = 0
 
-        def complete(self, messages, *, fast=False, tools=None, purpose="chat"):
+        def complete(self, messages, *, fast=False, tools=None, purpose="chat", **extra):
             self.voltas += 1
             if self.voltas == 1:
                 from aide.llm.base import LLMResponse
                 return LLMResponse(text="", model="fake", tool_calls=[
                     {"id": "1", "function": {"name": "tasks_drop",
                                              "arguments": '{"id": 1}'}}])
-            return super().complete(messages, fast=fast, tools=tools, purpose=purpose)
+            return super().complete(messages, fast=fast, tools=tools, purpose=purpose, **extra)
 
     bot = _bot(ctx, tmp_path, llm=LLMQueTentaApagar())
     conn = bot._db()

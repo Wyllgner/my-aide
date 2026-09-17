@@ -9,7 +9,7 @@ class FakeLLM(LLMProvider):
         self.seen = []
         self.sink = sink
 
-    def complete(self, messages, *, fast=False, tools=None, purpose="chat"):
+    def complete(self, messages, *, fast=False, tools=None, purpose="chat", **extra):
         self.seen.append(messages)
         if self.sink:
             self.sink("fake-model", purpose, 10, 5, 42)

@@ -20,7 +20,7 @@ AGORA = datetime(2026, 9, 3, 7, 30, tzinfo=TZ)
 class LLMIntocada(LLMProvider):
     """Se o briefing a chamar, o teste quebra — e é para quebrar."""
 
-    def complete(self, messages, *, fast=False, tools=None, purpose="chat"):
+    def complete(self, messages, *, fast=False, tools=None, purpose="chat", **extra):
         raise AssertionError("briefing não deve chamar a LLM: a montagem é determinística")
 
 

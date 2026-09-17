@@ -19,7 +19,7 @@ class ScriptedLLM(LLMProvider):
         self.script = list(script)
         self.seen = []
 
-    def complete(self, messages, *, fast=False, tools=None, purpose="chat"):
+    def complete(self, messages, *, fast=False, tools=None, purpose="chat", **extra):
         self.seen.append(messages[:])
         step = self.script.pop(0)
         if isinstance(step, str):

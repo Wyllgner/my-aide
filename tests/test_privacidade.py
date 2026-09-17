@@ -173,7 +173,7 @@ def test_conversa_nao_vaza_para_o_log_em_info(ctx, registry, caplog):
     from aide.llm.base import LLMProvider, LLMResponse
 
     class LLMMudo(LLMProvider):
-        def complete(self, messages, *, fast=False, tools=None, purpose="chat"):
+        def complete(self, messages, *, fast=False, tools=None, purpose="chat", **extra):
             return LLMResponse(text=f"anotei: {SEGREDO}", model="fake")
 
     agente = Orchestrator(ctx.config, ctx.conn, LLMMudo(), actor="test")

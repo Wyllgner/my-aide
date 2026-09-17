@@ -65,3 +65,34 @@ def test_erro_desconhecido_nao_e_adaptado(monkeypatch):
 def test_mensagem_de_tool_vai_com_tool_call_id():
     msg = Message(role="tool", content="{}", tool_call_id="abc")
     assert msg.to_api() == {"role": "tool", "tool_call_id": "abc", "content": "{}"}
+
+
+def test_a_sessao_e_a_volta_chegam_ao_registro_de_uso(monkeypatch, config):
+    """Passados como argumento, não guardados no provedor: é o que deixa o
+    mesmo provedor atender o bot e o daemon em threads diferentes sem trocar
+    as contas de uma conversa com as de outra."""
+    from types import SimpleNamespace
+
+    registrado = {}
+
+    def sink(model, purpose, entrada, saida, latencia, sessao=None, turno=None):
+        registrado.update(sessao=sessao, turno=turno)
+
+    class FakeOpenAI:
+        def __init__(self, **kw):
+            self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._criar))
+
+        def _criar(self, **payload):
+            msg = SimpleNamespace(content="ok", tool_calls=None)
+            return SimpleNamespace(choices=[SimpleNamespace(message=msg)],
+                                   usage=SimpleNamespace(prompt_tokens=10,
+                                                         completion_tokens=2))
+
+    monkeypatch.setattr("aide.llm.openai_provider.OpenAI", lambda **kw: FakeOpenAI())
+
+    from aide.llm.base import Message
+    from aide.llm.openai_provider import OpenAIProvider
+
+    provedor = OpenAIProvider(config, usage_sink=sink)
+    provedor.complete([Message(role="user", content="oi")], sessao="s7", turno=42)
+    assert registrado == {"sessao": "s7", "turno": 42}
