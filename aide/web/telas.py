@@ -177,7 +177,12 @@ def hoje(ctx, registry, agora: datetime) -> str:
 
 # ---------- calendário ----------
 
-DIAS_CURTOS = ("seg", "ter", "qua", "qui", "sex", "sáb", "dom")
+# 6 = domingo, como se lê calendário no Brasil. O `calendar` do Python conta a
+# semana a partir da segunda (0), então o cabeçalho tem de girar junto — trocar
+# um e esquecer o outro põe cada dia na coluna errada sem erro nenhum.
+PRIMEIRO_DIA = 6
+_DIAS = ("seg", "ter", "qua", "qui", "sex", "sáb", "dom")
+DIAS_CURTOS = _DIAS[PRIMEIRO_DIA:] + _DIAS[:PRIMEIRO_DIA]
 MESES = ("janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho",
          "agosto", "setembro", "outubro", "novembro", "dezembro")
 ITENS_POR_DIA = 3
@@ -254,7 +259,7 @@ def calendario(ctx, registry, agora: datetime, ano: int | None = None,
 
     base = f"/calendario?ano={ano}&mes={mes}"
     celulas = []
-    for semana in Calendar(firstweekday=0).monthdayscalendar(ano, mes):
+    for semana in Calendar(firstweekday=PRIMEIRO_DIA).monthdayscalendar(ano, mes):
         for numero in semana:
             if numero == 0:
                 celulas.append('<div style="background:var(--paper);border-radius:12px"></div>')
