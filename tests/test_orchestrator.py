@@ -111,3 +111,65 @@ def test_prompt_escreve_o_dia_da_semana_em_portugues(ctx):
     assert "Monday" not in texto and "Sunday" not in texto
     assert any(dia in texto for dia in
                ("Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"))
+
+
+# ---------- avisos de progresso ----------
+
+def test_conta_cada_passo_para_quem_quiser_ouvir(ctx, registry):
+    """A conversa fica muda enquanto o modelo pensa e chama tools; sem isso não
+    há como o canal mostrar "digitando" nem dizer em que ponto está."""
+    from aide.core.orchestrator import Orchestrator
+
+    class LLMComTool:
+        def __init__(self):
+            self.vezes = 0
+
+        def complete(self, messages, tools=None, purpose="chat", **kwargs):
+            from aide.llm.base import LLMResponse
+
+            self.vezes += 1
+            if self.vezes == 1:
+                return LLMResponse(text="", model="dublê", tool_calls=[
+                    {"id": "1", "function": {"name": "tasks_list", "arguments": "{}"}}])
+            return LLMResponse(text="pronto", model="dublê", tool_calls=[])
+
+    ditos = []
+    agente = Orchestrator(ctx.config, ctx.conn, LLMComTool(), registry=registry,
+                          progresso=ditos.append)
+    assert agente.ask("o que tenho pra hoje?") == "pronto"
+
+    assert "pensando" in ditos
+    assert "olhando suas tarefas" in ditos
+    # a ordem importa: pensar vem antes de agir
+    assert ditos.index("pensando") < ditos.index("olhando suas tarefas")
+
+
+def test_ouvinte_quebrado_nao_derruba_a_conversa(ctx, registry):
+    """O aviso é enfeite; perder a resposta por causa dele seria trocar o
+    silêncio por um erro."""
+    from aide.core.orchestrator import Orchestrator
+
+    class LLMSimples:
+        def complete(self, messages, tools=None, purpose="chat", **kwargs):
+            from aide.llm.base import LLMResponse
+
+            return LLMResponse(text="tudo bem", model="dublê", tool_calls=[])
+
+    def explode(frase):
+        raise RuntimeError("boom")
+
+    agente = Orchestrator(ctx.config, ctx.conn, LLMSimples(), registry=registry,
+                          progresso=explode)
+    assert agente.ask("oi") == "tudo bem"
+
+
+def test_sem_ouvinte_nada_muda(ctx, registry):
+    from aide.core.orchestrator import Orchestrator
+
+    class LLMSimples:
+        def complete(self, messages, tools=None, purpose="chat", **kwargs):
+            from aide.llm.base import LLMResponse
+
+            return LLMResponse(text="oi", model="dublê", tool_calls=[])
+
+    assert Orchestrator(ctx.config, ctx.conn, LLMSimples(), registry=registry).ask("oi") == "oi"

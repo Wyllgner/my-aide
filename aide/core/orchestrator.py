@@ -8,6 +8,7 @@ import sqlite3
 import uuid
 from collections.abc import Callable
 
+from aide.channels import passos
 from aide.core import context
 from aide.llm.base import LLMProvider, Message
 from aide.tools import registry as tool_registry
@@ -22,7 +23,8 @@ class Orchestrator:
     def __init__(self, config, conn: sqlite3.Connection, llm: LLMProvider,
                  session_id: str | None = None, registry=None,
                  confirm: Callable[[str, dict], bool] | None = None,
-                 actor: str = "cli", embedder=None):
+                 actor: str = "cli", embedder=None,
+                 progresso: Callable[[str], None] | None = None):
         self.config = config
         self.conn = conn
         self.llm = llm
@@ -32,6 +34,11 @@ class Orchestrator:
         self.confirm = confirm
         self.actor = actor
         self.embedder = embedder
+        # Recebe uma frase por passo ("olhando suas tarefas"). Quem chama decide
+        # o que fazer com ela: spinner no terminal, "digitando" no Telegram.
+        # Silêncio durante o trabalho é o que faz alguém mandar a mesma coisa
+        # duas vezes, achando que não chegou.
+        self.progresso = progresso
 
     # ---------- persistência ----------
 
@@ -96,6 +103,7 @@ class Orchestrator:
         log.debug("[%s] pergunta: %s", self.actor, text)
 
         for _ in range(MAX_ITERATIONS):
+            self._avisar(passos.PENSANDO)
             response = self.llm.complete(messages, tools=schemas, purpose="chat",
                                          sessao=self.session_id, turno=turno)
 
@@ -120,10 +128,21 @@ class Orchestrator:
         self._save(Message(role="assistant", content=fallback))
         return fallback
 
+    def _avisar(self, frase: str) -> None:
+        """Um passo nunca pode derrubar a conversa: se quem escuta falhar, o
+        trabalho segue e o aviso é o que se perde."""
+        if self.progresso is None:
+            return
+        try:
+            self.progresso(frase)
+        except Exception:
+            log.debug("aviso de progresso falhou", exc_info=True)
+
     def _run_call(self, call: dict, ctx: ToolContext) -> Message:
         fn = call.get("function", {})
         name = fn.get("name", "")
         raw_args = fn.get("arguments") or "{}"
+        self._avisar(passos.descrever(name))
 
         try:
             args = json.loads(raw_args)
