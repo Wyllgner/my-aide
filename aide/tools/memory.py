@@ -158,6 +158,10 @@ def list_memory(ctx: ToolContext, kind: str | None = None) -> list[dict]:
 )
 def forget(ctx: ToolContext, key: str, kind: str = "profile") -> dict:
     key = key.strip().lower().replace(" ", "_")
+    # lido antes de marcar como superado: depois, a linha não aparece mais
+    anterior = [r["value"] for r in ctx.conn.execute(
+        "SELECT value FROM memory WHERE kind = ? AND key = ? AND superseded_by IS NULL",
+        (kind, key)).fetchall()]
     marcador = ctx.conn.execute(
         "INSERT INTO memory (kind, key, value, confidence)"
         " VALUES (?, ?, '[esquecido]', 1.0)", (kind, key)
@@ -171,7 +175,8 @@ def forget(ctx: ToolContext, key: str, kind: str = "profile") -> dict:
 
     if not apagados:
         raise ValueError(f"não havia nada guardado em {kind}/{key}")
-    return {"kind": kind, "key": key, "esquecidos": apagados}
+    # o que foi esquecido, e não só quantos: "esqueci 1" não diz o que saiu
+    return {"kind": kind, "key": key, "esquecidos": apagados, "era": anterior}
 
 
 def buscar_episodios(conn, query: str, limite: int = 5) -> list[dict]:

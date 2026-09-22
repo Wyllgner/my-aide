@@ -293,4 +293,8 @@ def delete(ctx: ToolContext, id: int) -> dict:
     if row["private"] and not ctx.ver_privado:
         raise ValueError(f"gasto {id} é privado; ele não sai desta máquina")
     ctx.conn.execute("UPDATE expenses SET deleted_at = datetime('now') WHERE id = ?", (id,))
-    return {"id": id, "deleted": True}
+    # devolve o que era: com {"id": 8, "deleted": true} a única coisa que o
+    # modelo podia repetir de volta era o número, e "apaguei o 8" não confirma
+    # nada para quem pediu
+    return {"id": id, "deleted": True, "description": row["description"],
+            "valor": formatar(row["cents"]), "category": row["category"]}
