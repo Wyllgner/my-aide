@@ -71,11 +71,13 @@ def pessoas(atrasados: bool = typer.Option(False, "--atrasados", "-a")) -> None:
     table.add_column("combinado", style="dim")
     for p in linhas:
         dias = p["dias_sem_falar"]
-        texto = f"{dias}d" if dias is not None else "—"
+        texto = ("hoje" if dias == 0 else "ontem" if dias == 1
+                 else formato.plural(dias, "dia") if dias is not None else "nunca")
         cor = "red" if p["atrasado"] else "white"
         table.add_row(p["name"], p["relation"] or "",
                       f"[{cor}]{texto}[/]",
-                      f"a cada {p['cadence_days']}d" if p["cadence_days"] else "sem cobrança")
+                      f"a cada {formato.plural(p['cadence_days'], 'dia')}"
+                      if p["cadence_days"] else "sem cobrança")
     console.print(table)
 
 
@@ -90,6 +92,63 @@ def falei(nome: str, nota: str = typer.Argument(None)) -> None:
     if not resultado.ok:
         console.print(f"[red]{resultado.error}[/]")
         raise typer.Exit(1)
-    console.print(f"[green]ok[/] {resultado.data['name']}")
+
+    # "ok Pedro" não dizia o que mudou; o que interessa é quando ele volta a
+    # cobrar, que é a razão de registrar o contato
+    p = next((x for x in registry.call("people.list", {}, ctx).data
+              if x["id"] == resultado.data["id"]), None)
+    recado = ""
+    if p and p.get("cadence_days"):
+        recado = (f" [dim]· cobro de novo em "
+                  f"{formato.plural(p['cadence_days'], 'dia')}[/]")
+    console.print(f"[green]contato de hoje registrado com[/] "
+                  f"{resultado.data['name']}{recado}")
 
 
+@app.command(rich_help_panel="Agenda e pessoas")
+def pessoa(nome: str,
+           relacao: str = typer.Option(None, "--relacao", "-r",
+                                       help="amigo, família, trabalho, cliente..."),
+           cadencia: int = typer.Option(None, "--cadencia", "-c",
+                                        help="De quantos em quantos dias você quer ser cobrado."),
+           esquecer: bool = typer.Option(False, "--esquecer",
+                                         help="Para de acompanhar essa pessoa.")) -> None:
+    """Passa a acompanhar alguém, ou muda o combinado com quem já é acompanhado.
+
+    Cadastrar pessoa só existia por conversa e por MCP, então do terminal dava
+    para registrar um contato com `myaide falei` mas não criar a pessoa: o
+    comando falhava dizendo que não a conhecia, e não havia como ensinar.
+    """
+    _, _, ctx = _ctx()
+
+    if esquecer:
+        resultado = registry.call("people.remove", {"name": nome}, ctx)
+        if not resultado.ok:
+            console.print(f"[red]{resultado.error}[/]")
+            raise typer.Exit(1)
+        console.print(f"[green]não acompanho mais[/] {nome}")
+        return
+
+    args = {"name": nome}
+    if relacao:
+        args["relation"] = relacao
+    if cadencia is not None:
+        args["cadence_days"] = cadencia
+
+    resultado = registry.call("people.add", args, ctx)
+    # já registrado não é erro de quem digitou: é a intenção de mudar o combinado
+    if not resultado.ok and "já está registrado" in (resultado.error or ""):
+        resultado = registry.call("people.update", args, ctx)
+        verbo = "atualizado"
+    else:
+        verbo = "registrado"
+
+    if not resultado.ok:
+        console.print(f"[red]{resultado.error}[/]")
+        raise typer.Exit(1)
+
+    p = resultado.data
+    detalhes = [p["relation"]] if p.get("relation") else []
+    detalhes.append(f"a cada {formato.plural(p['cadence_days'], 'dia')}"
+                    if p.get("cadence_days") else "sem cobrança")
+    console.print(f"[green]{verbo}[/] {p['name']} [dim]· {' · '.join(detalhes)}[/]")

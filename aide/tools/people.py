@@ -7,6 +7,8 @@ quanto tempo, e o assessor cobra quando o silêncio passar do combinado.
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from aide.core.context import now_in
 from aide.tools.registry import ToolContext, registry
 
@@ -125,8 +127,13 @@ def list_people(ctx: ToolContext, atrasados: bool = False) -> list[dict]:
     for row in ctx.conn.execute(f"SELECT {CAMPOS} FROM people ORDER BY name").fetchall():
         dado = dict(row)
         if row["last_contact_at"]:
-            ultimo = row["last_contact_at"]
-            dias = (agora - agora.fromisoformat(ultimo).replace(tzinfo=agora.tzinfo)).days
+            # dias de calendário, e convertendo o fuso em vez de sobrescrevê-lo:
+            # `timedelta.days` trunca, então um contato de ontem à noite contava
+            # como zero, e a regra de cobrança contava um
+            ultimo = datetime.fromisoformat(row["last_contact_at"])
+            if ultimo.tzinfo is None:
+                ultimo = ultimo.replace(tzinfo=agora.tzinfo)
+            dias = (agora.date() - ultimo.astimezone(agora.tzinfo).date()).days
             dado["dias_sem_falar"] = dias
             dado["atrasado"] = bool(row["cadence_days"] and dias > row["cadence_days"])
         else:

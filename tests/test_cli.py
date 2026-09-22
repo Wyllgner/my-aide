@@ -89,7 +89,7 @@ def test_pessoas_lista_quem_esta_cadastrado(run, raiz):
     _cadastrar(raiz, "Pedro", cadencia=14)
     saida = run("pessoas").output
     assert "Pedro" in saida
-    assert "a cada 14d" in saida
+    assert "a cada 14 dias" in saida
 
 
 def test_pessoas_atrasados_mostra_so_quem_passou_da_cadencia(run, raiz):
@@ -106,13 +106,14 @@ def test_pessoas_atrasados_mostra_so_quem_passou_da_cadencia(run, raiz):
 
 def test_falei_marca_o_contato(run, raiz):
     _cadastrar(raiz, "Pedro", cadencia=7, ultimo="2020-01-01T10:00")
-    assert "ok" in run("falei", "Pedro", "vai se mudar").output
+    assert "registrado com Pedro" in run("falei", "Pedro", "vai se mudar").output
     # deixou de estar em atraso, e a conversa virou memória
     assert "Pedro" not in run("pessoas", "--atrasados").output
 
 
 def test_falei_com_desconhecido_diz_que_nao_conhece(run):
-    """A CLI não cadastra ninguém: registrar pessoa é `people.add`, por chat ou MCP."""
+    """Quem não é acompanhado não recebe contato por acidente; para passar a
+    acompanhar existe `myaide pessoa`."""
     resultado = run("falei", "Fulano")
     assert resultado.exit_code == 1
     assert "não conheço" in resultado.output
@@ -453,3 +454,72 @@ def test_reindexar_duas_vezes_nao_duplica(run, raiz):
     run("reindexar")
     run("reindexar")
     assert run("notas").stdout.count("Uma só") == 1
+
+
+# ---------- lembretes no terminal ----------
+
+def test_lembrete_entende_horario_escrito(run):
+    """Antes só dava por conversa, o que custava uma chamada de API e rede."""
+    run("init")
+    saida = run("lembrete", "tirar o bolo do forno", "-q", "amanhã 9h").stdout
+    assert "09:00" in saida
+    assert "amanhã" in saida
+
+
+def test_lembrete_com_horario_ilegivel_recusa_e_ensina(run):
+    """Adivinhar errado é pior: lembrete que não chega só é notado tarde."""
+    run("init")
+    resultado = run("lembrete", "qualquer coisa", "-q", "quando der")
+    assert resultado.exit_code == 1
+    assert "não entendi o horário" in resultado.stdout
+
+
+def test_lembretes_lista_e_cancela(run):
+    run("init")
+    run("lembrete", "ligar para o contador", "-q", "25/12 10h")
+    assert "ligar para o contador" in run("lembretes").stdout
+
+    run("cancelar", "1")
+    assert "Nenhum lembrete pendente" in run("lembretes").stdout
+
+
+def test_lembrete_aceita_repeticao_em_portugues(run):
+    run("init")
+    saida = run("lembrete", "tomar o remédio", "-q", "8h", "-r", "diario").stdout
+    assert "repete diario" in saida
+
+
+def test_repeticao_desconhecida_lista_as_validas(run):
+    run("init")
+    resultado = run("lembrete", "x", "-q", "8h", "-r", "de vez em quando")
+    assert resultado.exit_code == 1
+    assert "semanal" in resultado.stdout
+
+
+# ---------- cadastrar pessoa ----------
+
+def test_pessoa_cadastra_e_falei_passa_a_funcionar(run):
+    """Do terminal dava para registrar contato mas não criar a pessoa: `falei`
+    dizia que não a conhecia, e não havia comando para ensinar."""
+    run("init")
+    assert "não conheço" in run("falei", "Pedro").stdout.lower()
+
+    run("pessoa", "Pedro", "-r", "amigo", "-c", "14")
+    assert "Pedro" in run("pessoas").stdout
+    assert "registrado com Pedro" in run("falei", "Pedro").stdout
+
+
+def test_pessoa_repetida_atualiza_o_combinado(run):
+    """Já registrado não é erro de quem digitou: é a intenção de mudar."""
+    run("init")
+    run("pessoa", "Ana", "-c", "7")
+    saida = run("pessoa", "Ana", "-c", "30").stdout
+    assert "atualizado" in saida
+    assert "30 dias" in saida
+
+
+def test_pessoa_esquecer_para_de_acompanhar(run):
+    run("init")
+    run("pessoa", "Ana")
+    run("pessoa", "Ana", "--esquecer")
+    assert "Ninguém registrado" in run("pessoas").stdout
