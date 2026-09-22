@@ -523,3 +523,27 @@ def test_pessoa_esquecer_para_de_acompanhar(run):
     run("pessoa", "Ana")
     run("pessoa", "Ana", "--esquecer")
     assert "Ninguém registrado" in run("pessoas").stdout
+
+
+def test_add_com_repeticao_e_done_que_traz_a_proxima(run):
+    """Concluir uma tarefa que se repete não pode parecer que ela sumiu."""
+    run("init")
+    criada = run("add", "pagar o aluguel", "-d", "10/10 09:00", "-r", "todo mês").stdout
+    assert "todo mês" in criada
+
+    saida = run("done", "1").stdout
+    assert "volta em" in saida
+    assert "10/11" in saida
+
+
+def test_add_aceita_prazo_escrito_como_se_fala(run):
+    """Escrever ISO à mão é trabalho que a máquina faz melhor, e de graça."""
+    run("init")
+    assert "amanhã" in run("add", "coisa de amanhã", "-d", "amanhã 9h").stdout
+
+
+def test_repeticao_desconhecida_ensina_as_validas(run):
+    run("init")
+    resultado = run("add", "x", "-r", "de vez em quando")
+    assert resultado.exit_code == 1
+    assert "todo mês" in resultado.stdout
