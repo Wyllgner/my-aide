@@ -84,6 +84,20 @@ class TelegramClient:
             payload["parse_mode"] = "Markdown"
         return self.call("sendMessage", payload)
 
+    def send_action(self, chat_id: int | str, action: str = "typing") -> None:
+        """Mostra "digitando…" no chat. Dura cinco segundos, então precisa ser
+        repetido enquanto o trabalho continua.
+
+        Falha é engolida de propósito: um indicador que não apareceu é um
+        detalhe, e derrubar a resposta por causa dele seria trocar o silêncio
+        por um erro.
+        """
+        try:
+            self.call("sendChatAction", {"chat_id": chat_id, "action": action},
+                      tentativas=1)
+        except (TelegramError, OSError):
+            log.debug("sendChatAction falhou", exc_info=True)
+
     def get_updates(self, offset: int | None = None, timeout: int = 25) -> list[dict]:
         """Long polling: a chamada fica aberta até chegar mensagem ou estourar."""
         params: dict[str, Any] = {"timeout": timeout}

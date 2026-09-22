@@ -10,7 +10,7 @@ import logging
 import threading
 import time
 
-from aide.channels import formato
+from aide.channels import formato, passos
 from aide.channels.telegram import TelegramClient, TelegramError
 from aide.core.orchestrator import Orchestrator
 
@@ -26,6 +26,11 @@ VALIDADE_CONFIRMACAO = 120
 # Teto por confirmação. Um "sim" não deveria conseguir varrer a base inteira
 # de uma vez, e uma pergunta com trinta itens ninguém lê antes de responder.
 LIMITE_CONFIRMACAO = 12
+
+# Depois de quantos segundos de trabalho ele manda uma linha dizendo em que
+# passo está. O "digitando" do Telegram some em cinco segundos e não diz o que
+# está acontecendo; abaixo disso, uma mensagem a mais seria barulho.
+AVISO_APOS_SEGUNDOS = 9
 
 SIM = {"sim", "s", "confirmo", "confirmar", "pode", "pode apagar", "isso",
        "ok", "claro", "apaga", "apagar"}
@@ -138,11 +143,16 @@ class TelegramBot:
             self._recusar(chat_id)
             return
 
+        # antes de qualquer trabalho: é o que diz "chegou, estou nisso" e evita
+        # que você mande a mesma coisa de novo achando que não chegou
+        self.client.send_action(chat_id)
+
         try:
             resposta = self._resolver(chat_id, texto)
         except Exception:
             log.exception("falha ao tratar mensagem")
-            resposta = "Deu erro aqui do meu lado. Tenta de novo?"
+            resposta = ("Deu erro aqui do meu lado, e a sua mensagem não foi perdida: "
+                        "está no histórico. Tenta de novo?")
 
         self._responder(chat_id, resposta)
 
@@ -164,7 +174,11 @@ class TelegramBot:
             return self._comando(chat_id, nome, resto)
 
         agente = self._agente(chat_id)
-        resposta = agente.ask(texto)
+        agente.progresso = self._contar_passo(chat_id)
+        try:
+            resposta = agente.ask(texto)
+        finally:
+            agente.progresso = None
         pedido = self._pendentes.get(chat_id)
         if pedido:
             # O modelo recebeu "não autorizado" e vai dizer isso. Quem responde
@@ -176,6 +190,34 @@ class TelegramBot:
             agente.corrigir_ultima_resposta(pergunta)
             return pergunta
         return resposta
+
+    def _contar_passo(self, chat_id: int):
+        """Devolve o que o orquestrador chama a cada passo.
+
+        Renova o "digitando" sempre, e manda **uma** linha de texto quando o
+        trabalho passa de alguns segundos: aí o indicador já apareceu e sumiu, e
+        o que falta responder é "em que ponto está".
+        """
+        comeco = time.time()
+        avisado = False
+
+        def passo(frase: str) -> None:
+            nonlocal avisado
+            self.client.send_action(chat_id)
+            if avisado or frase == passos.PENSANDO:
+                return
+            if time.time() - comeco < AVISO_APOS_SEGUNDOS:
+                return
+            avisado = True
+            # texto puro e direto pelo cliente: este aviso não é resposta do
+            # assessor e não entra no histórico, senão o modelo leria de volta
+            # "ainda nisso" como se ele mesmo tivesse dito
+            try:
+                self.client.send_message(chat_id, f"Ainda nisso: {frase}.")
+            except TelegramError:
+                log.debug("aviso de progresso não foi entregue", exc_info=True)
+
+        return passo
 
     # ---------- confirmação em dois passos ----------
 

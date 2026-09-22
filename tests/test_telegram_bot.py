@@ -26,6 +26,10 @@ def _bot(ctx, tmp_path, permitidos=(42,), llm=None):
     # aceita markdown=: o bot manda formatado e cai para texto puro se recusarem
     bot.client.send_message = (
         lambda chat_id, text, markdown=False: bot.enviadas.append((chat_id, text)))
+    # "digitando" também é rede: sem dublê, o guard de rede do conftest acusa
+    bot.acoes = []
+    bot.client.send_action = (
+        lambda chat_id, action="typing": bot.acoes.append((chat_id, action)))
     return bot
 
 
@@ -517,3 +521,82 @@ def test_confirmacao_diz_o_que_e_e_nao_so_o_id(ctx, tmp_path):
     assert "apagar" in pergunta
     assert "tasks_drop" not in pergunta
     assert "{" not in pergunta
+
+
+# ---------- sinal de vida enquanto trabalha ----------
+
+def test_mostra_digitando_assim_que_a_mensagem_chega(ctx, tmp_path):
+    """É o que diz "chegou, estou nisso" e evita você mandar de novo."""
+    bot = _bot(ctx, tmp_path)
+    bot._tratar(_msg("oi", chat_id=42))
+    assert (42, "typing") in bot.acoes
+
+
+def test_chat_nao_autorizado_nao_recebe_nem_digitando(ctx, tmp_path):
+    """Responder qualquer coisa confirmaria que o bot existe."""
+    bot = _bot(ctx, tmp_path)
+    bot._tratar(_msg("oi", chat_id=99))
+    assert bot.acoes == []
+    assert bot.enviadas == []
+
+
+def test_passo_renova_o_digitando(ctx, tmp_path):
+    """O indicador do Telegram dura cinco segundos: sem renovar, ele some no meio
+    de um trabalho longo."""
+    bot = _bot(ctx, tmp_path)
+    passo = bot._contar_passo(42)
+    passo("olhando suas tarefas")
+    passo("somando os gastos")
+    assert bot.acoes.count((42, "typing")) == 2
+
+
+def test_trabalho_curto_nao_manda_linha_de_aviso(ctx, tmp_path):
+    """Abaixo de alguns segundos, uma mensagem a mais é barulho."""
+    bot = _bot(ctx, tmp_path)
+    passo = bot._contar_passo(42)
+    passo("olhando suas tarefas")
+    assert bot.enviadas == []
+
+
+def test_trabalho_longo_diz_em_que_passo_esta(ctx, tmp_path, monkeypatch):
+    import aide.channels.telegram_bot as mod
+
+    bot = _bot(ctx, tmp_path)
+    monkeypatch.setattr(mod, "AVISO_APOS_SEGUNDOS", 0)
+    passo = bot._contar_passo(42)
+    passo("procurando nas suas notas")
+
+    assert bot.enviadas[-1][1] == "Ainda nisso: procurando nas suas notas."
+
+
+def test_avisa_uma_vez_so(ctx, tmp_path, monkeypatch):
+    """Uma linha por passo transformaria a espera numa enxurrada."""
+    import aide.channels.telegram_bot as mod
+
+    bot = _bot(ctx, tmp_path)
+    monkeypatch.setattr(mod, "AVISO_APOS_SEGUNDOS", 0)
+    passo = bot._contar_passo(42)
+    for frase in ("olhando suas tarefas", "somando os gastos", "olhando a agenda"):
+        passo(frase)
+
+    assert len(bot.enviadas) == 1
+
+
+def test_pensar_nao_vira_mensagem(ctx, tmp_path, monkeypatch):
+    """"Ainda nisso: pensando" não informa nada que o "digitando" já não diga."""
+    import aide.channels.telegram_bot as mod
+    from aide.channels import passos
+
+    bot = _bot(ctx, tmp_path)
+    monkeypatch.setattr(mod, "AVISO_APOS_SEGUNDOS", 0)
+    bot._contar_passo(42)(passos.PENSANDO)
+    assert bot.enviadas == []
+
+
+def test_erro_diz_que_a_mensagem_nao_foi_perdida(ctx, tmp_path, monkeypatch):
+    """Sem isso a dúvida fica: reenvio ou não?"""
+    bot = _bot(ctx, tmp_path)
+    monkeypatch.setattr(bot, "_resolver", lambda *a: (_ for _ in ()).throw(RuntimeError("boom")))
+    bot._tratar(_msg("oi", chat_id=42))
+
+    assert "não foi perdida" in bot.enviadas[-1][1]
