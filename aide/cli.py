@@ -16,7 +16,7 @@ from aide.comandos.base import app, console
 # declara seu painel, ela também é a ordem em que os painéis saem no --help. O
 # que se usa todo dia vem primeiro; instalação, por último.
 _MODULOS = tuple(import_module(f"aide.comandos.{nome}") for nome in (
-    "tarefas", "conversa", "notas", "gastos", "pessoas",
+    "tarefas", "lembretes", "conversa", "notas", "gastos", "pessoas",
     "relatorios", "fila", "daemon", "setup",
 ))
 
