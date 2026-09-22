@@ -235,3 +235,24 @@ def test_carimbo_ilegivel_nao_explode():
 def test_decimal_e_o_dolar_sem_simbolo():
     assert formato.decimal(0.1369) == "0,1369"
     assert formato.decimal(12345.6, casas=2) == "12.345,60"
+
+
+def test_titulo_longo_nao_emenda_no_prazo():
+    """"Enviar versão final do artigo no20/09" — cortado sem aviso e sem espaço."""
+    saida = para_terminal(Mensagem("Bom dia", [Secao("Atrasadas", [
+        Item("Enviar versão final do artigo no BRWeb", ref="#15", marca="20/09 (ontem)")])]))
+    linha = [l for l in saida.splitlines() if "#15" in l][0]
+    assert "…" in linha
+    assert "no20/09" not in linha
+    assert linha.endswith("20/09 (ontem)")
+
+
+def test_titulo_curto_fica_inteiro_e_alinhado():
+    saida = para_terminal(Mensagem("Bom dia", [Secao("Hoje", [
+        Item("Pagar o IPVA", ref="#4", marca="hoje"),
+        Item("Renovar a CNH", ref="#8", marca="amanhã")])]))
+    linhas = [l for l in saida.splitlines() if l.startswith("  #")]
+    assert "…" not in saida
+    # a marca começa na mesma coluna nas duas linhas: é isso que faz a lista
+    # ser escaneável de cima a baixo
+    assert linhas[0].index("hoje") == linhas[1].index("amanhã")

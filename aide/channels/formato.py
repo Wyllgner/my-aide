@@ -188,6 +188,17 @@ def _cheias(mensagem: Mensagem) -> list[Secao]:
     return [s for s in mensagem.secoes if s.itens]
 
 
+def _encurtar(texto: str) -> str:
+    """Corta com reticência e deixa um espaço antes da coluna seguinte.
+
+    Cortar em LARGURA_TEXTO cru emendava o assunto no prazo — "Enviar versão
+    final do artigo no20/09" — e nada na linha dizia que o título continuava.
+    """
+    if len(texto) <= LARGURA_TEXTO:
+        return texto.ljust(LARGURA_TEXTO + 1)
+    return texto[:LARGURA_TEXTO - 1].rstrip() + "… "
+
+
 def para_terminal(mensagem: Mensagem) -> str:
     """Monoespaçado: dá para alinhar em coluna, que é o que faz a lista ser escaneável."""
     linhas = [mensagem.titulo, ""]
@@ -195,7 +206,7 @@ def para_terminal(mensagem: Mensagem) -> str:
         linhas.append(secao.titulo.upper())
         for item in secao.itens:
             ref = item.ref.ljust(LARGURA_REF)
-            texto = item.texto[:LARGURA_TEXTO].ljust(LARGURA_TEXTO) if item.marca else item.texto
+            texto = _encurtar(item.texto) if item.marca else item.texto
             linhas.append(f"  {ref}{texto}{item.marca}".rstrip())
         linhas.append("")
     if mensagem.rodape:
