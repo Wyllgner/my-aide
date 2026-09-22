@@ -230,3 +230,8 @@ def test_carimbo_ilegivel_nao_explode():
     """Vem do banco; uma linha estranha não pode derrubar a tela inteira."""
     assert formato.de_utc("nada disso", AGORA) is None
     assert formato.de_utc(None, AGORA) is None
+
+
+def test_decimal_e_o_dolar_sem_simbolo():
+    assert formato.decimal(0.1369) == "0,1369"
+    assert formato.decimal(12345.6, casas=2) == "12.345,60"

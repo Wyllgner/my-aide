@@ -125,9 +125,14 @@ def numero(n: int) -> str:
     return f"{n:,}".replace(",", ".")
 
 
+def decimal(valor: float, casas: int = 4) -> str:
+    """0,1369 — vírgula decimal, ponto no milhar. Sem símbolo, para tabela."""
+    return f"{valor:,.{casas}f}".translate(_MILHAR_DECIMAL)
+
+
 def dolar(valor: float, casas: int = 4) -> str:
     """US$ 0,1369 — símbolo em inglês, número em português, que é como se lê aqui."""
-    return f"US$ {valor:,.{casas}f}".translate(_MILHAR_DECIMAL)
+    return f"US$ {decimal(valor, casas)}"
 
 
 _MILHAR_DECIMAL = str.maketrans({",": ".", ".": ","})

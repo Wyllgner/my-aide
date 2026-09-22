@@ -8,6 +8,7 @@ import typer
 from rich.table import Table
 
 from aide import __version__
+from aide.channels import formato
 from aide.comandos.base import _open_db, app, console, now_in
 from aide.scheduler import rules
 
@@ -41,7 +42,11 @@ def status() -> None:
 
     momento = now_in(config.timezone)
     agora = momento.isoformat(timespec="minutes")
-    hoje = momento.replace(hour=23, minute=59).isoformat(timespec="minutes")
+    # Só o que vence de hoje para a frente: com `due_at <= fim_do_dia` toda
+    # tarefa atrasada entrava aqui também, e o retrato dizia "2 atrasadas, 2
+    # vencem hoje" sobre as mesmas duas tarefas.
+    inicio_do_dia = momento.replace(hour=0, minute=0).isoformat(timespec="minutes")
+    fim_do_dia = momento.replace(hour=23, minute=59).isoformat(timespec="minutes")
 
     estado = Table(title="Estado", box=None, title_justify="left", show_header=False)
     estado.add_column(justify="right", style="dim")
@@ -52,7 +57,8 @@ def status() -> None:
                    " AND due_at IS NOT NULL AND due_at < ?", (agora,))
     estado.add_row(f"[red]{atrasadas}[/]" if atrasadas else "0", "atrasadas")
     estado.add_row(str(um("SELECT COUNT(*) FROM tasks WHERE deleted_at IS NULL"
-                          " AND status='open' AND due_at <= ?", (hoje,))), "vencem hoje")
+                          " AND status='open' AND due_at BETWEEN ? AND ?",
+                          (inicio_do_dia, fim_do_dia))), "vencem hoje")
     estado.add_row(str(um("SELECT COUNT(*) FROM notes WHERE deleted_at IS NULL")), "notas")
     estado.add_row(str(um("SELECT COUNT(*) FROM memory WHERE kind='profile'"
                           " AND superseded_by IS NULL")), "fatos no perfil")
@@ -91,14 +97,15 @@ def status() -> None:
         if preco:
             valor = r["i"] / 1e6 * preco[0] + r["o"] / 1e6 * preco[1]
             total += valor
-            texto = f"{valor:.4f}"
+            texto = formato.decimal(valor)
         else:
             sem_preco.append(r["model"])
             texto = "[dim]?[/]"
-        custo.add_row(r["model"], str(r["n"]), f"{r['i']:,}", f"{r['o']:,}", texto)
+        custo.add_row(r["model"], formato.numero(r["n"]), formato.numero(r["i"]),
+                      formato.numero(r["o"]), texto)
 
     if linhas:
-        custo.add_row("", "", "", "[bold]total[/]", f"[bold]{total:.4f}[/]")
+        custo.add_row("", "", "", "[bold]total[/]", f"[bold]{formato.decimal(total)}[/]")
         console.print(custo)
         if sem_preco:
             console.print(f"[dim]sem preço em config.yaml: {', '.join(sem_preco)}[/]")
@@ -108,7 +115,9 @@ def status() -> None:
     ultimo = conn.execute(
         "SELECT ts FROM audit ORDER BY id DESC LIMIT 1").fetchone()
     if ultimo:
-        quando = datetime.fromisoformat(ultimo["ts"]).replace(tzinfo=momento.tzinfo)
+        # o carimbo do audit é UTC; sem converter, a atividade das 20:29 de
+        # hoje aparecia como 00:29 de amanhã
+        quando = formato.de_utc(ultimo["ts"], momento) or momento
         console.print(f"\n[dim]última atividade: {quando.strftime('%d/%m %H:%M')} · "
                       f"banco {config.db_path.stat().st_size // 1024} KB[/]")
 

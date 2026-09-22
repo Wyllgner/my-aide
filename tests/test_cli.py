@@ -238,3 +238,60 @@ def test_gastos_lista_os_lancamentos(run):
 
 def test_quanto_sem_gasto_nenhum(run):
     assert "Nenhum gasto" in run("quanto", "hoje").output
+
+
+# ---------- status ----------
+
+def test_status_nao_conta_atrasada_como_vencendo_hoje(run):
+    """Dizia "2 atrasadas · 2 vencem hoje" sobre as mesmas duas tarefas."""
+    run("init")
+    run("add", "tarefa velha", "--prazo", "2020-01-01T09:00")
+    saida = run("status").stdout
+
+    linhas = {l.split(maxsplit=1)[1].strip(): l.split(maxsplit=1)[0]
+              for l in saida.splitlines() if l.strip() and l.split()[0].isdigit()}
+    assert linhas["atrasadas"] == "1"
+    assert linhas["vencem hoje"] == "0"
+
+
+def test_status_conta_o_que_vence_hoje(run):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    run("init")
+    hoje = datetime.now(ZoneInfo("America/Sao_Paulo")).replace(hour=23, minute=0)
+    run("add", "tarefa de hoje", "--prazo", hoje.isoformat(timespec="minutes"))
+    saida = run("status").stdout
+    assert "1  vencem hoje" in " ".join(saida.split("\n"))
+
+
+def test_status_mostra_a_ultima_atividade_na_hora_daqui(run, raiz):
+    """O carimbo do audit é UTC: cru, ele adianta 3h e pode virar o dia."""
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    run("init")
+    run("add", "qualquer coisa")
+    saida = run("status").stdout
+
+    agora = datetime.now(ZoneInfo("America/Sao_Paulo"))
+    esperado = {(agora - timedelta(minutes=2)).strftime("%d/%m %H:%M"),
+                (agora - timedelta(minutes=1)).strftime("%d/%m %H:%M"),
+                agora.strftime("%d/%m %H:%M")}
+    assert any(f"última atividade: {e}" in saida for e in esperado), saida
+
+
+def test_numero_grande_sai_com_ponto_no_milhar(run, raiz):
+    """654,638 é o número inglês; ao lado de R$ escrito certo fica incoerente."""
+    import sqlite3
+
+    run("init")
+    conn = sqlite3.connect(raiz / "data" / "aide.db")
+    conn.execute("INSERT INTO llm_usage (model, purpose, input_tokens, output_tokens)"
+                 " VALUES ('gpt-4.1', 'chat', 654638, 5003)")
+    conn.commit()
+    conn.close()
+
+    saida = run("status").stdout
+    assert "654.638" in saida
+    assert "654,638" not in saida
