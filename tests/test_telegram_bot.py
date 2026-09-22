@@ -35,6 +35,9 @@ def _bot(ctx, tmp_path, permitidos=(42,), llm=None):
     bot.client.send_message = enviar
     bot.client.edit_message = (
         lambda chat_id, message_id, text: bot.editadas.append((message_id, text)))
+    bot.apagadas = []
+    bot.client.delete_message = (
+        lambda chat_id, message_id: bot.apagadas.append(message_id))
     # "digitando" também é rede: sem dublê, o guard de rede do conftest acusa
     bot.acoes = []
     bot.client.send_action = (
@@ -588,23 +591,33 @@ def test_os_passos_crescem_na_mesma_mensagem(ctx, tmp_path, monkeypatch):
 
 
 def test_edicao_respeita_a_folga_do_telegram(ctx, tmp_path):
-    """O Telegram recusa edição em rajada; os passos engolidos pela folga não se
-    perdem, entram na próxima."""
+    """O Telegram recusa edição em rajada: sem a folga, um turno com seis tools
+    tentaria seis edições seguidas."""
     bot = _bot(ctx, tmp_path)
     passo = bot._contar_passo(42)
     passo("olhando suas tarefas")
     passo("somando os gastos")
 
     assert bot.editadas == []          # a segunda caiu dentro da folga
+
+
+def test_a_lista_sai_do_chat_quando_termina(ctx, tmp_path):
+    """Passada a espera, ela só empurra a conversa para cima. O que foi
+    consultado continua na trilha de auditoria."""
+    bot = _bot(ctx, tmp_path)
+    passo = bot._contar_passo(42)
+    passo("olhando suas tarefas")
     passo.fechar()
-    assert "somando os gastos" in bot.editadas[-1][1]
+
+    assert bot.apagadas == [101]
 
 
-def test_fechar_sem_passo_nenhum_nao_manda_nada(ctx, tmp_path):
+def test_fechar_sem_passo_nenhum_nao_mexe_no_chat(ctx, tmp_path):
     bot = _bot(ctx, tmp_path)
     bot._contar_passo(42).fechar()
     assert bot.enviadas == []
     assert bot.editadas == []
+    assert bot.apagadas == []
 
 
 def test_pensar_nao_vira_passo(ctx, tmp_path):
@@ -649,3 +662,22 @@ def test_erro_diz_que_a_mensagem_nao_foi_perdida(ctx, tmp_path, monkeypatch):
     bot._tratar(_msg("oi", chat_id=42))
 
     assert "não foi perdida" in bot.enviadas[-1][1]
+
+
+def test_o_progresso_nao_chega_ao_modelo(ctx, tmp_path):
+    """Pergunta do dono: isso gasta token? Não. A lista de passos é mensagem do
+    Telegram, não fala da conversa: ela não entra em `messages`, então não entra
+    no histórico nem no prompt da volta seguinte."""
+    vistas = []
+
+    class LLMQueEspia(FakeLLM):
+        def complete(self, messages, tools=None, purpose="chat", **kwargs):
+            vistas.append([(m.role, m.content or "") for m in messages])
+            return super().complete(messages, tools=tools, purpose=purpose, **kwargs)
+
+    bot = _bot(ctx, tmp_path, llm=LLMQueEspia())
+    bot._contar_passo(42)("olhando suas tarefas")
+    bot._tratar(_msg("e agora?", chat_id=42))
+
+    tudo = " ".join(conteudo for volta in vistas for _, conteudo in volta)
+    assert "olhando suas tarefas" not in tudo

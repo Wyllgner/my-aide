@@ -230,10 +230,15 @@ class TelegramBot:
             estado["ultima_edicao"] = time.time()
 
         def fechar() -> None:
-            """Garante que o último passo aparece, mesmo se a folga o tiver
-            engolido: a lista não pode terminar sem o passo que ficou por último."""
-            if estado["id"] is not None and linhas:
-                self.client.edit_message(chat_id, estado["id"], "\n".join(linhas))
+            """Tira a lista do chat quando o trabalho acaba.
+
+            Ela existe para a espera não ser silêncio; passada a espera, fica
+            empurrando a conversa para cima sem dizer nada que a resposta não
+            diga. O que foi consultado continua registrado na trilha de
+            auditoria, que é onde se confere isso depois.
+            """
+            if estado["id"] is not None:
+                self.client.delete_message(chat_id, estado["id"])
 
         passo.fechar = fechar
         return passo

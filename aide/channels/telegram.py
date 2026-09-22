@@ -100,6 +100,20 @@ class TelegramClient:
         except (TelegramError, OSError):
             log.debug("editMessageText falhou", exc_info=True)
 
+    def delete_message(self, chat_id: int | str, message_id: int) -> None:
+        """Apaga uma mensagem enviada por nós.
+
+        Serve para a lista de passos sair do chat quando o trabalho termina: ela
+        existe para a espera não ser um silêncio, e depois da resposta não tem
+        mais função. Falha é engolida: mensagem que não pôde ser apagada é um
+        detalhe, e derrubar o turno por isso seria pior.
+        """
+        try:
+            self.call("deleteMessage", {"chat_id": chat_id, "message_id": message_id},
+                      tentativas=1)
+        except (TelegramError, OSError):
+            log.debug("deleteMessage falhou", exc_info=True)
+
     def send_action(self, chat_id: int | str, action: str = "typing") -> None:
         """Mostra "digitando…" no chat. Dura cinco segundos, então precisa ser
         repetido enquanto o trabalho continua.

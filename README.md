@@ -84,6 +84,14 @@ passo novo:
 · olhando a agenda
 ```
 
+Quando a resposta chega, essa mensagem é apagada: ela existe para a espera não
+ser silêncio, e depois só empurraria a conversa para cima. O que foi consultado
+continua na trilha de auditoria.
+
+Nada disso gasta token: os passos são mensagens do Telegram e linhas do terminal,
+nunca entram em `messages`, e por isso não vão no prompt da volta seguinte. O
+custo é só o das chamadas que o modelo já faria.
+
 Se algo falhar, a resposta diz que falhou e que a sua mensagem não foi perdida,
 para você não ficar na dúvida entre reenviar ou esperar.
 
