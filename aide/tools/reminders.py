@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from aide.core import recorrencia
 from aide.core.context import now_in
 from aide.tools.registry import ToolContext, registry
 
-REPEAT_RULES = {"daily", "weekdays", "weekly", "monthly", "yearly"}
+# a lista é uma só, e vive no módulo de recorrência
+REPEAT_RULES = set(recorrencia.REGRAS)
 
 
 def _parse_dt(value: str, field: str) -> str:
@@ -93,34 +95,9 @@ def cancel(ctx: ToolContext, id: int) -> dict:
 # ---------- usado pelo scheduler, não é tool ----------
 
 def _next_occurrence(fire_at: datetime, rule: str) -> datetime:
-    from datetime import timedelta
-
-    if rule == "daily":
-        return fire_at + timedelta(days=1)
-    if rule == "weekdays":
-        nxt = fire_at + timedelta(days=1)
-        while nxt.weekday() >= 5:  # sábado e domingo
-            nxt += timedelta(days=1)
-        return nxt
-    if rule == "weekly":
-        return fire_at + timedelta(weeks=1)
-    if rule == "monthly":
-        month = fire_at.month + 1
-        year = fire_at.year + (month > 12)
-        month = 1 if month > 12 else month
-        # dia 31 em mês curto cai para o último dia possível
-        for day in range(fire_at.day, 27, -1):
-            try:
-                return fire_at.replace(year=year, month=month, day=day)
-            except ValueError:
-                continue
-        return fire_at.replace(year=year, month=month, day=28)
-    if rule == "yearly":
-        try:
-            return fire_at.replace(year=fire_at.year + 1)
-        except ValueError:  # 29 de fevereiro
-            return fire_at.replace(year=fire_at.year + 1, day=28)
-    raise ValueError(f"regra de repetição desconhecida: {rule}")
+    """Mesma conta que a recorrência de tarefa faz, e pelo mesmo código: enquanto
+    eram dois, "todo mês" podia significar coisas diferentes em cada um."""
+    return recorrencia.proxima(fire_at, rule)
 
 
 def due(conn, now: datetime) -> list[dict]:
