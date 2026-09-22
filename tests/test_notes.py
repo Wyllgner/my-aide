@@ -102,12 +102,43 @@ def test_append_reindexa(ctx, registry, tmp_path):
     assert buscar_texto(ctx.conn, "posterior")
 
 
-def test_apagar_tira_do_indice_mas_mantem_o_arquivo(ctx, registry, tmp_path):
+def test_apagar_leva_o_arquivo_para_a_lixeira(ctx, registry, tmp_path):
+    """Apagar é um ato completo. Enquanto o arquivo ficava no vault, existia a
+    nota que está no disco e não está em lugar nenhum mais: invisível na busca,
+    na listagem e para a reindexação, que varria as linhas."""
     _config_vault(ctx, tmp_path)
     nota = registry.call("notes.create", {"title": "X", "body": "conteudo unico"}, ctx).data
-    registry.call("notes.delete", {"id": nota["id"]}, ctx)
+    resultado = registry.call("notes.delete", {"id": nota["id"]}, ctx).data
+
     assert buscar_texto(ctx.conn, "unico") == []
-    assert Path(nota["path"]).exists()
+    assert not Path(nota["path"]).exists()
+    # não é destruição: o texto continua legível, e voltar é um mv
+    na_lixeira = Path(resultado["arquivo"])
+    assert na_lixeira.parent.name == ".trash"
+    assert "conteudo unico" in na_lixeira.read_text()
+
+
+def test_lixeira_nao_sobrescreve_homonimo(ctx, registry, tmp_path):
+    """Duas notas de mesmo título apagadas não podem virar uma."""
+    _config_vault(ctx, tmp_path)
+    primeira = registry.call("notes.create", {"title": "X", "body": "a primeira"}, ctx).data
+    segunda = registry.call("notes.create", {"title": "X", "body": "a segunda"}, ctx).data
+
+    um = registry.call("notes.delete", {"id": primeira["id"]}, ctx).data["arquivo"]
+    dois = registry.call("notes.delete", {"id": segunda["id"]}, ctx).data["arquivo"]
+
+    assert um != dois
+    assert "a primeira" in Path(um).read_text()
+    assert "a segunda" in Path(dois).read_text()
+
+
+def test_a_lixeira_fica_fora_da_varredura(ctx, registry, tmp_path):
+    """Senão a reindexação adotaria de volta o que acabou de ser apagado."""
+    _config_vault(ctx, tmp_path)
+    nota = registry.call("notes.create", {"title": "X", "body": "conteudo"}, ctx).data
+    registry.call("notes.delete", {"id": nota["id"]}, ctx)
+
+    assert vault.arquivos(Path(ctx.config.vault_dir)) == []
 
 
 def test_frontmatter_e_lido_de_volta(tmp_path):

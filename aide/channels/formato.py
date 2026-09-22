@@ -107,11 +107,18 @@ def de_utc(iso: str, agora: datetime) -> datetime | None:
 
 
 def plural(quantos: int, singular: str, plural_: str = "") -> str:
-    """'1 nota', '2 notas' — em vez de 'nota(s)', que ninguém fala.
+    """'1 nota', '2 notas', em vez de 'nota(s)', que ninguém fala.
 
-    O plural_ existe para o que não termina em vogal: "mensagem" → "mensagens".
+    Frase de duas palavras concorda inteira: "nota reindexada" vira "notas
+    reindexadas", não "notas reindexada". O plural_ existe para o que não
+    termina em vogal, onde o "s" não basta: "mensagem" → "mensagens".
     """
-    palavra = singular if abs(quantos) == 1 else (plural_ or f"{singular}s")
+    if abs(quantos) == 1:
+        palavra = singular
+    elif plural_:
+        palavra = plural_
+    else:
+        palavra = " ".join(f"{p}s" for p in singular.split())
     return f"{numero(quantos)} {palavra}"
 
 

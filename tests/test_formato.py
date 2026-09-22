@@ -256,3 +256,10 @@ def test_titulo_curto_fica_inteiro_e_alinhado():
     # a marca começa na mesma coluna nas duas linhas: é isso que faz a lista
     # ser escaneável de cima a baixo
     assert linhas[0].index("hoje") == linhas[1].index("amanhã")
+
+
+def test_plural_de_frase_concorda_inteira():
+    """"2 nota reindexadas" e "2 tarefa abertas" eram o que saía antes."""
+    assert formato.plural(2, "nota reindexada") == "2 notas reindexadas"
+    assert formato.plural(1, "nota reindexada") == "1 nota reindexada"
+    assert formato.plural(3, "tarefa aberta") == "3 tarefas abertas"

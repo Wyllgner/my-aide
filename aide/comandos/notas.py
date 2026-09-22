@@ -79,40 +79,77 @@ def perfil() -> None:
 def reindexar() -> None:
     """Reconstrói o índice a partir dos arquivos do vault.
 
-    O markdown é a fonte da verdade: se o banco corromper, isto traz tudo de volta.
+    O markdown é a fonte da verdade, e aqui isso vale nos dois sentidos: a linha
+    sem arquivo é acusada, e o arquivo sem linha é adotado. Antes a varredura
+    percorria só as linhas, então um `.md` escrito no editor nunca era achado e
+    um arquivo de nota apagada ficava no vault invisível para sempre.
     """
     from pathlib import Path
 
     from aide.storage import vault
     from aide.storage.search import indexar
 
-    _, conn, ctx = _ctx()
-    linhas = conn.execute(
-        "SELECT id, title, path FROM notes WHERE deleted_at IS NULL").fetchall()
+    config, conn, ctx = _ctx()
+    vault_dir = Path(config.vault_dir)
 
-    reindexadas = sumidas = 0
-    for row in linhas:
-        caminho = Path(row["path"])
-        if not caminho.exists():
-            console.print(f"[yellow]sumiu:[/] {caminho}")
-            sumidas += 1
+    def _indexar(note_id: int, titulo: str, corpo: str) -> None:
+        indexar(conn, note_id, titulo, corpo)
+        if not ctx.embedder:
+            return
+        try:
+            vetor = ctx.embedder.embed_one(f"{titulo}\n\n{corpo}")
+        except Exception:  # noqa: BLE001
+            return
+        if vetor:
+            from aide.storage.search import guardar_vetor
+
+            guardar_vetor(conn, "note", note_id, f"{titulo}\n\n{corpo}", vetor,
+                          ctx.embedder.modelo)
+
+    vivas = {Path(r["path"]).resolve(): r for r in conn.execute(
+        "SELECT id, title, path FROM notes WHERE deleted_at IS NULL")}
+    apagadas = {Path(r["path"]).resolve() for r in conn.execute(
+        "SELECT path FROM notes WHERE deleted_at IS NOT NULL")}
+
+    reindexadas = adotadas = recolhidas = sumidas = 0
+
+    for caminho in vault.arquivos(vault_dir):
+        real = caminho.resolve()
+        if real in vivas:
+            row = vivas[real]
+            _indexar(row["id"], row["title"], vault.corpo_de(caminho))
+            reindexadas += 1
             continue
-        corpo = vault.corpo_de(caminho)
-        indexar(conn, row["id"], row["title"], corpo)
-        if ctx.embedder:
-            try:
-                vetor = ctx.embedder.embed_one(f"{row['title']}\n\n{corpo}")
-            except Exception:  # noqa: BLE001
-                vetor = None
-            if vetor:
-                from aide.storage.search import guardar_vetor
+        if real in apagadas:
+            # a nota foi apagada, mas o arquivo ficou: recolhe para a lixeira, que
+            # é onde o apagar de hoje já o põe
+            destino = vault.para_lixeira(vault_dir, caminho)
+            console.print(f"[yellow]recolhido para a lixeira:[/] {destino}")
+            recolhidas += 1
+            continue
+        # arquivo que o banco não conhece: alguém escreveu no editor, e o vault
+        # é a fonte da verdade, então ele entra
+        meta, corpo = vault.ler(caminho)
+        titulo = meta.get("title") or caminho.stem
+        cur = conn.execute(
+            "INSERT INTO notes (title, path, tags) VALUES (?, ?, ?)",
+            (titulo, str(caminho), (meta.get("tags") or "").strip("[]") or None))
+        _indexar(cur.lastrowid, titulo, corpo)
+        console.print(f"[green]adotada:[/] #{cur.lastrowid} {titulo}")
+        adotadas += 1
 
-                guardar_vetor(conn, "note", row["id"], f"{row['title']}\n\n{corpo}", vetor,
-                              ctx.embedder.modelo)
-        reindexadas += 1
+    for real, row in vivas.items():
+        if not real.exists():
+            console.print(f"[red]sumiu:[/] {row['path']} [dim](#{row['id']} {row['title']})[/]")
+            sumidas += 1
 
-    console.print(f"[green]{formato.plural(reindexadas, 'nota reindexada')}[/]"
-                  + (f" · [yellow]{formato.plural(sumidas, 'arquivo sumido')}[/]"
-                     if sumidas else ""))
-
-
+    partes = [f"[green]{formato.plural(reindexadas, 'nota reindexada')}[/]"]
+    if adotadas:
+        partes.append(f"[green]{formato.plural(adotadas, 'adotada')}[/]")
+    if recolhidas:
+        partes.append(f"[yellow]{formato.plural(recolhidas, 'recolhida')} "
+                      f"para a lixeira[/]")
+    if sumidas:
+        partes.append(
+            f"[red]{formato.plural(sumidas, 'arquivo sumido')}[/]")
+    console.print(" · ".join(partes))

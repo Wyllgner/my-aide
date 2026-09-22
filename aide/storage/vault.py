@@ -12,6 +12,7 @@ from datetime import datetime
 from pathlib import Path
 
 SEPARADOR = "---"
+LIXEIRA = ".trash"
 
 
 def slugify(texto: str, tamanho: int = 60) -> str:
@@ -30,6 +31,38 @@ def caminho_para(vault_dir: Path, titulo: str, criada_em: datetime) -> Path:
         caminho = pasta / f"{base}-{contador}.md"
         contador += 1
     return caminho
+
+
+def para_lixeira(vault_dir: Path, caminho: Path) -> Path | None:
+    """Tira o arquivo do vault sem destruí-lo, e devolve onde ele foi parar.
+
+    Apagar uma nota tem de ser um ato completo: enquanto o arquivo ficava no
+    vault com a linha marcada como apagada, ele não aparecia em lugar nenhum e
+    nem a reindexação o alcançava, porque ela varre as linhas. Com o arquivo
+    fora, vale uma regra só: o que está no vault é nota viva.
+
+    Não é destruição. O texto continua legível em `vault/.trash/`, e voltar é um
+    `mv`. O que deixa de existir é o meio-caminho.
+    """
+    if not caminho.exists():
+        return None
+    destino = vault_dir / LIXEIRA / caminho.name
+    contador = 2
+    while destino.exists():
+        destino = vault_dir / LIXEIRA / f"{caminho.stem}-{contador}{caminho.suffix}"
+        contador += 1
+    destino.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    caminho.replace(destino)
+    return destino
+
+
+def arquivos(vault_dir: Path) -> list[Path]:
+    """Todo markdown do vault, menos a lixeira. Ordem estável, para o relato
+    de uma reindexação sair igual duas vezes."""
+    if not vault_dir.exists():
+        return []
+    return sorted(p for p in vault_dir.rglob("*.md")
+                  if LIXEIRA not in p.relative_to(vault_dir).parts)
 
 
 def escrever(caminho: Path, titulo: str, corpo: str, tags: str | None,

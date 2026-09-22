@@ -388,3 +388,68 @@ def test_agenda_sem_calendario_ensina_a_configurar(run):
     saida = run("agenda").stdout
     assert "Nenhum calendário configurado" in saida
     assert "ics_url" in saida
+
+
+# ---------- reindexar: o vault e o banco nos dois sentidos ----------
+
+def test_reindexar_adota_arquivo_escrito_no_editor(run, raiz):
+    """O vault é a fonte da verdade, então um .md salvo à mão é nota."""
+    run("init")
+    pasta = raiz / "vault" / "2026-09"
+    pasta.mkdir(parents=True)
+    (pasta / "2026-09-20-escrita-a-mao.md").write_text(
+        "---\ntitle: Escrita à mão\n---\n\nnasceu no editor, não no assessor\n")
+
+    saida = run("reindexar").stdout
+    assert "adotada" in saida
+    assert "Escrita à mão" in run("notas").stdout
+    assert "Escrita à mão" in run("buscar", "editor").stdout
+
+
+def test_reindexar_recolhe_o_arquivo_de_nota_apagada(run, raiz):
+    """Era o buraco: linha apagada e arquivo no vault, invisível para sempre."""
+    import sqlite3
+    from pathlib import Path
+
+    run("init")
+    run("nota", "Some daqui", "corpo qualquer")
+
+    conn = sqlite3.connect(raiz / "data" / "aide.db")
+    caminho = Path(conn.execute("SELECT path FROM notes").fetchone()[0])
+    conn.execute("UPDATE notes SET deleted_at = datetime('now')")
+    conn.commit()
+    conn.close()
+
+    assert caminho.exists()
+
+    saida = run("reindexar").stdout
+    assert "lixeira" in saida
+    assert not caminho.exists()
+    assert (raiz / "vault" / ".trash" / caminho.name).exists()
+
+
+def test_reindexar_acusa_a_linha_sem_arquivo(run, raiz):
+    import sqlite3
+    from pathlib import Path
+
+    run("init")
+    run("nota", "Vai sumir", "corpo")
+    conn = sqlite3.connect(raiz / "data" / "aide.db")
+    Path(conn.execute("SELECT path FROM notes").fetchone()[0]).unlink()
+    conn.close()
+
+    saida = run("reindexar").stdout
+    assert "sumiu" in saida
+    assert "Vai sumir" in saida
+
+
+def test_reindexar_duas_vezes_nao_duplica(run, raiz):
+    """Adotar tem de ser idempotente, senão o job do daemon multiplica notas."""
+    run("init")
+    pasta = raiz / "vault" / "2026-09"
+    pasta.mkdir(parents=True)
+    (pasta / "n.md").write_text("---\ntitle: Uma só\n---\n\ncorpo\n")
+
+    run("reindexar")
+    run("reindexar")
+    assert run("notas").stdout.count("Uma só") == 1

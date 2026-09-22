@@ -223,7 +223,7 @@ def search(ctx: ToolContext, query: str, limit: int = 5) -> list[dict]:
 
 @registry.register(
     name="notes.delete",
-    description="Descarta uma nota. O arquivo no vault continua lá.",
+    description="Descarta uma nota. O arquivo vai para a lixeira do vault.",
     parameters={"type": "object", "properties": {"id": {"type": "integer"}}, "required": ["id"]},
     safety="confirm",
 )
@@ -231,5 +231,9 @@ def delete(ctx: ToolContext, id: int) -> dict:
     row = _nota(ctx, id)
     ctx.conn.execute("UPDATE notes SET deleted_at = datetime('now') WHERE id = ?", (id,))
     remover_do_indice(ctx.conn, id)
+    # o arquivo sai do vault junto com a linha: deixá-lo ali criava a nota que
+    # existe no disco e não existe em lugar nenhum mais
+    destino = vault.para_lixeira(Path(ctx.config.vault_dir), Path(row["path"]))
     return {"id": id, "title": row["title"], "status": "removida do índice",
-            "arquivo": row["path"]}
+            "arquivo": str(destino) if destino else row["path"],
+            "na_lixeira": destino is not None}
