@@ -7,6 +7,18 @@ import typer
 from aide.comandos.base import _ctx, _print_tasks, app, console
 from aide.tools import registry
 
+# O filtro é o nome que a tool entende; o título é o que você lê. Sem este mapa
+# a tabela saía encabeçada por "today" ou "inbox" no meio de uma tela em
+# português — e "inbox" ainda não diz o que está vendo.
+TITULOS = {
+    "today": "Para hoje",
+    "overdue": "Atrasadas",
+    "week": "Nos próximos 7 dias",
+    "inbox": "Sem prazo",
+    "done": "Concluídas",
+    "all": "Todas as tarefas",
+}
+
 
 @app.command()
 def hoje() -> None:
@@ -28,7 +40,7 @@ def listar(filtro: str = typer.Argument("today", help="today|overdue|week|inbox|
     if not result.ok:
         console.print(f"[red]{result.error}[/]")
         raise typer.Exit(1)
-    _print_tasks(result.data, config, filtro)
+    _print_tasks(result.data, config, TITULOS.get(filtro, filtro))
 
 
 @app.command()

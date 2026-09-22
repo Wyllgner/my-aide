@@ -95,7 +95,9 @@ def _fmt_due(due: str | None, now: datetime) -> tuple[str, str]:
 
 def _print_tasks(rows: list[dict], config, title: str) -> None:
     if not rows:
-        console.print("[dim]Nada por aqui.[/]")
+        # o título diz qual recorte estava sendo olhado; "Nada por aqui" sozinho
+        # deixava a dúvida de se a lista está vazia ou se o filtro não pegou nada
+        console.print(f"[dim]Nenhuma tarefa aqui ({title.lower()}).[/]")
         return
 
     now = now_in(config.timezone)
@@ -119,5 +121,7 @@ def _print_tasks(rows: list[dict], config, title: str) -> None:
             " · ".join(marks),
         )
     console.print(table)
+    if len(rows) > 3:
+        console.print(f"[dim]{formato.plural(len(rows), 'tarefa')}[/]")
 
 
