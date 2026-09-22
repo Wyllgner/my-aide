@@ -55,6 +55,16 @@ telegram:
   enabled: true
   allowed_chat_ids: [6391052199]
 
+gastos:
+  # Teto por categoria, em reais por mês. Sem teto declarado o assessor não tem
+  # opinião sobre quanto é muito, e não cobra nada. Ex.:
+  #   tetos:
+  #     alimentação: 800
+  #     transporte: 300
+  tetos: {}
+  # a partir de que fração do teto ele começa a avisar
+  avisar_em: 0.8
+
 calendar:
   # endereço iCal secreto da sua agenda (só leitura).
   # Google: Configurações da agenda > Integrar agenda > Endereço secreto em iCal

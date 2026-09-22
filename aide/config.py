@@ -64,6 +64,23 @@ class ScheduleConfig:
 
 
 @dataclass(frozen=True)
+class GastosConfig:
+    """Teto por categoria, em reais e por mês.
+
+    Em centavos inteiros como o resto do controle de gastos: comparar um teto em
+    float com uma soma em inteiro é a porta de entrada do erro de um centavo que
+    faz a cobrança disparar (ou não) no limite.
+
+    Vazio desliga a cobrança: sem teto declarado, o assessor não tem opinião
+    sobre quanto é muito.
+    """
+
+    tetos_centavos: dict[str, int] = field(default_factory=dict)
+    # a partir de quanto do teto ele começa a avisar
+    avisar_em: float = 0.8
+
+
+@dataclass(frozen=True)
 class Config:
     timezone: str = "America/Porto_Velho"
     locale: str = "pt-BR"
@@ -78,6 +95,7 @@ class Config:
     calendar_sync_hours: int = 6
     telegram: TelegramConfig = field(default_factory=TelegramConfig)
     schedule: ScheduleConfig = field(default_factory=ScheduleConfig)
+    gastos: GastosConfig = field(default_factory=GastosConfig)
 
     @property
     def db_path(self) -> Path:
@@ -103,6 +121,7 @@ def load_config(root: Path | None = None) -> Config:
     sched_raw = raw.get("schedule", {})
     tg_raw = raw.get("telegram", {})
     cal_raw = raw.get("calendar", {})
+    gastos_raw = raw.get("gastos", {})
 
     llm = LLMConfig(
         provider=llm_raw.get("provider", "openai"),
@@ -138,6 +157,11 @@ def load_config(root: Path | None = None) -> Config:
             enabled=bool(tg_raw.get("enabled", False)),
             allowed_chat_ids=tuple(int(x) for x in tg_raw.get("allowed_chat_ids", [])),
             token=os.getenv("TELEGRAM_BOT_TOKEN"),
+        ),
+        gastos=GastosConfig(
+            tetos_centavos={str(cat).lower(): round(float(valor) * 100)
+                            for cat, valor in (gastos_raw.get("tetos") or {}).items()},
+            avisar_em=float(gastos_raw.get("avisar_em", 0.8)),
         ),
         schedule=ScheduleConfig(
             briefing_manha=sched_raw.get("briefing_manha", "07:30"),
