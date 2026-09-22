@@ -22,6 +22,9 @@ TRACOS = {
     "ferramentas": ("M12.5 3.5a3.5 3.5 0 0 0-4.6 4.4L3.5 12.3v3.2h3.2l4.4-4.4"
                     "a3.5 3.5 0 0 0 4.4-4.6l-2.2 2.2-2-2z"),
     "auditoria": "M8.5 12.5a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM11.5 11.5 16 16",
+    # relógio: lembrete é hora marcada, e na lista ele fica ao lado de tarefa,
+    # que tem prazo. O ícone é o que distingue as duas coisas de longe.
+    "reminders": "M10 17a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM10 6.5V10l2.5 1.5",
 }
 
 

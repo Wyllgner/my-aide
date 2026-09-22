@@ -145,6 +145,51 @@ def barras(pares: list[tuple[str, float]], rotulo_px: int = 96,
     return f'<div style="display:flex;flex-direction:column;gap:7px">{linhas}</div>'
 
 
+# cores de estado do medidor: o número sempre acompanha, a cor só reforça
+ALERTA = "#C4432B"
+ATENCAO = "#B8860B"
+CALMA = "#3F7A54"
+
+
+def medidores(linhas: list[dict], rotulo_px: int = 104,
+              vazio: str = "nenhum teto declarado") -> str:
+    """Barras contra uma **meta**, não contra o maior valor da série.
+
+    `barras()` normaliza pelo maior item, o que responde "qual é o maior". Teto é
+    outra pergunta: quanto falta para passar. Aqui cada linha tem escala própria,
+    o traço marca 100% e o que passa do teto aparece em cor distinta — com o
+    número ao lado, porque cor sozinha não carrega dado.
+
+    Cada linha: {rotulo, valor, meta, texto}.
+    """
+    if not linhas:
+        return f'<p style="margin:0;font-size:12.5px;color:{FRACO}">{escape(vazio)}</p>'
+
+    html = ""
+    for linha in linhas:
+        meta = linha["meta"] or 1
+        fracao = linha["valor"] / meta
+        cor = ALERTA if fracao > 1 else ATENCAO if fracao >= 0.8 else CALMA
+        # a barra para em 100%: o excesso vira cor e número, não uma barra que
+        # estoura a coluna e desalinha as outras
+        largura = min(fracao, 1.0) * 100
+        html += (
+            f'<div style="display:flex;align-items:center;gap:10px">'
+            f'<span style="width:{rotulo_px}px;flex-shrink:0;font-size:12.5px;'
+            f'color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap"'
+            f' title="{escape(linha["rotulo"])}">{escape(linha["rotulo"])}</span>'
+            f'<div style="flex:1;height:16px;background:{TRILHO};border-radius:5px;'
+            f'position:relative;overflow:hidden">'
+            f'<div style="width:{largura:.1f}%;height:100%;background:{cor};'
+            f'border-radius:5px"></div>'
+            f'<span style="position:absolute;right:0;top:0;bottom:0;width:2px;'
+            f'background:{TINTA};opacity:.16"></span></div>'
+            f'<span class="mono" style="white-space:nowrap;text-align:right;font-size:12.5px;'
+            f'color:{cor if fracao >= 0.8 else "var(--ink)"}">'
+            f'{escape(linha["texto"])}</span></div>')
+    return f'<div style="display:flex;flex-direction:column;gap:7px">{html}</div>'
+
+
 def anel(fracao: float, rotulo: str, tamanho: int = 92) -> str:
     """Proporção de duas partes. O número vai no meio — a cor não carrega o dado."""
     import math

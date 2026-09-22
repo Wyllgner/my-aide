@@ -247,3 +247,61 @@ def uso_por_finalidade(conn, limite: int = 6) -> list[tuple[str, int]]:
     return [(r["purpose"] or "sem rótulo", r["n"]) for r in conn.execute(
         "SELECT purpose, COUNT(*) n FROM llm_usage GROUP BY purpose"
         " ORDER BY n DESC LIMIT ?", (limite,)).fetchall()]
+
+
+def tetos_do_mes(conn, config, agora: datetime) -> list[dict]:
+    """Gasto do mês contra o teto de cada categoria declarada.
+
+    Mesma conta da regra `orcamento_categoria`, e de propósito: a página e a
+    cobrança precisam dizer o mesmo número, senão você olha a tela, vê folga, e
+    recebe o aviso de estouro no minuto seguinte.
+
+    O gasto privado entra na soma e a descrição não aparece: aqui só há nome de
+    categoria e total, então somar mantém o total verdadeiro sem contar o que a
+    listagem esconde.
+    """
+    tetos = getattr(getattr(config, "gastos", None), "tetos_centavos", None) or {}
+    if not tetos:
+        return []
+
+    inicio = agora.replace(day=1, hour=0, minute=0).isoformat(timespec="minutes")
+    fim = agora.isoformat(timespec="minutes")
+    gasto = {
+        (r["categoria"] or ""): r["total"] for r in conn.execute(
+            "SELECT lower(category) categoria, SUM(cents) total FROM expenses"
+            " WHERE deleted_at IS NULL AND spent_at BETWEEN ? AND ?"
+            " GROUP BY lower(category)", (inicio, fim)).fetchall()
+    }
+    return [{"categoria": categoria, "gasto": gasto.get(categoria, 0), "teto": teto}
+            for categoria, teto in sorted(tetos.items(), key=lambda kv: -kv[1])]
+
+
+def notas_na_lixeira(vault_dir) -> int:
+    """Quantos arquivos estão na lixeira do vault.
+
+    Apagar nota move o arquivo para lá, e sem mostrar em algum lugar a lixeira
+    seria uma pasta que só cresce e ninguém sabe que existe.
+    """
+    from pathlib import Path
+
+    lixeira = Path(vault_dir) / ".trash"
+    return len(list(lixeira.glob("*.md"))) if lixeira.exists() else 0
+
+
+def gasto_fora_dos_tetos(conn, config, agora: datetime) -> list[tuple[str, int]]:
+    """Gasto do mês nas categorias que não têm teto, da maior para a menor.
+
+    É o ponto cego do controle: o que não tem teto não aparece em medidor, e sem
+    esta lista dá para estourar o mês inteiro em categorias que a tela não
+    mostra. Sem categoria nenhuma entra como "sem categoria", que é o caso mais
+    fácil de acumular sem perceber.
+    """
+    tetos = getattr(getattr(config, "gastos", None), "tetos_centavos", None) or {}
+    inicio = agora.replace(day=1, hour=0, minute=0).isoformat(timespec="minutes")
+    fim = agora.isoformat(timespec="minutes")
+    linhas = conn.execute(
+        "SELECT lower(COALESCE(category, '')) categoria, SUM(cents) total FROM expenses"
+        " WHERE deleted_at IS NULL AND spent_at BETWEEN ? AND ?"
+        " GROUP BY lower(COALESCE(category, '')) ORDER BY total DESC", (inicio, fim)).fetchall()
+    return [(r["categoria"] or "sem categoria", r["total"])
+            for r in linhas if r["categoria"] not in tetos]

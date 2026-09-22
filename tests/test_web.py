@@ -948,3 +948,72 @@ def test_valor_minusculo_nao_vira_zero_redondo(cliente, app):
     _gravar_uso(conn, "s1", 10, entrada=100)
 
     assert "menos de US$ 0,0001" in cliente.get("/conversas?sessao=s1").text
+
+
+# ---------- tetos de gasto na página ----------
+
+@pytest.fixture
+def com_tetos(app):
+    """Tetos postos aqui, e com categorias que ninguém teria de verdade: lendo do
+    `config.local.yaml` do dono o teste passaria nesta máquina e falharia num
+    clone limpo, ou o contrário."""
+    from aide.config import GastosConfig
+
+    object.__setattr__(app.state.config, "gastos",
+                       GastosConfig(tetos_centavos={"cinema": 42_00, "barbearia": 17_00}))
+    return app
+
+
+def test_gastos_mostra_o_medidor_de_cada_teto(cliente, com_dados, com_tetos):
+    html = cliente.get("/gastos").text
+    assert "Tetos do mês" in html
+    assert "cinema" in html and "R$ 42,00" in html
+    assert "barbearia" in html and "R$ 17,00" in html
+
+
+def test_gasto_em_categoria_sem_teto_aparece_mesmo_assim(cliente, com_dados, com_tetos):
+    """É o ponto cego: sem esta linha o mês estoura em categoria que a tela
+    não mostra."""
+    html = cliente.get("/gastos").text
+    assert "sem teto:" in html
+    assert "alimentação" in html
+
+
+def test_sem_teto_declarado_a_pagina_ensina_a_declarar(cliente, com_dados):
+    from aide.config import GastosConfig
+
+    object.__setattr__(com_dados.state.config, "gastos", GastosConfig())
+    html = cliente.get("/gastos").text
+    assert "Nenhum teto declarado" in html
+    assert "gastos.tetos" in html
+
+
+def test_painel_lista_todas_as_regras_registradas(cliente, com_dados):
+    """A lista era escrita à mão e as duas regras de dinheiro ficariam de fora
+    sem ninguém notar."""
+    from aide.scheduler import rules
+
+    html = cliente.get("/").text
+    assert "teto de gasto" in html
+    assert "gasto atípico" in html
+    # nenhuma regra registrada fica fora da tela
+    assert len(rules.rule_names()) == html.count('style="width:18px;')
+
+
+def test_hoje_marca_a_tarefa_que_se_repete(cliente, app, registry):
+    ctx = app.state.contexto()
+    registry.call("tasks.create", {"title": "pagar o aluguel", "due": "2020-01-10T09:00",
+                                   "recurrence": "monthly"}, ctx)
+    html = cliente.get("/hoje").text
+    assert "todo mês" in html
+
+
+def test_notas_conta_o_que_esta_na_lixeira(cliente, app, registry, tmp_path):
+    """Apagar move o arquivo para lá; sem mostrar, é pasta que só cresce."""
+    vault = tmp_path / "v"
+    (vault / ".trash").mkdir(parents=True)
+    (vault / ".trash" / "velha.md").write_text("---\ntitle: Velha\n---\n\ncorpo\n")
+    object.__setattr__(app.state.config, "vault_dir", vault)
+
+    html = cliente.get("/notas").text
+    assert "1 arquivo na lixeira" in html

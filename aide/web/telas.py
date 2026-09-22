@@ -7,6 +7,7 @@ from html import escape
 
 from aide.channels import formato
 from aide.channels.formato import por_extenso, quando
+from aide.core import recorrencia
 from aide.web import consultas, graficos
 from aide.web.icones import icone
 from aide.web.paginas import cabecalho
@@ -32,15 +33,53 @@ def _lista(itens: list[str], vazio: str) -> str:
     return "".join(itens)
 
 
+def _selo(texto: str) -> str:
+    return (f'<span style="font-size:11px;color:var(--muted);background:#F5F6F8;'
+            f'padding:2px 8px;border-radius:var(--r-pill);white-space:nowrap">'
+            f'{escape(texto)}</span>')
+
+
 def _linha_tarefa(t: dict, agora: datetime, atrasada: bool = False) -> str:
     marca = quando(t.get("due_at"), agora)
     classe = "quando mono late" if atrasada else "quando mono"
+    # a repetição aparece na linha: concluir uma tarefa que volta é outra coisa
+    # que concluir uma que acaba, e sem o selo as duas são idênticas na tela
+    selo = _selo(recorrencia.por_extenso(t["recurrence"])) if t.get("recurrence") else ""
     return (f'<div class="linha"><span class="ref mono">#{t["id"]}</span>'
-            f'<span style="font-size:14.5px">{escape(t["title"])}</span>'
+            f'<span style="font-size:14.5px">{escape(t["title"])}</span>{selo}'
             f'<span class="{classe}">{escape(marca)}</span></div>')
 
 
 # ---------- painel ----------
+
+ROTULO_DA_REGRA = {
+    "atrasadas": "atrasadas",
+    "adiada_demais": "adiada demais",
+    "projeto_parado": "projeto parado",
+    "contato_atrasado": "contato atrasado",
+    "zumbi": "zumbi",
+    "orcamento_categoria": "teto de gasto",
+    "gasto_atipico": "gasto atípico",
+}
+
+
+def _indicador_teto(ctx, agora: datetime) -> str:
+    """Quanto do combinado do mês já foi. Sem teto declarado, convida a declarar
+    em vez de mostrar um quadrado vazio sem explicação."""
+    from aide.tools.expenses import formatar
+
+    linhas = consultas.tetos_do_mes(ctx.conn, ctx.config, agora)
+    if not linhas:
+        return _indicador("Tetos", "—", "nenhum declarado")
+
+    gasto = sum(linha["gasto"] for linha in linhas)
+    teto = sum(linha["teto"] for linha in linhas) or 1
+    estourados = sum(1 for linha in linhas if linha["gasto"] > linha["teto"])
+    nota = (formato.plural(estourados, "categoria estourada") if estourados
+            else f'de {formatar(teto)} em tetos')
+    return _indicador("Gasto do combinado", f"{gasto / teto * 100:.0f}%", nota,
+                      alerta=bool(estourados))
+
 
 def painel(ctx, registry, agora: datetime) -> str:
     conn = ctx.conn
@@ -64,21 +103,22 @@ def painel(ctx, registry, agora: datetime) -> str:
         _indicador("Gasto do mês", gasto["total"], formato.plural(gasto["quantos"], "lançamento")),
         _indicador("Chamadas de LLM", str(n["chamadas"]), "desde o começo"),
         _indicador("Notas", str(n["notas"]), f'{formato.plural(n["perfil"], "fato")} no perfil'),
+        _indicador_teto(ctx, agora),
     ])
 
+    # a lista sai do registro de regras, não de uma lista escrita à mão: as duas
+    # regras de dinheiro entraram e ficariam de fora da tela sem ninguém notar
     regras_html = "".join(
         f'<div style="display:flex;align-items:center;gap:10px;font-size:13px;'
-        f'color:{"var(--ink)" if por_regra.get(r) else "var(--faint)"}">'
+        f'color:{"var(--ink)" if por_regra.get(nome) else "var(--faint)"}">'
         f'<span class="mono" style="width:18px;'
-        f'color:{"var(--accent)" if por_regra.get(r) else "var(--faint)"}">'
-        f'{por_regra.get(r, 0)}</span>{escape(rotulo)}</div>'
-        for r, rotulo in (("atrasadas", "atrasadas"), ("adiada_demais", "adiada demais"),
-                          ("projeto_parado", "projeto parado"),
-                          ("contato_atrasado", "contato atrasado"), ("zumbi", "zumbi")))
+        f'color:{"var(--accent)" if por_regra.get(nome) else "var(--faint)"}">'
+        f'{por_regra.get(nome, 0)}</span>{escape(ROTULO_DA_REGRA.get(nome, nome))}</div>'
+        for nome in rules.rule_names())
 
     return f"""
 {cabecalho("Painel", por_extenso(agora))}
-<div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px">{indicadores}</div>
+<div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:14px">{indicadores}</div>
 
 <div style="display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:16px;margin-top:16px">
   {_cartao("Chamadas de LLM por dia",
@@ -128,8 +168,8 @@ def hoje(ctx, registry, agora: datetime) -> str:
                if f.rule in {"adiada_demais", "zumbi", "projeto_parado"}]
 
     lembretes = ctx.conn.execute(
-        "SELECT text, fire_at FROM reminders WHERE status='pending' ORDER BY fire_at LIMIT 8"
-    ).fetchall()
+        "SELECT text, fire_at, repeat_rule FROM reminders WHERE status='pending'"
+        " ORDER BY fire_at LIMIT 8").fetchall()
 
     contagem = []
     if atrasadas.data:
@@ -157,8 +197,9 @@ def hoje(ctx, registry, agora: datetime) -> str:
     <div style="padding:16px 20px 13px"><span class="eyebrow">Hoje</span></div>
     <div style="border-top:1px solid var(--line-soft)">
       {_lista([_linha_tarefa(t, agora) for t in hoje_sem_atraso]
-              + [f'<div class="linha"><span class="ref"></span>'
+              + [f'<div class="linha"><span class="ref">{icone("reminders")}</span>'
                  f'<span style="font-size:14.5px">{escape(r["text"])}</span>'
+                 f'{_selo(recorrencia.por_extenso(r["repeat_rule"])) if r["repeat_rule"] else ""}'
                  f'<span class="quando mono">{escape(quando(r["fire_at"], agora))}</span></div>'
                  for r in lembretes],
               "Nada marcado para hoje.")}
@@ -379,6 +420,53 @@ def _periodo_por_extenso(de: str, ate: str, periodo: str) -> str:
             f"a {fim.day} de {MESES[fim.month - 1]}")
 
 
+def _cartao_tetos(ctx, agora: datetime) -> str:
+    """Os tetos do mês, sempre no mês corrente mesmo quando a tela mostra outro
+    período: teto é mensal, e mostrá-lo ao lado de "ontem" diria uma mentira."""
+    from aide.tools.expenses import formatar
+
+    linhas = consultas.tetos_do_mes(ctx.conn, ctx.config, agora)
+    if not linhas:
+        return (
+            '<div class="card" style="padding:16px 20px;margin-top:16px">'
+            '<p class="eyebrow" style="margin-bottom:8px">Tetos do mês</p>'
+            '<p style="margin:0;font-size:12.5px;color:var(--faint);line-height:1.5">'
+            'Nenhum teto declarado. Em <span class="mono">config.local.yaml</span>, '
+            'em <span class="mono">gastos.tetos</span>, e o assessor passa a cobrar '
+            'a categoria que passar do combinado.</p></div>')
+
+    medidores = graficos.medidores([
+        {"rotulo": linha["categoria"],
+         "valor": linha["gasto"],
+         "meta": linha["teto"],
+         "texto": f'{formatar(linha["gasto"])} / {formatar(linha["teto"])}'}
+        for linha in linhas
+    ])
+
+    gasto_total = sum(linha["gasto"] for linha in linhas)
+    teto_total = sum(linha["teto"] for linha in linhas)
+    estourados = [linha for linha in linhas if linha["gasto"] > linha["teto"]]
+    resumo = f'{formatar(gasto_total)} de {formatar(teto_total)} em tetos'
+    if estourados:
+        resumo += f' · {formato.plural(len(estourados), "categoria estourada")}'
+
+    # O que foi gasto fora das categorias com teto não aparece em medidor nenhum,
+    # e é justamente o que ninguém está vigiando: sem esta linha, o mês pode
+    # estourar inteiro em categorias que a tela não mostra.
+    fora = consultas.gasto_fora_dos_tetos(ctx.conn, ctx.config, agora)
+    rodape = ""
+    if fora:
+        itens = " · ".join(f'{escape(c)} {escape(formatar(v))}' for c, v in fora[:6])
+        rodape = (f'<p style="margin:12px 0 0;font-size:12px;color:var(--faint);'
+                  f'line-height:1.5">sem teto: {itens}</p>')
+
+    return (f'<div class="card" style="padding:16px 20px;margin-top:16px">'
+            f'<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px">'
+            f'<span class="eyebrow">Tetos do mês</span>'
+            f'<span style="font-size:12.5px;color:var(--muted)">{escape(resumo)}</span></div>'
+            f'{medidores}{rodape}</div>')
+
+
 def gastos(ctx, registry, agora: datetime, periodo: str = "mes") -> str:
     from aide.tools.expenses import PERIODOS, formatar, intervalo
 
@@ -420,6 +508,7 @@ def gastos(ctx, registry, agora: datetime, periodo: str = "mes") -> str:
                 f'{escape(g["valor"])}</span></div>')
 
     linhas = "".join(_linha_gasto(g) for g in lancamentos)
+    tetos = _cartao_tetos(ctx, agora)
 
     return f"""
 {cabecalho("Gastos", _periodo_por_extenso(de, ate, periodo), _seletor("/gastos", periodo))}
@@ -435,6 +524,8 @@ def gastos(ctx, registry, agora: datetime, periodo: str = "mes") -> str:
   {_indicador("Maior", formatar(maior["cents"]) if maior else "—",
               maior["description"][:28] if maior else "nada lançado")}
 </div>
+
+{tetos}
 
 {f'<div class="card" style="padding:16px 20px;margin-top:16px">'
  f'<p class="eyebrow" style="margin-bottom:8px">Por dia</p>{diario}</div>' if diario else ''}
@@ -779,6 +870,9 @@ def notas(ctx, registry, agora: datetime, nota: int | None = None,
                  for n in (registry.call("notes.list", {"limit": 60}, ctx).data or [])]
 
     escolhida = nota if any(n["id"] == nota for n in lista) else (lista[0]["id"] if lista else None)
+    # apagar nota move o arquivo para vault/.trash; sem dizer isso em algum lugar,
+    # a lixeira é uma pasta que só cresce e ninguém sabe que existe
+    na_lixeira = consultas.notas_na_lixeira(ctx.config.vault_dir)
 
     itens = ""
     for n in lista:
@@ -817,7 +911,10 @@ def notas(ctx, registry, agora: datetime, nota: int | None = None,
             corpo = f'<p class="vazio">{escape(lida.error)}</p>'
 
     return f"""
-{cabecalho("Notas", formato.plural(len(lista), "nota") + (f' para "{escape(busca)}"' if busca else ""),
+{cabecalho("Notas", formato.plural(len(lista), "nota")
+           + (f' para "{escape(busca)}"' if busca else "")
+           + (f' · {formato.plural(na_lixeira, "arquivo na lixeira", "arquivos na lixeira")}'
+              if na_lixeira else ""),
            f'<form method="get" action="/notas" style="display:flex;gap:6px">'
            f'<input name="busca" value="{escape(busca or "")}" placeholder="buscar por significado"'
            f' style="font:inherit;font-size:13px;padding:7px 13px;border:1px solid var(--line);'
