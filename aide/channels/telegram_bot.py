@@ -201,23 +201,22 @@ class TelegramBot:
         return False
 
     def _descrever(self, nome: str, args: dict) -> str:
-        """O que vai ser apagado, em palavras — não `tasks.drop {'id': 4}`."""
-        alvo = args.get("id") or args.get("name") or args.get("key")
-        tabela = {"tasks.drop": ("tasks", "title"), "notes.delete": ("notes", "title"),
-                  "expenses.delete": ("expenses", "description"),
-                  "work_orders.drop": ("work_orders", "goal")}.get(nome)
-        if tabela and isinstance(alvo, int):
-            coluna = tabela[1]
-            linha = self._db().execute(
-                f"SELECT {coluna} FROM {tabela[0]} WHERE id = ?", (alvo,)).fetchone()
-            if linha:
-                return f'"{linha[coluna]}" (#{alvo})'
-        return f"{alvo}" if alvo else nome
+        """O que vai ser apagado, em palavras.
+
+        `ver_privado` fica falso: a pergunta vai para o Telegram, que é rede de
+        terceiro. A versão anterior lia o título direto da tabela sem olhar a
+        marca de privado, então pedir para apagar uma nota privada devolvia o
+        título dela por aqui.
+        """
+        from aide.tools import alvo
+
+        return alvo.descrever(self._db(), nome, args, ver_privado=False)
 
     @staticmethod
     def _verbo(nome: str) -> str:
-        return {"memory.forget": "esquecer",
-                "people.remove": "parar de acompanhar"}.get(nome, "apagar")
+        from aide.tools import alvo
+
+        return alvo.verbo(nome)
 
     RODAPE = "Responda sim para confirmar. Qualquer outra coisa cancela."
 

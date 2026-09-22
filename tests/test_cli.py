@@ -547,3 +547,22 @@ def test_repeticao_desconhecida_ensina_as_validas(run):
     resultado = run("add", "x", "-r", "de vez em quando")
     assert resultado.exit_code == 1
     assert "todo mês" in resultado.stdout
+
+
+def test_a_confirmacao_do_terminal_diz_o_que_vai_apagar(run, raiz, monkeypatch):
+    """`notes.delete {'id': 7}` obrigava a abrir outra tela para saber o que era
+    o 7, e a pressa de responder é o que faz apagar a coisa errada."""
+    import typer
+
+    from aide.comandos import base
+
+    run("init")
+    run("add", "Pagar o IPVA")
+
+    escrito = []
+    monkeypatch.setattr(base.console, "print", lambda *a, **k: escrito.append(str(a[0])))
+    monkeypatch.setattr(typer, "confirm", lambda *a, **k: False)
+
+    _, conn = base._open_db()
+    assert base._confirm("tasks.drop", {"id": 1}, conn) is False
+    assert any("Pagar o IPVA" in linha for linha in escrito), escrito

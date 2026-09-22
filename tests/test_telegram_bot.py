@@ -491,3 +491,25 @@ def test_hoje_vazio_diz_que_nada_vence_hoje(ctx, tmp_path):
     bot = _bot(ctx, tmp_path)
     bot._tratar(_msg("/hoje", chat_id=42))
     assert "Nada para hoje" in bot.enviadas[-1][1]
+
+
+def test_confirmacao_no_telegram_nao_revela_nota_privada(ctx, tmp_path):
+    """A pergunta vai por rede de terceiro: pedir para apagar uma nota privada
+    devolvia o título dela no Telegram."""
+    object.__setattr__(ctx.config, "vault_dir", tmp_path / "v")
+    bot = _bot(ctx, tmp_path)
+    nota = tool_registry.call("notes.create", {"title": "Senha do cofre", "body": "x",
+                                              "private": True}, bot._ctx(42)).data
+
+    pergunta = bot._perguntar(([("notes.delete", {"id": nota["id"]})], 0))
+    assert "Senha" not in pergunta
+    assert "privada" in pergunta
+
+
+def test_confirmacao_diz_o_que_e_e_nao_so_o_id(ctx, tmp_path):
+    bot = _bot(ctx, tmp_path)
+    tarefa = tool_registry.call("tasks.create", {"title": "Pagar o IPVA"}, bot._ctx(42)).data
+
+    pergunta = bot._perguntar(([("tasks.drop", {"id": tarefa["id"]})], 0))
+    assert "Pagar o IPVA" in pergunta
+    assert "apagar" in pergunta

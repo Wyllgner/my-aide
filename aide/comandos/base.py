@@ -61,14 +61,26 @@ def _ctx() -> tuple[object, sqlite3.Connection, ToolContext]:
                                      ver_privado=True)
 
 
-def _confirm(name: str, args: dict) -> bool:
-    console.print(f"[yellow]O assessor quer executar[/] {name} [dim]{args}[/]")
+def _confirm(name: str, args: dict, conn=None) -> bool:
+    """Pergunta dizendo o que é, não só o id.
+
+    `notes.delete {'id': 7}` obrigava a abrir outra tela para descobrir o que era
+    o 7 — e a pressa de responder é o que faz apagar a coisa errada.
+    """
+    if conn is not None:
+        from aide.tools import alvo
+
+        descricao = alvo.descrever(conn, name, args, ver_privado=True)
+        console.print(f"[yellow]O assessor quer {alvo.verbo(name)}[/] {descricao}")
+    else:
+        console.print(f"[yellow]O assessor quer executar[/] {name} [dim]{args}[/]")
     return typer.confirm("autorizar?", default=False)
 
 
 def _agent(config, conn) -> Orchestrator:
     llm = build_provider(config, usage_sink=record_usage(conn))
-    return Orchestrator(config, conn, llm, confirm=_confirm,
+    return Orchestrator(config, conn, llm,
+                        confirm=lambda nome, args: _confirm(nome, args, conn),
                         embedder=_embedder(config, conn))
 
 
