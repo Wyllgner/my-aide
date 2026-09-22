@@ -76,12 +76,12 @@ Enquanto ele trabalha você não fica no escuro, e os dois canais mostram a mesm
 coisa. No terminal, um spinner marca a espera do modelo e cada consulta aparece
 como uma linha. No Telegram, o "digitando" começa no instante em que a mensagem
 chega, e a lista de passos cresce dentro de **uma** mensagem, editada a cada
-passo novo:
+passo novo, com o que terminou no passado e o de agora em andamento:
 
 ```
-· olhando suas tarefas
-· somando os gastos
-· olhando a agenda
+✓ vi o que você tem pra hoje
+✓ somei seus gastos do mês
+⏳ vendo seus compromissos
 ```
 
 Quando a resposta chega, essa mensagem é apagada: ela existe para a espera não

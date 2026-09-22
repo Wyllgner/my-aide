@@ -566,9 +566,9 @@ def test_o_primeiro_passo_aparece_na_hora(ctx, tmp_path):
     """É a mensagem que tira a espera do escuro; esperar para mostrar seria o
     mesmo silêncio de antes, só mais curto."""
     bot = _bot(ctx, tmp_path)
-    bot._contar_passo(42)("olhando suas tarefas")
+    bot._contar_passo(42)("tasks_list")
 
-    assert bot.enviadas == [(42, "· olhando suas tarefas")]
+    assert bot.enviadas == [(42, "⏳ vendo o que você tem pra hoje")]
 
 
 def test_os_passos_crescem_na_mesma_mensagem(ctx, tmp_path, monkeypatch):
@@ -579,15 +579,17 @@ def test_os_passos_crescem_na_mesma_mensagem(ctx, tmp_path, monkeypatch):
     monkeypatch.setattr(mod, "EDICAO_A_CADA_SEGUNDOS", 0)
     bot = _bot(ctx, tmp_path)
     passo = bot._contar_passo(42)
-    passo("olhando suas tarefas")
-    passo("somando os gastos")
-    passo("olhando a agenda")
+    passo("tasks_list")
+    passo("expenses_summary")
+    passo("events_list")
 
     # uma mensagem só, editada
     assert len(bot.enviadas) == 1
     assert bot.editadas[-1][0] == 101
-    assert bot.editadas[-1][1] == ("· olhando suas tarefas\n· somando os gastos\n"
-                                   "· olhando a agenda")
+    # o que terminou vai para o passado; só o último está em andamento
+    assert bot.editadas[-1][1] == ("✓ vi o que você tem pra hoje\n"
+                                   "✓ somei seus gastos do mês\n"
+                                   "⏳ vendo seus compromissos")
 
 
 def test_edicao_respeita_a_folga_do_telegram(ctx, tmp_path):
@@ -595,8 +597,8 @@ def test_edicao_respeita_a_folga_do_telegram(ctx, tmp_path):
     tentaria seis edições seguidas."""
     bot = _bot(ctx, tmp_path)
     passo = bot._contar_passo(42)
-    passo("olhando suas tarefas")
-    passo("somando os gastos")
+    passo("tasks_list")
+    passo("expenses_summary")
 
     assert bot.editadas == []          # a segunda caiu dentro da folga
 
@@ -606,7 +608,7 @@ def test_a_lista_sai_do_chat_quando_termina(ctx, tmp_path):
     consultado continua na trilha de auditoria."""
     bot = _bot(ctx, tmp_path)
     passo = bot._contar_passo(42)
-    passo("olhando suas tarefas")
+    passo("tasks_list")
     passo.fechar()
 
     assert bot.apagadas == [101]
@@ -634,10 +636,10 @@ def test_a_lista_de_passos_nao_entra_no_historico(ctx, tmp_path):
     """É relato de trabalho, não fala do assessor: no histórico o modelo leria de
     volta como se tivesse dito."""
     bot = _bot(ctx, tmp_path)
-    bot._contar_passo(42)("olhando suas tarefas")
+    bot._contar_passo(42)("tasks_list")
 
     guardadas = bot._db().execute(
-        "SELECT content FROM messages WHERE content LIKE '%olhando%'").fetchall()
+        "SELECT content FROM messages WHERE content LIKE '%pra hoje%'").fetchall()
     assert guardadas == []
 
 
@@ -651,7 +653,7 @@ def test_progresso_que_nao_foi_entregue_nao_derruba_a_conversa(ctx, tmp_path):
 
     bot.client.send_message = recusar
     passo = bot._contar_passo(42)
-    passo("olhando suas tarefas")   # não levanta
+    passo("tasks_list")   # não levanta
     passo.fechar()
 
 
@@ -676,8 +678,8 @@ def test_o_progresso_nao_chega_ao_modelo(ctx, tmp_path):
             return super().complete(messages, tools=tools, purpose=purpose, **kwargs)
 
     bot = _bot(ctx, tmp_path, llm=LLMQueEspia())
-    bot._contar_passo(42)("olhando suas tarefas")
+    bot._contar_passo(42)("tasks_list")
     bot._tratar(_msg("e agora?", chat_id=42))
 
     tudo = " ".join(conteudo for volta in vistas for _, conteudo in volta)
-    assert "olhando suas tarefas" not in tudo
+    assert "vendo o que você tem pra hoje" not in tudo

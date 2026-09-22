@@ -138,10 +138,12 @@ def test_conta_cada_passo_para_quem_quiser_ouvir(ctx, registry):
                           progresso=ditos.append)
     assert agente.ask("o que tenho pra hoje?") == "pronto"
 
+    # manda o nome da tool, não a frase: o Telegram escreve o mesmo passo de
+    # dois jeitos (fazendo e feito), e quem sabe disso é o canal
     assert "pensando" in ditos
-    assert "olhando suas tarefas" in ditos
+    assert "tasks_list" in ditos
     # a ordem importa: pensar vem antes de agir
-    assert ditos.index("pensando") < ditos.index("olhando suas tarefas")
+    assert ditos.index("pensando") < ditos.index("tasks_list")
 
 
 def test_ouvinte_quebrado_nao_derruba_a_conversa(ctx, registry):

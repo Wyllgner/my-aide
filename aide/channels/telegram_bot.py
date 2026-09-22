@@ -198,35 +198,41 @@ class TelegramBot:
     def _contar_passo(self, chat_id: int):
         """Devolve o que o orquestrador chama a cada passo.
 
-        Faz aqui o que o terminal faz: a lista do que está sendo consultado vai
-        crescendo na tela. A diferença é o meio — uma mensagem por passo encheria
-        o chat, então é **uma** mensagem, editada a cada passo novo.
+        Monta a lista que o chat mostra enquanto ele trabalha: o que terminou fica
+        no passado com um ✓, e o passo de agora aparece com ⏳. Sem os dois
+        estados, um passo concluído continuaria escrito como se ainda estivesse
+        acontecendo, e a lista viraria um log sem começo nem fim.
 
-        O "digitando" continua sendo renovado, porque ele é o sinal que aparece
-        antes do primeiro passo existir, quando o modelo só está pensando.
+        É **uma** mensagem, editada a cada passo novo. Uma por passo encheria o
+        chat. O "digitando" continua sendo renovado, porque ele é o sinal que
+        existe antes do primeiro passo, quando o modelo só está pensando.
         """
-        linhas: list[str] = []
+        tools: list[str] = []
         estado = {"id": None, "ultima_edicao": 0.0}
 
-        def passo(frase: str) -> None:
+        def texto() -> str:
+            linhas = [f"{passos.PRONTO} {passos.feito(t)}" for t in tools[:-1]]
+            linhas.append(f"{passos.AGORA} {passos.fazendo(tools[-1])}")
+            return "\n".join(linhas)
+
+        def passo(nome: str) -> None:
             self.client.send_action(chat_id)
-            if frase == passos.PENSANDO:
+            if nome == passos.PENSANDO:
                 # pensar não é passo: o indicador de digitando já diz isso, e
-                # "· pensando" na lista não informaria nada
+                # "⏳ pensando" na lista não informaria nada
                 return
 
-            linhas.append(f"· {frase}")
-            texto = "\n".join(linhas)
+            tools.append(nome)
 
             if estado["id"] is None:
                 # a primeira aparece na hora: é ela que tira a espera do escuro
-                estado["id"] = self._abrir_progresso(chat_id, texto)
+                estado["id"] = self._abrir_progresso(chat_id, texto())
                 estado["ultima_edicao"] = time.time()
                 return
 
             if time.time() - estado["ultima_edicao"] < EDICAO_A_CADA_SEGUNDOS:
                 return
-            self.client.edit_message(chat_id, estado["id"], texto)
+            self.client.edit_message(chat_id, estado["id"], texto())
             estado["ultima_edicao"] = time.time()
 
         def fechar() -> None:

@@ -34,10 +34,11 @@ class Orchestrator:
         self.confirm = confirm
         self.actor = actor
         self.embedder = embedder
-        # Recebe uma frase por passo ("olhando suas tarefas"). Quem chama decide
-        # o que fazer com ela: spinner no terminal, "digitando" no Telegram.
-        # Silêncio durante o trabalho é o que faz alguém mandar a mesma coisa
-        # duas vezes, achando que não chegou.
+        # Recebe o nome da tool que vai rodar, ou `passos.PENSANDO` antes de cada
+        # chamada ao modelo. Manda o nome e não a frase de propósito: o Telegram
+        # precisa escrever o mesmo passo de dois jeitos (fazendo e feito), e quem
+        # sabe disso é o canal. Silêncio durante o trabalho é o que faz alguém
+        # mandar a mesma coisa duas vezes, achando que não chegou.
         self.progresso = progresso
 
     # ---------- persistência ----------
@@ -142,7 +143,7 @@ class Orchestrator:
         fn = call.get("function", {})
         name = fn.get("name", "")
         raw_args = fn.get("arguments") or "{}"
-        self._avisar(passos.descrever(name))
+        self._avisar(name)
 
         try:
             args = json.loads(raw_args)

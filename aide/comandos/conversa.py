@@ -21,11 +21,12 @@ def _responder(agent, texto: str) -> None:
     from aide.channels import passos
 
     with console.status("[dim]pensando[/]", spinner="dots") as spinner:
-        def contar(frase: str) -> None:
-            if frase == passos.PENSANDO:
+        def contar(passo: str) -> None:
+            if passo == passos.PENSANDO:
                 spinner.update("[dim]pensando[/]")
             else:
-                console.print(f"[dim]· {frase}[/]")
+                # gerúndio: a linha sai no instante em que o passo começa
+                console.print(f"[dim]· {passos.fazendo(passo)}[/]")
 
         agent.progresso = contar
         try:
