@@ -127,7 +127,8 @@ def historico(limite: int = typer.Option(15, "--limite", "-n"),
               canal: str = typer.Option(None, "--canal", "-c",
                                         help="cli | telegram")) -> None:
     """Mostra as últimas conversas e as tools que foram chamadas."""
-    _, conn = _open_db()
+    config, conn = _open_db()
+    agora = now_in(config.timezone)
 
     sql = ("SELECT id, session_id, role, content, tool_calls, created_at"
            "  FROM messages WHERE role IN ('user', 'assistant')")
@@ -144,12 +145,25 @@ def historico(limite: int = typer.Option(15, "--limite", "-n"),
         console.print("[dim]Nada no histórico.[/]")
         return
 
+    # A data inteira em cada linha é ruído: numa conversa ela se repete dezenas
+    # de vezes e a hora, que é o que muda, fica no meio do carimbo. O dia vira
+    # cabeçalho e a linha mostra só a hora — daqui, não de Londres.
+    dia_impresso = None
     for m in linhas:
         cor = "cyan" if m["role"] == "user" else "green"
         seta = "›" if m["role"] == "user" else "‹"
         origem = "tg" if m["session_id"].startswith("tg") else "cli"
         texto = (m["content"] or "").strip() or "[dim](chamou tools)[/]"
-        console.print(f"[dim]{m['created_at']} {origem}[/] [{cor}]{seta}[/] {texto}")
+        quando = formato.de_utc(m["created_at"], agora)
+        dia = quando.date() if quando else None
+        if dia != dia_impresso:
+            cabecalho = formato.por_extenso(quando) if quando else "sem data"
+            relativo = formato.data_curta(quando.isoformat(), agora) if quando else ""
+            console.print(f"\n[bold]{cabecalho}[/]"
+                          + (f" [dim]({relativo})[/]" if relativo else ""))
+            dia_impresso = dia
+        hora = quando.strftime("%H:%M") if quando else "--:--"
+        console.print(f"[dim]{hora} {origem:>3}[/] [{cor}]{seta}[/] {texto}")
 
     console.print("\n[dim]tools chamadas recentemente:[/]")
     for a in conn.execute(
@@ -157,7 +171,9 @@ def historico(limite: int = typer.Option(15, "--limite", "-n"),
         (limite,),
     ).fetchall():
         marca = "[green]ok[/]" if a["ok"] else "[red]erro[/]"
-        console.print(f"[dim]{a['ts']} {a['actor']}[/] {marca} "
+        quando = formato.de_utc(a["ts"], agora)
+        console.print(f"[dim]{quando.strftime('%d/%m %H:%M') if quando else a['ts']} "
+                      f"{a['actor']}[/] {marca} "
                       f"[cyan]{a['tool']}[/] [dim]{a['args_json']}[/]")
 
 

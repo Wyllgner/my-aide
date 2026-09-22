@@ -295,3 +295,37 @@ def test_numero_grande_sai_com_ponto_no_milhar(run, raiz):
     saida = run("status").stdout
     assert "654.638" in saida
     assert "654,638" not in saida
+
+
+# ---------- histórico ----------
+
+def test_historico_mostra_a_hora_daqui_e_o_dia_no_cabecalho(run, raiz):
+    """`created_at` é UTC: cru, a conversa das 19:17 aparecia às 22:17."""
+    import sqlite3
+
+    run("init")
+    conn = sqlite3.connect(raiz / "data" / "aide.db")
+    conn.execute("INSERT INTO messages (session_id, role, content, created_at)"
+                 " VALUES ('tg:1', 'user', 'oi', '2026-09-17 22:17:00')")
+    conn.commit()
+    conn.close()
+
+    saida = run("historico").stdout
+    assert "Quinta, 17 de setembro" in saida
+    assert "19:17" in saida
+    assert "2026-09-17 22:17:00" not in saida
+
+
+def test_historico_nao_repete_a_data_em_cada_linha(run, raiz):
+    import sqlite3
+
+    run("init")
+    conn = sqlite3.connect(raiz / "data" / "aide.db")
+    for hora in ("12:00", "12:05", "12:09"):
+        conn.execute("INSERT INTO messages (session_id, role, content, created_at)"
+                     " VALUES ('cli', 'user', 'oi', ?)", (f"2026-09-17 {hora}:00",))
+    conn.commit()
+    conn.close()
+
+    saida = run("historico").stdout
+    assert saida.count("17 de setembro") == 1
