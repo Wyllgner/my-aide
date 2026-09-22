@@ -10,7 +10,7 @@ import logging
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from aide.channels.formato import plural
@@ -19,9 +19,6 @@ from aide.scheduler import briefing, rules
 from aide.tools import reminders
 
 log = logging.getLogger(__name__)
-
-# folga na comparação de mtime; ver reindex_vault
-FOLGA_MTIME = timedelta(seconds=2)
 
 DIAS = {"segunda": "mon", "terça": "tue", "terca": "tue", "quarta": "wed",
         "quinta": "thu", "sexta": "fri", "sábado": "sat", "sabado": "sat",
@@ -156,56 +153,30 @@ def queue_work(deps: JobDeps) -> int:
 
 
 def reindex_vault(deps: JobDeps) -> int:
-    """Reindexa as notas cujo arquivo mudou desde a última indexação.
+    """Põe o índice de acordo com o vault, a cada quinze minutos.
 
-    O markdown é a fonte da verdade: se você editar uma nota no editor, a busca
-    precisa acompanhar — senão ela responde com o texto antigo, calada.
+    É a mesma reconciliação do `myaide reindexar`, e isso é o ponto: enquanto
+    eram dois códigos, a nota escrita no editor entrava na busca se você rodasse
+    o comando à mão e nunca entrava se esperasse o daemon. Aqui só o que mudou é
+    reindexado, porque o job roda a toda hora.
     """
     from pathlib import Path
 
-    from aide.storage import vault
-    from aide.storage.search import guardar_vetor, indexar
+    from aide.storage.reconciliacao import reconciliar
 
-    conn = deps.db()
-    linhas = conn.execute(
-        "SELECT id, title, path, updated_at FROM notes WHERE deleted_at IS NULL"
-    ).fetchall()
+    relato = reconciliar(deps.db(), Path(deps.config.vault_dir),
+                         embedder=getattr(deps, "embedder", None))
 
-    reindexadas = 0
-    for row in linhas:
-        caminho = Path(row["path"])
-        if not caminho.exists():
-            log.warning("arquivo da nota %s sumiu: %s", row["id"], caminho)
-            continue
+    for _, titulo in relato.adotadas:
+        log.info("nota adotada do vault: %s", titulo)
+    for caminho in relato.recolhidas:
+        log.info("arquivo de nota apagada recolhido para a lixeira: %s", caminho)
+    for note_id, _, caminho in relato.sumidas:
+        log.warning("arquivo da nota %s sumiu: %s", note_id, caminho)
+    for note_id, _ in relato.reindexadas:
+        log.info("nota %s reindexada (arquivo mudou)", note_id)
 
-        # datetime('now') do SQLite é UTC; comparar com mtime local atrasaria a
-        # reindexação pelo tamanho do fuso (3h aqui) e ninguém entenderia por quê.
-        modificado = datetime.fromtimestamp(caminho.stat().st_mtime, tz=UTC)
-        indexado = datetime.fromisoformat(row["updated_at"]).replace(tzinfo=UTC)
-        # o updated_at do SQLite tem resolução de segundos e o mtime tem fração;
-        # sem folga, toda nota recém-criada parece editada e reindexa à toa
-        if modificado <= indexado + FOLGA_MTIME:
-            continue
-
-        corpo = vault.corpo_de(caminho)
-        indexar(conn, row["id"], row["title"], corpo)
-        conn.execute("UPDATE notes SET updated_at = datetime('now') WHERE id = ?", (row["id"],))
-
-        embedder = getattr(deps, "embedder", None)
-        if embedder is not None:
-            try:
-                vetor = embedder.embed_one(f"{row['title']}\n\n{corpo}")
-            except Exception:
-                log.warning("embedding da nota %s falhou", row["id"], exc_info=True)
-                vetor = None
-            if vetor:
-                guardar_vetor(conn, "note", row["id"], f"{row['title']}\n\n{corpo}", vetor,
-                              embedder.modelo)
-
-        reindexadas += 1
-        log.info("nota %s reindexada (arquivo mudou)", row["id"])
-
-    return reindexadas
+    return len(relato.reindexadas) + len(relato.adotadas)
 
 
 def sync_calendar(deps: JobDeps) -> int:

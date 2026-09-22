@@ -207,6 +207,50 @@ def test_reindex_sobrevive_a_arquivo_sumido(ctx, registry, tmp_path):
     assert jobs.reindex_vault(_deps(ctx)) == 0  # não levanta
 
 
+def test_reindex_do_daemon_adota_arquivo_novo(ctx, registry, tmp_path):
+    """Era o buraco entre os dois caminhos: o comando à mão adotava e o daemon
+    não, então a nota escrita no editor entrava na busca só se você lembrasse
+    de rodar `myaide reindexar`."""
+    from aide.storage.search import buscar_texto
+
+    _nota_no_vault(ctx, registry, tmp_path)
+    pasta = tmp_path / "v" / "2026-09"
+    pasta.mkdir(parents=True, exist_ok=True)
+    (pasta / "escrita-a-mao.md").write_text(
+        "---\ntitle: Escrita à mão\n---\n\nnasceu no editor\n")
+
+    assert jobs.reindex_vault(_deps(ctx)) == 1
+    assert buscar_texto(ctx.conn, "editor")
+    assert ctx.conn.execute(
+        "SELECT title FROM notes WHERE deleted_at IS NULL AND title = 'Escrita à mão'"
+    ).fetchone() is not None
+
+
+def test_reindex_do_daemon_nao_readota_o_que_adotou(ctx, registry, tmp_path):
+    """O job roda a cada quinze minutos: adotar duas vezes multiplicaria a nota."""
+    _nota_no_vault(ctx, registry, tmp_path)
+    (tmp_path / "v" / "2026-09").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "v" / "2026-09" / "n.md").write_text("---\ntitle: Uma só\n---\n\ncorpo\n")
+
+    jobs.reindex_vault(_deps(ctx))
+    jobs.reindex_vault(_deps(ctx))
+    assert ctx.conn.execute(
+        "SELECT COUNT(*) FROM notes WHERE title = 'Uma só'").fetchone()[0] == 1
+
+
+def test_reindex_do_daemon_recolhe_arquivo_de_nota_apagada(ctx, registry, tmp_path):
+    from pathlib import Path
+
+    nota = _nota_no_vault(ctx, registry, tmp_path)
+    registry.call("notes.delete", {"id": nota["id"]}, ctx)
+    # o apagar já move o arquivo; simula o arquivo que ficou de antes da lixeira
+    (tmp_path / "v" / ".trash" / Path(nota["path"]).name).replace(Path(nota["path"]))
+    assert Path(nota["path"]).exists()
+
+    jobs.reindex_vault(_deps(ctx))
+    assert not Path(nota["path"]).exists()
+
+
 # ---------- briefing_noite e revisao_semanal ----------
 
 def test_briefing_noite_fecha_o_dia(ctx, registry):
