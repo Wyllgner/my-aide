@@ -12,6 +12,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+from aide.channels.formato import plural
+
 log = logging.getLogger(__name__)
 
 SNOOZE_LIMITE = 3
@@ -59,18 +61,37 @@ def atrasadas(conn, now: datetime) -> list[Finding]:
     if not rows:
         return []
 
-    dias = [(r, (now - datetime.fromisoformat(r["due_at"]).replace(tzinfo=now.tzinfo)).days)
-            for r in rows]
+    # Diferença de datas, não de instantes: `timedelta.days` trunca, então um
+    # prazo de anteontem às 23h virava "há 1 dia" — e a tabela de tarefas, que
+    # compara datas, dizia "há 2 dias" sobre a mesma linha.
+    dias = [(r, (now.date() - _no_fuso(r["due_at"], now).date()).days) for r in rows]
     return [
         Finding(
             rule="atrasadas",
             severity=1 if d >= 3 else 2,
-            summary=f"#{r['id']} {r['title']} venceu há {d} dia(s)" if d
-                    else f"#{r['id']} {r['title']} venceu hoje",
+            summary=f"#{r['id']} {r['title']} {_venceu(d)}",
             refs=[r["id"]],
         )
         for r, d in dias
     ]
+
+
+def _no_fuso(iso: str, now: datetime) -> datetime:
+    """Converte para o fuso de agora. `replace(tzinfo=...)` mentiria sobre o
+    prazo gravado noutro fuso — e existem seis deles no banco, de quando a
+    config dizia −03."""
+    momento = datetime.fromisoformat(iso)
+    if momento.tzinfo is None:
+        momento = momento.replace(tzinfo=now.tzinfo)
+    return momento.astimezone(now.tzinfo)
+
+
+def _venceu(dias: int) -> str:
+    if dias <= 0:
+        return "venceu hoje"
+    if dias == 1:
+        return "venceu ontem"
+    return f"venceu há {dias} dias"
 
 
 @rule("adiada_demais")
@@ -109,7 +130,7 @@ def projeto_parado(conn, now: datetime) -> list[Finding]:
             rule="projeto_parado",
             severity=3,
             summary=f"projeto '{r['project']}' está parado há mais de "
-                    f"{PROJETO_PARADO_DIAS} dias ({r['n']} tarefa(s) abertas)",
+                    f"{PROJETO_PARADO_DIAS} dias ({plural(r['n'], 'tarefa aberta')})",
             refs=[],
         )
         for r in rows
@@ -147,13 +168,12 @@ def contato_atrasado(conn, now: datetime) -> list[Finding]:
     )
     achados = []
     for r in rows:
-        ultimo = datetime.fromisoformat(r["last_contact_at"]).replace(tzinfo=now.tzinfo)
-        dias = (now - ultimo).days
+        dias = (now.date() - _no_fuso(r["last_contact_at"], now).date()).days
         if dias > r["cadence_days"]:
             achados.append(Finding(
                 rule="contato_atrasado",
                 severity=3,
-                summary=f"faz {dias} dias que você não fala com {r['name']}",
+                summary=f"faz {plural(dias, 'dia')} que você não fala com {r['name']}",
                 refs=[r["id"]],
             ))
     return achados

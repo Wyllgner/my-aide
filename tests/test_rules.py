@@ -105,3 +105,48 @@ def test_ordena_por_severidade(ctx, registry):
     registry.call("tasks.create", {"title": "Boleto", "due": "2026-08-25T09:00"}, ctx)
     achados = rules.evaluate(ctx.conn, AGORA)
     assert [f.severity for f in achados] == sorted(f.severity for f in achados)
+
+
+def test_atraso_e_contado_em_dias_de_calendario(ctx):
+    """`timedelta.days` trunca: um prazo de anteontem à noite dizia "há 1 dia",
+    enquanto a tabela de tarefas dizia "há 2 dias" sobre a mesma linha."""
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    tz = ZoneInfo("America/Porto_Velho")
+    agora = datetime(2026, 9, 21, 8, 0, tzinfo=tz)
+    anteontem = (agora - timedelta(days=2)).replace(hour=23, minute=0)
+    ctx.conn.execute("INSERT INTO tasks (title, status, due_at) VALUES (?, 'open', ?)",
+                     ("prazo da noite", anteontem.isoformat(timespec="minutes")))
+
+    achado = rules.evaluate(ctx.conn, agora, only=["atrasadas"])[0]
+    assert "venceu há 2 dias" in achado.summary
+
+
+def test_atraso_de_um_dia_se_escreve_ontem(ctx):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    tz = ZoneInfo("America/Porto_Velho")
+    agora = datetime(2026, 9, 21, 8, 0, tzinfo=tz)
+    ctx.conn.execute("INSERT INTO tasks (title, status, due_at) VALUES (?, 'open', ?)",
+                     ("de ontem", "2026-09-20T09:00-04:00"))
+
+    achado = rules.evaluate(ctx.conn, agora, only=["atrasadas"])[0]
+    assert "venceu ontem" in achado.summary
+    assert "dia(s)" not in achado.summary
+
+
+def test_prazo_gravado_em_outro_fuso_e_convertido(ctx):
+    """Seis prazos no banco foram gravados com −03; `replace(tzinfo=)` os movia."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    tz = ZoneInfo("America/Porto_Velho")
+    # 21/09 00:30 em São Paulo é ainda 20/09 às 23:30 aqui
+    agora = datetime(2026, 9, 21, 8, 0, tzinfo=tz)
+    ctx.conn.execute("INSERT INTO tasks (title, status, due_at) VALUES (?, 'open', ?)",
+                     ("virada do dia", "2026-09-21T00:30-03:00"))
+
+    achado = rules.evaluate(ctx.conn, agora, only=["atrasadas"])[0]
+    assert "venceu ontem" in achado.summary
