@@ -241,7 +241,7 @@ def test_titulo_longo_nao_emenda_no_prazo():
     """"Enviar versão final do artigo no20/09" — cortado sem aviso e sem espaço."""
     saida = para_terminal(Mensagem("Bom dia", [Secao("Atrasadas", [
         Item("Enviar versão final do artigo no BRWeb", ref="#15", marca="20/09 (ontem)")])]))
-    linha = [l for l in saida.splitlines() if "#15" in l][0]
+    linha = next(l for l in saida.splitlines() if "#15" in l)
     assert "…" in linha
     assert "no20/09" not in linha
     assert linha.endswith("20/09 (ontem)")

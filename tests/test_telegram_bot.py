@@ -1,5 +1,6 @@
 from aide.channels.telegram import TelegramError
 from aide.channels.telegram_bot import TelegramBot
+from aide.core.context import now_in
 from aide.llm.base import LLMProvider, LLMResponse
 from aide.storage import connect, migrate
 from aide.tools import registry as tool_registry
@@ -470,3 +471,23 @@ def test_o_sim_e_o_desfecho_entram_na_conversa(ctx, tmp_path):
         "SELECT role, content FROM messages WHERE session_id = 's-teste' ORDER BY id")]
     assert ("user", "sim") in falas
     assert any(papel == "assistant" and "apaguei" in texto for papel, texto in falas)
+
+
+def test_hoje_manda_o_prazo_escrito_e_nao_o_iso(ctx, tmp_path):
+    """No celular chegava "2026-09-17T23:59-04:00" — carimbo de banco, não prazo."""
+    bot = _bot(ctx, tmp_path)
+    hoje = (now_in(ctx.config.timezone).replace(hour=23, minute=59)
+            .isoformat(timespec="minutes"))
+    tool_registry.call("tasks.create", {"title": "Fazer atividade do ICMC", "due": hoje},
+                       bot._ctx(42))
+    bot._tratar(_msg("/hoje", chat_id=42))
+
+    texto = bot.enviadas[-1][1]
+    assert "T23:59" not in texto
+    assert "hoje 23:59" in texto
+
+
+def test_hoje_vazio_diz_que_nada_vence_hoje(ctx, tmp_path):
+    bot = _bot(ctx, tmp_path)
+    bot._tratar(_msg("/hoje", chat_id=42))
+    assert "Nada para hoje" in bot.enviadas[-1][1]

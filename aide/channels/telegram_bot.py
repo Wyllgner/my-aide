@@ -296,9 +296,14 @@ class TelegramBot:
             tarefas = self.registry.call(
                 "tasks.list", {"filter": filtro}, self._ctx(chat_id)).data
             if not tarefas:
-                return "Nada por aqui."
+                return ("Nada para hoje." if nome == "hoje"
+                        else "Nenhuma tarefa atrasada.")
+            # o prazo vai escrito como em todo o resto do assessor; cru, ele
+            # chegava no celular como "2026-09-17T23:59-04:00"
+            agora = self._agora()
             return "\n".join(
-                f"#{t['id']} {t['title']}" + (f" — {t['due_at']}" if t["due_at"] else "")
+                f"#{t['id']} {t['title']}"
+                + (f" — {formato.quando(t['due_at'], agora)}" if t["due_at"] else "")
                 for t in tarefas
             )
         if nome == "gastos":
