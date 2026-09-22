@@ -52,7 +52,7 @@ def painel(ctx, registry, agora: datetime) -> str:
     gasto = resumo.data if resumo.ok else {"total": "R$ 0,00", "quantos": 0}
 
     from aide.scheduler import rules
-    achados = rules.evaluate(conn, agora)
+    achados = rules.evaluate(conn, agora, config=ctx.config)
     por_regra: dict[str, int] = {}
     for f in achados:
         por_regra[f.rule] = por_regra.get(f.rule, 0) + 1
@@ -124,7 +124,7 @@ def hoje(ctx, registry, agora: datetime) -> str:
     hoje_sem_atraso = [t for t in (do_dia.data or []) if t["id"] not in ids_atrasadas]
 
     from aide.scheduler import rules
-    decidir = [f for f in rules.evaluate(ctx.conn, agora)
+    decidir = [f for f in rules.evaluate(ctx.conn, agora, config=ctx.config)
                if f.rule in {"adiada_demais", "zumbi", "projeto_parado"}]
 
     lembretes = ctx.conn.execute(

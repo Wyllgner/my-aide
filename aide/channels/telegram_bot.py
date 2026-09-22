@@ -341,7 +341,7 @@ class TelegramBot:
                 return "Ainda não sei nada sobre você."
             return "\n".join(f"{f['key']}: {f['value']}" for f in fatos)
         if nome == "checar":
-            achados = rules.evaluate(self._db(), self._agora())
+            achados = rules.evaluate(self._db(), self._agora(), config=self.config)
             return "\n".join(f.summary for f in achados) if achados else "Nada pedindo atenção."
         return f"Não conheço /{nome}. Use /ajuda."
 

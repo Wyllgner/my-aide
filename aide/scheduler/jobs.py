@@ -76,7 +76,8 @@ def tick_reminders(deps: JobDeps) -> int:
 
 def eval_conditions(deps: JobDeps) -> int:
     """Avalia as regras e cobra o que precisa. Este job é o ponto do projeto."""
-    achados = [f for f in rules.evaluate(deps.db(), deps.now) if f.severity == 1]
+    achados = [f for f in rules.evaluate(deps.db(), deps.now, config=deps.config)
+               if f.severity == 1]
     if not achados:
         return 0
 
@@ -128,7 +129,7 @@ def queue_work(deps: JobDeps) -> int:
 
     # projeto parado costuma precisar de alguém revisar material, não de uma
     # tarefa a mais na lista
-    for achado in rules.evaluate(conn, deps.now):
+    for achado in rules.evaluate(conn, deps.now, config=deps.config):
         if achado.rule != "projeto_parado":
             continue
         ja_existe = conn.execute(

@@ -90,7 +90,7 @@ def test_banco_vazio_nao_gera_ruido(ctx):
 def test_regra_quebrada_nao_derruba_as_outras(ctx, registry, monkeypatch):
     registry.call("tasks.create", {"title": "Boleto", "due": "2026-08-30T09:00"}, ctx)
 
-    def explode(conn, now):
+    def explode(conn, now, config=None):
         raise RuntimeError("boom")
 
     monkeypatch.setattr(rules, "_RULES", [("quebrada", explode), *rules._RULES])
@@ -150,3 +150,119 @@ def test_prazo_gravado_em_outro_fuso_e_convertido(ctx):
 
     achado = rules.evaluate(ctx.conn, agora, only=["atrasadas"])[0]
     assert "venceu ontem" in achado.summary
+
+
+# ---------- dinheiro ----------
+
+def _gasto(ctx, cents, descricao="algo", categoria=None, dias_atras=0, privado=0):
+    from datetime import timedelta
+
+    from aide.core.context import now_in
+
+    quando = (now_in(ctx.config.timezone) - timedelta(days=dias_atras))
+    ctx.conn.execute(
+        "INSERT INTO expenses (cents, description, category, spent_at, private)"
+        " VALUES (?, ?, ?, ?, ?)",
+        (cents, descricao, categoria, quando.isoformat(timespec="minutes"), privado))
+
+
+def _com_teto(ctx, **tetos):
+    from aide.config import GastosConfig
+
+    object.__setattr__(ctx.config, "gastos", GastosConfig(tetos_centavos=dict(tetos)))
+    return ctx.config
+
+
+def _sobre_dinheiro(ctx, regra, config=None):
+    from aide.core.context import now_in
+
+    return rules.evaluate(ctx.conn, now_in(ctx.config.timezone), only=[regra],
+                          config=config or ctx.config)
+
+
+def test_sem_teto_declarado_o_assessor_nao_opina(ctx):
+    """Inventar um limite seria cobrar por algo que você nunca combinou."""
+    _gasto(ctx, 500_00, categoria="alimentação")
+    assert _sobre_dinheiro(ctx, "orcamento_categoria") == []
+
+
+def test_teto_estourado_e_cobrado_com_urgencia(ctx):
+    config = _com_teto(ctx, alimentação=800_00)
+    _gasto(ctx, 850_00, categoria="alimentação")
+
+    achado = _sobre_dinheiro(ctx, "orcamento_categoria", config)[0]
+    assert achado.severity == 1
+    assert "passou em R$ 50,00" in achado.summary
+
+
+def test_teto_perto_de_estourar_avisa_antes(ctx):
+    config = _com_teto(ctx, transporte=300_00)
+    _gasto(ctx, 270_00, categoria="transporte")
+
+    achado = _sobre_dinheiro(ctx, "orcamento_categoria", config)[0]
+    assert achado.severity == 2
+    assert "90% do teto" in achado.summary
+
+
+def test_gasto_abaixo_do_aviso_nao_incomoda(ctx):
+    config = _com_teto(ctx, transporte=300_00)
+    _gasto(ctx, 100_00, categoria="transporte")
+    assert _sobre_dinheiro(ctx, "orcamento_categoria", config) == []
+
+
+def test_privado_entra_na_soma_do_teto_e_nao_no_texto(ctx):
+    """Somar mantém o total verdadeiro; nomear entregaria o que a listagem esconde."""
+    config = _com_teto(ctx, saúde=200_00)
+    _gasto(ctx, 190_00, descricao="consulta que é só minha", categoria="saúde", privado=1)
+
+    achado = _sobre_dinheiro(ctx, "orcamento_categoria", config)[0]
+    assert "R$ 190,00" in achado.summary
+    assert "só minha" not in achado.summary
+
+
+def test_mes_anterior_nao_conta_no_teto_do_mes(ctx):
+    config = _com_teto(ctx, alimentação=100_00)
+    _gasto(ctx, 900_00, categoria="alimentação", dias_atras=40)
+    assert _sobre_dinheiro(ctx, "orcamento_categoria", config) == []
+
+
+# ---------- gasto atípico ----------
+
+def test_sem_historico_nada_e_atipico(ctx):
+    """Nos primeiros dias de uso todo lançamento seria fora do normal."""
+    _gasto(ctx, 900_00, descricao="geladeira")
+    assert _sobre_dinheiro(ctx, "gasto_atipico") == []
+
+
+def test_gasto_muito_acima_do_normal_e_apontado(ctx):
+    for _ in range(10):
+        _gasto(ctx, 20_00, descricao="almoço", dias_atras=10)
+    _gasto(ctx, 900_00, descricao="geladeira", dias_atras=1)
+
+    achado = _sobre_dinheiro(ctx, "gasto_atipico")[0]
+    assert "geladeira" in achado.summary
+    assert "R$ 900,00" in achado.summary
+
+
+def test_gasto_atipico_de_tres_semanas_atras_nao_e_cobrado_hoje(ctx):
+    """Cobrar o que já passou não deixa nada a decidir."""
+    for _ in range(10):
+        _gasto(ctx, 20_00, dias_atras=30)
+    _gasto(ctx, 900_00, descricao="geladeira", dias_atras=21)
+    assert _sobre_dinheiro(ctx, "gasto_atipico") == []
+
+
+def test_gasto_atipico_respeita_o_piso(ctx):
+    """3x a mediana de gastos miúdos transformaria um café caro em cobrança."""
+    for _ in range(10):
+        _gasto(ctx, 3_00, descricao="café", dias_atras=10)
+    _gasto(ctx, 20_00, descricao="café grande", dias_atras=1)
+    assert _sobre_dinheiro(ctx, "gasto_atipico") == []
+
+
+def test_gasto_privado_nunca_aparece_no_aviso(ctx):
+    """Este aviso diz a descrição em voz alta, inclusive no Telegram."""
+    for _ in range(10):
+        _gasto(ctx, 20_00, dias_atras=10)
+    _gasto(ctx, 900_00, descricao="presente surpresa", dias_atras=1, privado=1)
+    assert _sobre_dinheiro(ctx, "gasto_atipico") == []

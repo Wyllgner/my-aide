@@ -52,7 +52,7 @@ ABERTAS = ("SELECT id, title, due_at FROM tasks WHERE deleted_at IS NULL"
            " AND status = 'open' AND private = 0")
 
 
-def montar_manha(conn, agora: datetime) -> Briefing:
+def montar_manha(conn, agora: datetime, config=None) -> Briefing:
     inicio = agora.replace(hour=0, minute=0).isoformat(timespec="minutes")
     fim = agora.replace(hour=23, minute=59).isoformat(timespec="minutes")
 
@@ -67,7 +67,7 @@ def montar_manha(conn, agora: datetime) -> Briefing:
             " AND fire_at <= ? ORDER BY fire_at LIMIT ?", (fim, LIMITE_ITENS)).fetchall()
     ]
     decidir = [
-        Item(texto=f.summary) for f in rules.evaluate(conn, agora)
+        Item(texto=f.summary) for f in rules.evaluate(conn, agora, config=config)
         if f.rule in {"adiada_demais", "zumbi"}
     ][:LIMITE_ITENS]
 
@@ -81,7 +81,7 @@ def montar_manha(conn, agora: datetime) -> Briefing:
     return Briefing(mensagem, urgency="critical" if atrasadas else "normal")
 
 
-def montar_noite(conn, agora: datetime) -> Briefing:
+def montar_noite(conn, agora: datetime, config=None) -> Briefing:
     amanha = agora + timedelta(days=1)
 
     feitas = _itens(
@@ -105,8 +105,9 @@ def montar_noite(conn, agora: datetime) -> Briefing:
     return Briefing(mensagem)
 
 
-def montar_semanal(conn, agora: datetime) -> Briefing:
-    atencao = [Item(texto=f.summary) for f in rules.evaluate(conn, agora)][:10]
+def montar_semanal(conn, agora: datetime, config=None) -> Briefing:
+    atencao = [Item(texto=f.summary)
+               for f in rules.evaluate(conn, agora, config=config)][:10]
     sem_prazo = _itens(conn, f"{ABERTAS} AND due_at IS NULL ORDER BY created_at",
                        (), agora, marca=lambda r, a: "", limite=10)
 
@@ -145,4 +146,4 @@ def gerar(conn, config, llm, agora: datetime, tipo: str = "manha") -> Briefing:
     """`llm` continua na assinatura: quem chama não precisa saber que saiu de cena."""
     if tipo not in MONTADORES:
         raise ValueError(f"briefing desconhecido: {tipo}")
-    return MONTADORES[tipo](conn, agora)
+    return MONTADORES[tipo](conn, agora, config)

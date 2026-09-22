@@ -17,7 +17,7 @@ from aide.scheduler import rules
 def checar() -> None:
     """Mostra o que as regras de condição estão vendo agora."""
     config, conn = _open_db()
-    achados = rules.evaluate(conn, now_in(config.timezone))
+    achados = rules.evaluate(conn, now_in(config.timezone), config=config)
     if not achados:
         console.print("[green]Nada pedindo atenção.[/]")
         return
@@ -67,7 +67,7 @@ def status() -> None:
                    "lembretes pendentes")
     console.print(estado)
 
-    achados = rules.evaluate(conn, momento)
+    achados = rules.evaluate(conn, momento, config=config)
     if achados:
         console.print()
         pedindo = Table(title="Pedindo atenção", box=None, title_justify="left",
