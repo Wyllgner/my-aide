@@ -64,13 +64,16 @@ myaide hoje                             # o que precisa de você
 myaide add "Pagar boleto" -d 2026-09-25T09:00
 myaide done 3
 myaide ls overdue                       # today, overdue, week, inbox, done, all
+myaide lembrete "tirar o bolo" -q 20h   # "amanhã 9h", "quinta 20h", "25/09 14h"
+myaide lembretes                        # o que ainda vai disparar
 myaide chat                             # conversa; ele cria e altera tarefas sozinho
 myaide checar                           # o que as regras de condição estão vendo
 myaide status                           # retrato geral: estado, cobranças e custo
 ```
 
 O `--help` é agrupado por assunto, então dá para achar um comando sem conhecer
-a lista inteira.
+a lista inteira. O horário do lembrete é lido por um parser determinístico, o
+que significa que criar um lembrete não custa chamada de API e funciona offline.
 
 ### Dinheiro
 
@@ -103,14 +106,21 @@ myaide reindexar                             # reconstrói o índice a partir do
 ```
 
 As notas vivem em `vault/AAAA-MM/*.md` com frontmatter, legíveis sem o projeto.
-O SQLite é só índice: `myaide reindexar` traz tudo de volta a partir dos
-arquivos, que são a fonte da verdade.
+O SQLite é só índice, e o vault manda nos dois sentidos:
+
+* Um `.md` que você escreveu no editor e salvou em `vault/` é **adotado** na
+  próxima reindexação, com o título lido do frontmatter.
+* Apagar uma nota move o arquivo para `vault/.trash/`, então o vault contém só
+  nota viva. O texto continua legível ali, e voltar é um `mv`.
+* Linha sem arquivo é acusada por nome, em vez de falhar calada na busca.
 
 ### Pessoas e agenda
 
 ```bash
+myaide pessoa Pedro -r amigo -c 14      # passa a acompanhar, cobrando a cada 14 dias
 myaide pessoas                          # com quem você combinou de manter contato
 myaide falei Pedro "vai se mudar"       # registra o contato de hoje
+myaide pessoa Pedro --esquecer          # para de acompanhar
 myaide agenda -d 14                     # próximas duas semanas, com conflitos
 ```
 
@@ -134,7 +144,7 @@ Oito jobs cuidam do ciclo:
 | `briefing_noite` | o que foi concluído e o que sobrou |
 | `revisao_semanal` | o retrato de domingo |
 | `queue_work` | enfileira trabalho para um executor externo |
-| `reindex_vault` | reindexa a nota que você editou no editor |
+| `reindex_vault` | reindexa a nota que mudou e adota a que você escreveu no editor |
 | `sync_calendar` | baixa de novo o calendário assinado |
 
 Os horários ficam em `config.yaml`: briefing às 07:30 e às 21:30, revisão no
