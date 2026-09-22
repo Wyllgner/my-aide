@@ -329,3 +329,19 @@ def test_historico_nao_repete_a_data_em_cada_linha(run, raiz):
 
     saida = run("historico").stdout
     assert saida.count("17 de setembro") == 1
+
+
+def test_usage_mostra_quanto_custou(run, raiz):
+    """A pergunta que se faz olhando consumo é quanto ele custou."""
+    import sqlite3
+
+    run("init")
+    conn = sqlite3.connect(raiz / "data" / "aide.db")
+    conn.execute("INSERT INTO llm_usage (model, purpose, input_tokens, output_tokens)"
+                 " VALUES ('gpt-4.1', 'chat', 1000000, 0)")
+    conn.commit()
+    conn.close()
+
+    saida = run("usage").stdout
+    assert "US$" in saida
+    assert "total" in saida

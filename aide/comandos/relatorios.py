@@ -180,7 +180,7 @@ def historico(limite: int = typer.Option(15, "--limite", "-n"),
 @app.command()
 def usage(days: int = 7) -> None:
     """Quanto o assessor consumiu de LLM nos últimos dias."""
-    _, conn = _open_db()
+    config, conn = _open_db()
     rows = conn.execute(
         "SELECT model, purpose, COUNT(*) n,"
         "       SUM(input_tokens) inp, SUM(output_tokens) outp"
@@ -190,14 +190,32 @@ def usage(days: int = 7) -> None:
     ).fetchall()
 
     if not rows:
-        console.print("[dim]Nenhuma chamada registrada.[/]")
+        console.print(f"[dim]Nenhuma chamada de LLM em {formato.plural(days, 'dia')}.[/]")
         return
 
-    table = Table(title=f"Uso de LLM — {days} dias", box=None)
-    for col in ("modelo", "uso", "chamadas", "entrada", "saída"):
-        table.add_column(col)
+    table = Table(title=f"Uso de LLM — {formato.plural(days, 'dia')}", box=None,
+                  title_justify="left")
+    # número à direita: coluna de dígito só fica comparável alinhada pela
+    # unidade, e sem isso "1" e "595117" começavam no mesmo ponto
+    table.add_column("modelo")
+    table.add_column("para quê")
+    for col in ("chamadas", "entrada", "saída", "US$"):
+        table.add_column(col, justify="right")
+
+    total = 0.0
     for r in rows:
-        table.add_row(r["model"], r["purpose"] or "-", str(r["n"]), str(r["inp"]), str(r["outp"]))
+        preco = config.llm.precos.get(r["model"])
+        if preco:
+            valor = r["inp"] / 1e6 * preco[0] + r["outp"] / 1e6 * preco[1]
+            total += valor
+            usd = formato.decimal(valor)
+        else:
+            usd = "[dim]sem preço[/]"
+        table.add_row(r["model"], r["purpose"] or "—", formato.numero(r["n"]),
+                      formato.numero(r["inp"]), formato.numero(r["outp"]), usd)
+    # a pergunta que se faz olhando uso é quanto ele custou; sem esta coluna
+    # a resposta exigia abrir outro comando e cruzar à mão
+    table.add_row("", "", "", "", "[bold]total[/]", f"[bold]{formato.decimal(total)}[/]")
     console.print(table)
 
 
