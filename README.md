@@ -72,10 +72,18 @@ myaide checar                           # o que as regras de condição estão v
 myaide status                           # retrato geral: estado, cobranças e custo
 ```
 
-Enquanto ele trabalha você não fica no escuro: no terminal, um spinner marca a
-espera do modelo e cada consulta aparece como uma linha do que foi olhado; no
-Telegram, o "digitando" começa no instante em que a mensagem chega e, se o
-trabalho passar de nove segundos, ele manda uma linha dizendo em que passo está.
+Enquanto ele trabalha você não fica no escuro, e os dois canais mostram a mesma
+coisa. No terminal, um spinner marca a espera do modelo e cada consulta aparece
+como uma linha. No Telegram, o "digitando" começa no instante em que a mensagem
+chega, e a lista de passos cresce dentro de **uma** mensagem, editada a cada
+passo novo:
+
+```
+· olhando suas tarefas
+· somando os gastos
+· olhando a agenda
+```
+
 Se algo falhar, a resposta diz que falhou e que a sua mensagem não foi perdida,
 para você não ficar na dúvida entre reenviar ou esperar.
 

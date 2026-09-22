@@ -27,10 +27,12 @@ VALIDADE_CONFIRMACAO = 120
 # de uma vez, e uma pergunta com trinta itens ninguém lê antes de responder.
 LIMITE_CONFIRMACAO = 12
 
-# Depois de quantos segundos de trabalho ele manda uma linha dizendo em que
-# passo está. O "digitando" do Telegram some em cinco segundos e não diz o que
-# está acontecendo; abaixo disso, uma mensagem a mais seria barulho.
-AVISO_APOS_SEGUNDOS = 9
+# Intervalo mínimo entre edições da mensagem de progresso. O Telegram limita a
+# mais ou menos uma alteração por segundo por chat, e os passos acontecem em
+# milissegundos: sem a folga, um turno com seis tools tomaria seis edições
+# seguidas e o Telegram passaria a recusá-las. Os passos que caem dentro da folga
+# não se perdem, entram na próxima edição.
+EDICAO_A_CADA_SEGUNDOS = 1.2
 
 SIM = {"sim", "s", "confirmo", "confirmar", "pode", "pode apagar", "isso",
        "ok", "claro", "apaga", "apagar"}
@@ -174,11 +176,13 @@ class TelegramBot:
             return self._comando(chat_id, nome, resto)
 
         agente = self._agente(chat_id)
-        agente.progresso = self._contar_passo(chat_id)
+        passo = self._contar_passo(chat_id)
+        agente.progresso = passo
         try:
             resposta = agente.ask(texto)
         finally:
             agente.progresso = None
+            passo.fechar()
         pedido = self._pendentes.get(chat_id)
         if pedido:
             # O modelo recebeu "não autorizado" e vai dizer isso. Quem responde
@@ -194,30 +198,56 @@ class TelegramBot:
     def _contar_passo(self, chat_id: int):
         """Devolve o que o orquestrador chama a cada passo.
 
-        Renova o "digitando" sempre, e manda **uma** linha de texto quando o
-        trabalho passa de alguns segundos: aí o indicador já apareceu e sumiu, e
-        o que falta responder é "em que ponto está".
+        Faz aqui o que o terminal faz: a lista do que está sendo consultado vai
+        crescendo na tela. A diferença é o meio — uma mensagem por passo encheria
+        o chat, então é **uma** mensagem, editada a cada passo novo.
+
+        O "digitando" continua sendo renovado, porque ele é o sinal que aparece
+        antes do primeiro passo existir, quando o modelo só está pensando.
         """
-        comeco = time.time()
-        avisado = False
+        linhas: list[str] = []
+        estado = {"id": None, "ultima_edicao": 0.0}
 
         def passo(frase: str) -> None:
-            nonlocal avisado
             self.client.send_action(chat_id)
-            if avisado or frase == passos.PENSANDO:
+            if frase == passos.PENSANDO:
+                # pensar não é passo: o indicador de digitando já diz isso, e
+                # "· pensando" na lista não informaria nada
                 return
-            if time.time() - comeco < AVISO_APOS_SEGUNDOS:
-                return
-            avisado = True
-            # texto puro e direto pelo cliente: este aviso não é resposta do
-            # assessor e não entra no histórico, senão o modelo leria de volta
-            # "ainda nisso" como se ele mesmo tivesse dito
-            try:
-                self.client.send_message(chat_id, f"Ainda nisso: {frase}.")
-            except TelegramError:
-                log.debug("aviso de progresso não foi entregue", exc_info=True)
 
+            linhas.append(f"· {frase}")
+            texto = "\n".join(linhas)
+
+            if estado["id"] is None:
+                # a primeira aparece na hora: é ela que tira a espera do escuro
+                estado["id"] = self._abrir_progresso(chat_id, texto)
+                estado["ultima_edicao"] = time.time()
+                return
+
+            if time.time() - estado["ultima_edicao"] < EDICAO_A_CADA_SEGUNDOS:
+                return
+            self.client.edit_message(chat_id, estado["id"], texto)
+            estado["ultima_edicao"] = time.time()
+
+        def fechar() -> None:
+            """Garante que o último passo aparece, mesmo se a folga o tiver
+            engolido: a lista não pode terminar sem o passo que ficou por último."""
+            if estado["id"] is not None and linhas:
+                self.client.edit_message(chat_id, estado["id"], "\n".join(linhas))
+
+        passo.fechar = fechar
         return passo
+
+    def _abrir_progresso(self, chat_id: int, texto: str) -> int | None:
+        """Manda a mensagem que vai crescer. Vai direto pelo cliente e não entra
+        no histórico: é relato de trabalho, não fala do assessor, e no histórico o
+        modelo leria de volta como se tivesse dito."""
+        try:
+            enviada = self.client.send_message(chat_id, texto)
+        except TelegramError:
+            log.debug("mensagem de progresso não foi entregue", exc_info=True)
+            return None
+        return (enviada or {}).get("message_id")
 
     # ---------- confirmação em dois passos ----------
 

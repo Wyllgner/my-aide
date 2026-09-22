@@ -23,9 +23,18 @@ def _bot(ctx, tmp_path, permitidos=(42,), llm=None):
     migrate(connect(caminho))
     bot = TelegramBot(ctx.config, lambda: connect(caminho), llm or FakeLLM(), tool_registry)
     bot.enviadas = []
+    bot.editadas = []
+
+    # devolve o que a Bot API devolve: o progresso precisa do message_id para
+    # editar a mesma mensagem em vez de mandar outra
+    def enviar(chat_id, text, markdown=False):
+        bot.enviadas.append((chat_id, text))
+        return {"message_id": 100 + len(bot.enviadas)}
+
     # aceita markdown=: o bot manda formatado e cai para texto puro se recusarem
-    bot.client.send_message = (
-        lambda chat_id, text, markdown=False: bot.enviadas.append((chat_id, text)))
+    bot.client.send_message = enviar
+    bot.client.edit_message = (
+        lambda chat_id, message_id, text: bot.editadas.append((message_id, text)))
     # "digitando" também é rede: sem dublê, o guard de rede do conftest acusa
     bot.acoes = []
     bot.client.send_action = (
@@ -550,47 +559,87 @@ def test_passo_renova_o_digitando(ctx, tmp_path):
     assert bot.acoes.count((42, "typing")) == 2
 
 
-def test_trabalho_curto_nao_manda_linha_de_aviso(ctx, tmp_path):
-    """Abaixo de alguns segundos, uma mensagem a mais é barulho."""
+def test_o_primeiro_passo_aparece_na_hora(ctx, tmp_path):
+    """É a mensagem que tira a espera do escuro; esperar para mostrar seria o
+    mesmo silêncio de antes, só mais curto."""
+    bot = _bot(ctx, tmp_path)
+    bot._contar_passo(42)("olhando suas tarefas")
+
+    assert bot.enviadas == [(42, "· olhando suas tarefas")]
+
+
+def test_os_passos_crescem_na_mesma_mensagem(ctx, tmp_path, monkeypatch):
+    """Como no terminal: a lista do que foi consultado vai crescendo. Uma
+    mensagem por passo encheria o chat."""
+    import aide.channels.telegram_bot as mod
+
+    monkeypatch.setattr(mod, "EDICAO_A_CADA_SEGUNDOS", 0)
     bot = _bot(ctx, tmp_path)
     passo = bot._contar_passo(42)
     passo("olhando suas tarefas")
-    assert bot.enviadas == []
+    passo("somando os gastos")
+    passo("olhando a agenda")
 
-
-def test_trabalho_longo_diz_em_que_passo_esta(ctx, tmp_path, monkeypatch):
-    import aide.channels.telegram_bot as mod
-
-    bot = _bot(ctx, tmp_path)
-    monkeypatch.setattr(mod, "AVISO_APOS_SEGUNDOS", 0)
-    passo = bot._contar_passo(42)
-    passo("procurando nas suas notas")
-
-    assert bot.enviadas[-1][1] == "Ainda nisso: procurando nas suas notas."
-
-
-def test_avisa_uma_vez_so(ctx, tmp_path, monkeypatch):
-    """Uma linha por passo transformaria a espera numa enxurrada."""
-    import aide.channels.telegram_bot as mod
-
-    bot = _bot(ctx, tmp_path)
-    monkeypatch.setattr(mod, "AVISO_APOS_SEGUNDOS", 0)
-    passo = bot._contar_passo(42)
-    for frase in ("olhando suas tarefas", "somando os gastos", "olhando a agenda"):
-        passo(frase)
-
+    # uma mensagem só, editada
     assert len(bot.enviadas) == 1
+    assert bot.editadas[-1][0] == 101
+    assert bot.editadas[-1][1] == ("· olhando suas tarefas\n· somando os gastos\n"
+                                   "· olhando a agenda")
 
 
-def test_pensar_nao_vira_mensagem(ctx, tmp_path, monkeypatch):
-    """"Ainda nisso: pensando" não informa nada que o "digitando" já não diga."""
-    import aide.channels.telegram_bot as mod
+def test_edicao_respeita_a_folga_do_telegram(ctx, tmp_path):
+    """O Telegram recusa edição em rajada; os passos engolidos pela folga não se
+    perdem, entram na próxima."""
+    bot = _bot(ctx, tmp_path)
+    passo = bot._contar_passo(42)
+    passo("olhando suas tarefas")
+    passo("somando os gastos")
+
+    assert bot.editadas == []          # a segunda caiu dentro da folga
+    passo.fechar()
+    assert "somando os gastos" in bot.editadas[-1][1]
+
+
+def test_fechar_sem_passo_nenhum_nao_manda_nada(ctx, tmp_path):
+    bot = _bot(ctx, tmp_path)
+    bot._contar_passo(42).fechar()
+    assert bot.enviadas == []
+    assert bot.editadas == []
+
+
+def test_pensar_nao_vira_passo(ctx, tmp_path):
+    """"· pensando" não informaria nada que o "digitando" já não diga."""
     from aide.channels import passos
 
     bot = _bot(ctx, tmp_path)
-    monkeypatch.setattr(mod, "AVISO_APOS_SEGUNDOS", 0)
     bot._contar_passo(42)(passos.PENSANDO)
     assert bot.enviadas == []
+    assert (42, "typing") in bot.acoes
+
+
+def test_a_lista_de_passos_nao_entra_no_historico(ctx, tmp_path):
+    """É relato de trabalho, não fala do assessor: no histórico o modelo leria de
+    volta como se tivesse dito."""
+    bot = _bot(ctx, tmp_path)
+    bot._contar_passo(42)("olhando suas tarefas")
+
+    guardadas = bot._db().execute(
+        "SELECT content FROM messages WHERE content LIKE '%olhando%'").fetchall()
+    assert guardadas == []
+
+
+def test_progresso_que_nao_foi_entregue_nao_derruba_a_conversa(ctx, tmp_path):
+    from aide.channels.telegram import TelegramError
+
+    bot = _bot(ctx, tmp_path)
+
+    def recusar(*a, **k):
+        raise TelegramError("400")
+
+    bot.client.send_message = recusar
+    passo = bot._contar_passo(42)
+    passo("olhando suas tarefas")   # não levanta
+    passo.fechar()
 
 
 def test_erro_diz_que_a_mensagem_nao_foi_perdida(ctx, tmp_path, monkeypatch):

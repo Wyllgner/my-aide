@@ -84,6 +84,22 @@ class TelegramClient:
             payload["parse_mode"] = "Markdown"
         return self.call("sendMessage", payload)
 
+    def edit_message(self, chat_id: int | str, message_id: int, text: str) -> None:
+        """Reescreve uma mensagem já enviada.
+
+        É o que permite acompanhar passo a passo sem encher o chat: uma mensagem
+        só, que cresce. Falha é engolida porque o Telegram recusa a edição quando
+        o texto não mudou, e isso não é problema nenhum.
+        """
+        if len(text) > LIMITE_MENSAGEM:
+            text = text[: LIMITE_MENSAGEM - 20] + "\n[...cortado]"
+        try:
+            self.call("editMessageText",
+                      {"chat_id": chat_id, "message_id": message_id, "text": text},
+                      tentativas=1)
+        except (TelegramError, OSError):
+            log.debug("editMessageText falhou", exc_info=True)
+
     def send_action(self, chat_id: int | str, action: str = "typing") -> None:
         """Mostra "digitando…" no chat. Dura cinco segundos, então precisa ser
         repetido enquanto o trabalho continua.
