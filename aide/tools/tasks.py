@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta
 from difflib import SequenceMatcher
 
+from aide.core import recorrencia
 from aide.core.context import now_in
 from aide.tools.registry import ToolContext, registry
+
+log = logging.getLogger(__name__)
 
 FIELDS = "id, title, notes, status, priority, project, tags, due_at, recurrence, snooze_count"
 PRIORITIES = {1: "urgente", 2: "normal", 3: "baixa", 4: "algum dia"}
@@ -88,8 +92,10 @@ def _require(ctx: ToolContext, task_id: int):
             "project": {"type": "string"},
             "tags": {"type": "string", "description": "Separadas por vírgula."},
             "notes": {"type": "string"},
-            "recurrence": {"type": "string",
-                           "description": "Ex.: 'every weekday', '1st of month'."},
+            "recurrence": {"type": "string", "enum": list(recorrencia.REGRAS),
+                           "description": ("Faz a tarefa voltar sozinha ao ser concluída. "
+                                           "Só estas cinco: concluir uma tarefa com "
+                                           "recorrência cria a próxima ocorrência.")},
             "private": {"type": "boolean",
                         "description": "Se verdadeiro, nunca entra no contexto enviado ao modelo."},
             "force": {"type": "boolean",
@@ -105,6 +111,14 @@ def create(ctx: ToolContext, title: str, due: str | None = None, priority: int =
     if not title:
         raise ValueError("título vazio")
 
+    regra = recorrencia.normalizar(recurrence)
+    if recurrence and regra is None:
+        # guardar "quando der" aqui é prometer uma repetição que nunca acontece
+        raise ValueError(
+            f"recorrência desconhecida: {recurrence!r}. "
+            f"Use uma de: {', '.join(recorrencia.REGRAS)}."
+        )
+
     if not force:
         existente = _similar_open_task(ctx, title)
         if existente is not None:
@@ -117,7 +131,7 @@ def create(ctx: ToolContext, title: str, due: str | None = None, priority: int =
     cur = ctx.conn.execute(
         "INSERT INTO tasks (title, notes, priority, project, tags, due_at, recurrence,"
         " private, last_touched_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))",
-        (title, notes, priority, project, tags, _parse_dt(due, "due"), recurrence, int(private)),
+        (title, notes, priority, project, tags, _parse_dt(due, "due"), regra, int(private)),
     )
     return _row(_require(ctx, cur.lastrowid))
 
@@ -221,7 +235,8 @@ def update(ctx: ToolContext, id: int, **fields) -> dict:
 
 @registry.register(
     name="tasks.complete",
-    description="Marca uma tarefa como concluída.",
+    description=("Marca uma tarefa como concluída. Se ela se repete, a próxima "
+                 "ocorrência é criada na hora."),
     parameters={"type": "object", "properties": {"id": {"type": "integer"}}, "required": ["id"]},
 )
 def complete(ctx: ToolContext, id: int) -> dict:
@@ -232,7 +247,55 @@ def complete(ctx: ToolContext, id: int) -> dict:
         "UPDATE tasks SET status = 'done', completed_at = datetime('now'),"
         " last_touched_at = datetime('now') WHERE id = ?", (id,)
     )
-    return {"id": id, "title": row["title"], "status": "done"}
+    resposta = {"id": id, "title": row["title"], "status": "done"}
+
+    proxima = _renovar(ctx, row)
+    if proxima:
+        resposta["proxima"] = proxima
+    return resposta
+
+
+def _renovar(ctx: ToolContext, row) -> dict | None:
+    """Cria a ocorrência seguinte de uma tarefa que se repete.
+
+    Sem isto a recorrência era só uma coluna preenchida: o aluguel concluído em
+    setembro não voltava em outubro, e a falta só era notada no dia em que a
+    cobrança não veio.
+
+    A conta parte do prazo, não de hoje: quem paga o aluguel no dia 12 quer o
+    próximo dia 10, não o dia 12 do mês que vem. Sem prazo, parte de agora, que
+    é a única referência que existe.
+    """
+    regra = recorrencia.normalizar(row["recurrence"])
+    if regra is None:
+        if row["recurrence"]:
+            # linha antiga, de quando a coluna aceitava texto livre
+            log.warning("tarefa %s tem recorrência que não sei ler: %r",
+                        row["id"], row["recurrence"])
+        return None
+
+    agora = now_in(ctx.config.timezone)
+    if row["due_at"]:
+        base = datetime.fromisoformat(row["due_at"])
+        if base.tzinfo is None:
+            base = base.replace(tzinfo=agora.tzinfo)
+        base = base.astimezone(agora.tzinfo)
+    else:
+        base = agora
+
+    alvo = recorrencia.proxima(base, regra)
+    # tarefa atrasada renovada não pode nascer atrasada: avança até passar de hoje
+    while alvo.date() < agora.date():
+        alvo = recorrencia.proxima(alvo, regra)
+
+    cur = ctx.conn.execute(
+        "INSERT INTO tasks (title, notes, priority, project, tags, due_at, recurrence,"
+        " private, last_touched_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))",
+        (row["title"], row["notes"], row["priority"], row["project"], row["tags"],
+         alvo.isoformat(timespec="minutes"), regra, row["private"]),
+    )
+    return {"id": cur.lastrowid, "due_at": alvo.isoformat(timespec="minutes"),
+            "recorrencia": recorrencia.por_extenso(regra)}
 
 
 @registry.register(

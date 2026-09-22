@@ -133,3 +133,68 @@ def test_update_nao_ressuscita_tarefa_apagada(ctx, registry):
     ctx.conn.execute("UPDATE tasks SET deleted_at = datetime('now') WHERE id = ?",
                      (tarefa["id"],))
     assert not registry.call("tasks.update", {"id": tarefa["id"], "title": "Y"}, ctx).ok
+
+
+# ---------- recorrência de tarefa ----------
+
+def test_concluir_tarefa_que_se_repete_cria_a_proxima(ctx, registry):
+    """Era o buraco: `recurrence` entrava no banco e ninguém lia de volta, então
+    o aluguel concluído em setembro não voltava em outubro."""
+    tarefa = registry.call("tasks.create", {"title": "pagar o aluguel",
+                                            "due": "2026-10-10T09:00",
+                                            "recurrence": "monthly"}, ctx).data
+
+    feito = registry.call("tasks.complete", {"id": tarefa["id"]}, ctx).data
+    assert feito["proxima"]["due_at"].startswith("2026-11-10")
+
+    nova = registry.call("tasks.list", {"filter": "all"}, ctx).data
+    assert any(t["title"] == "pagar o aluguel" and t["status"] == "open" for t in nova)
+
+
+def test_a_proxima_herda_o_que_define_a_tarefa(ctx, registry):
+    tarefa = registry.call("tasks.create", {
+        "title": "revisar o backup", "due": "2026-10-01T08:00", "recurrence": "weekly",
+        "priority": 1, "project": "casa", "tags": "infra", "notes": "conferir o restore",
+    }, ctx).data
+    proxima_id = registry.call("tasks.complete", {"id": tarefa["id"]}, ctx).data["proxima"]["id"]
+
+    nova = next(t for t in registry.call("tasks.list", {"filter": "all"}, ctx).data
+                if t["id"] == proxima_id)
+    assert (nova["priority"], nova["project"], nova["tags"]) == (1, "casa", "infra")
+    assert nova["recurrence"] == "weekly"
+
+
+def test_tarefa_sem_recorrencia_nao_volta(ctx, registry):
+    tarefa = registry.call("tasks.create", {"title": "coisa única"}, ctx).data
+    assert "proxima" not in registry.call("tasks.complete", {"id": tarefa["id"]}, ctx).data
+
+
+def test_recorrencia_desconhecida_e_recusada_na_criacao(ctx, registry):
+    """Aceitar texto livre era prometer uma repetição que nunca aconteceria."""
+    resultado = registry.call("tasks.create", {"title": "x", "recurrence": "quando der"}, ctx)
+    assert not resultado.ok
+    assert "monthly" in resultado.error
+
+
+def test_renovar_tarefa_atrasada_nao_nasce_atrasada(ctx, registry):
+    """Concluir hoje o que vencia em janeiro não pode criar algo já vencido."""
+    from datetime import timedelta
+
+    from aide.core.context import now_in
+
+    agora = now_in(ctx.config.timezone)
+    antiga = (agora - timedelta(days=90)).replace(hour=9, minute=0)
+    tarefa = registry.call("tasks.create", {"title": "vistoria", "recurrence": "monthly",
+                                            "due": antiga.isoformat(timespec="minutes")}, ctx).data
+
+    proxima = registry.call("tasks.complete", {"id": tarefa["id"]}, ctx).data["proxima"]
+    assert proxima["due_at"] >= agora.date().isoformat()
+
+
+def test_recorrencia_antiga_em_texto_livre_nao_quebra(ctx, registry):
+    """Linhas gravadas quando a coluna aceitava qualquer coisa continuam existindo."""
+    cur = ctx.conn.execute(
+        "INSERT INTO tasks (title, status, recurrence) VALUES ('velha', 'open', 'every fortnight')")
+    feito = registry.call("tasks.complete", {"id": cur.lastrowid}, ctx)
+    assert feito.ok
+    assert "proxima" not in feito.data
