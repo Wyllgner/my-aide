@@ -169,16 +169,27 @@ def test_a_tool_informa_o_que_ainda_cabe(com_uso, registry):
 
 # ---------- saldo ancorado ----------
 
+def _ontem(ctx) -> str:
+    """Uma âncora de ontem: depois do gasto antigo, antes do gasto de agora."""
+    from datetime import timedelta
+
+    from aide.core.context import now_in
+
+    return (now_in(ctx.config.timezone) - timedelta(days=1)).isoformat(timespec="minutes")
+
 def test_sem_ancora_nao_ha_saldo(ctx):
     """Sem um número lido no painel, não há resposta honesta para 'quanto tenho'."""
     assert calculo.saldo_estimado(ctx.conn, ctx.config) is None
 
 
 def test_saldo_e_a_ancora_menos_o_gasto_depois_dela(ctx):
+    # a âncora é relativa a agora, não uma data escrita: presa em 16/09 ela
+    # passou a vir depois do gasto "-2 days" e o teste quebrou sozinho em
+    # 19/09, sem nenhuma mudança no código
     ctx.conn.execute(
         "INSERT INTO llm_usage (ts, model, purpose, input_tokens, output_tokens)"
         " VALUES (datetime('now','-2 days'), 'gpt-5.6-luna', 'chat', 1000000, 0)")
-    calculo.anotar_saldo(ctx.conn, 4.22, "2026-09-16T17:00-04:00")
+    calculo.anotar_saldo(ctx.conn, 4.22, _ontem(ctx))
     # depois da âncora: 1M de entrada no luna = US$ 0,20
     ctx.conn.execute(
         "INSERT INTO llm_usage (model, purpose, input_tokens, output_tokens)"
@@ -195,7 +206,7 @@ def test_gasto_anterior_a_ancora_nao_e_descontado(ctx):
     ctx.conn.execute(
         "INSERT INTO llm_usage (ts, model, purpose, input_tokens, output_tokens)"
         " VALUES (datetime('now','-5 days'), 'gpt-5.6-luna', 'chat', 5000000, 0)")
-    calculo.anotar_saldo(ctx.conn, 4.22, "2026-09-16T17:00-04:00")
+    calculo.anotar_saldo(ctx.conn, 4.22, _ontem(ctx))
 
     assert calculo.saldo_estimado(ctx.conn, ctx.config)["gasto_desde"] == 0.0
 
