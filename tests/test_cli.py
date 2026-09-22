@@ -345,3 +345,13 @@ def test_usage_mostra_quanto_custou(run, raiz):
     saida = run("usage").stdout
     assert "US$" in saida
     assert "total" in saida
+
+
+def test_barra_de_custo_diz_o_que_mede(run, raiz):
+    """Barra sem legenda não diz se o cheio é o que sobrou ou o que já foi."""
+    run("init")
+    run("saldo", "4,22")
+    saida = run("saldo").stdout
+    assert "já foi" in saida
+    assert "US$ 4,22" in saida
+    assert "US$ 4.22" not in saida

@@ -262,18 +262,19 @@ def custo(dias: int = typer.Option(0, "--dias", "-d",
     for coluna in ("modelo", "chamadas", "entrada", "saída", "US$"):
         tabela.add_column(coluna, justify="left" if coluna == "modelo" else "right")
     for m in gasto.por_modelo:
-        tabela.add_row(m["model"], f"{m['chamadas']:,}".replace(",", "."),
-                       f"{m['entrada']:,}".replace(",", "."),
-                       f"{m['saida']:,}".replace(",", "."),
-                       f"{m['usd']:.4f}" if m["usd"] is not None else "[yellow]sem preço[/]")
-    tabela.add_row("", "", "", "[dim]estimado[/]", f"[bold]{gasto.estimado_usd:.4f}[/]")
+        tabela.add_row(m["model"], formato.numero(m["chamadas"]),
+                       formato.numero(m["entrada"]), formato.numero(m["saida"]),
+                       formato.decimal(m["usd"]) if m["usd"] is not None
+                       else "[yellow]sem preço[/]")
+    tabela.add_row("", "", "", "[dim]estimado[/]",
+                   f"[bold]{formato.decimal(gasto.estimado_usd)}[/]")
     console.print(tabela)
 
     if gasto.sem_preco:
         console.print(f"[yellow]sem preço em config.yaml:[/] {', '.join(gasto.sem_preco)}")
 
     if gasto.real_usd is not None:
-        console.print(f"\n[bold]US$ {gasto.real_usd:.4f}[/] cobrados pela OpenAI "
+        console.print(f"\n[bold]{formato.dolar(gasto.real_usd)}[/] cobrados pela OpenAI "
                       f"[dim](real, não estimativa)[/]")
     elif gasto.erro_real:
         console.print(f"\n[yellow]custo real indisponível:[/] {gasto.erro_real}")
@@ -292,12 +293,11 @@ def custo(dias: int = typer.Option(0, "--dias", "-d",
                       "[dim] para acompanhar quanto ainda resta.[/]")
         return
 
-    cheio = round(24 * sobra["fracao"])
-    cor = "red" if sobra["fracao"] >= 0.9 else "yellow" if sobra["fracao"] >= 0.7 else "green"
-    console.print(f"\n[{cor}]{'█' * cheio}[/][dim]{'░' * (24 - cheio)}[/] "
-                  f"{sobra['fracao'] * 100:.0f}% de US$ {sobra['orcamento']:.2f}")
+    console.print()
+    console.print(_barra(sobra["fracao"], "do orçamento do mês"))
     fonte = "estimado" if sobra["estimado"] else "real"
-    console.print(f"[bold]US$ {sobra['sobra']:.2f}[/] ainda cabem no mês "
+    console.print(f"[bold]{formato.dolar(sobra['sobra'], casas=2)}[/] ainda cabem "
+                  f"nos {formato.dolar(sobra['orcamento'], casas=2)} do mês "
                   f"[dim]({fonte})[/]")
 
 
@@ -323,7 +323,8 @@ def saldo(valor: str = typer.Argument(None, help='O que o painel da OpenAI mostr
             console.print(f"[red]{exc}[/]")
             raise typer.Exit(1) from exc
         calculo.anotar_saldo(conn, usd, agora.isoformat(timespec="minutes"))
-        console.print(f"[green]anotado[/] US$ {usd:.2f} em {agora.strftime('%d/%m %H:%M')}")
+        console.print(f"[green]anotado[/] {formato.dolar(usd, casas=2)} em "
+                      f"{agora.strftime('%d/%m %H:%M')}")
         return
 
     estimado = calculo.saldo_estimado(conn, config)
@@ -336,17 +337,25 @@ def saldo(valor: str = typer.Argument(None, help='O que o painel da OpenAI mostr
     _mostrar_saldo(estimado)
 
 
-def _mostrar_saldo(e: dict) -> None:
-    fracao = e["fracao_usada"]
-    cheio = round(24 * fracao)
+def _barra(fracao: float, do_que: str, largura: int = 24) -> str:
+    """Barra com legenda. Sem dizer o que ela mede, a barra é enfeite: quem lê
+    não sabe se o cheio é o que sobrou ou o que já foi."""
+    fracao = max(0.0, min(1.0, fracao))
+    cheio = round(largura * fracao)
     cor = "red" if fracao >= 0.9 else "yellow" if fracao >= 0.7 else "green"
+    return (f"[{cor}]{'█' * cheio}[/][dim]{'░' * (largura - cheio)}[/] "
+            f"{fracao * 100:.0f}% {do_que} já foi")
+
+
+def _mostrar_saldo(e: dict) -> None:
     dias = e["dias_desde"]
     quando = "hoje" if dias == 0 else "ontem" if dias == 1 else f"há {dias} dias"
 
-    console.print(f"[{cor}]{'█' * cheio}[/][dim]{'░' * (24 - cheio)}[/]")
-    console.print(f"[bold]US$ {e['saldo_usd']:.2f}[/] estimados")
-    console.print(f"[dim]US$ {e['ancora_usd']:.2f} anotados {quando} "
-                  f"− US$ {e['gasto_desde']:.4f} gastos desde então[/]")
+    console.print(_barra(e["fracao_usada"], "do saldo anotado"))
+    console.print(f"[bold]{formato.dolar(e['saldo_usd'], casas=2)}[/] ainda no saldo "
+                  f"[dim](estimado)[/]")
+    console.print(f"[dim]{formato.dolar(e['ancora_usd'], casas=2)} anotados {quando} "
+                  f"− {formato.dolar(e['gasto_desde'])} gastos desde então[/]")
 
     if dias >= 30:
         console.print("\n[yellow]a âncora tem mais de um mês.[/] Confira no painel e "
