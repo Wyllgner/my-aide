@@ -364,3 +364,27 @@ def test_ajuda_agrupa_os_comandos_por_assunto(run):
         assert painel in saida, painel
     # o que se usa todo dia aparece antes da instalação
     assert saida.index("Tarefas") < saida.index("Instalação")
+
+
+def test_add_ecoa_o_prazo_como_entendeu(run):
+    """Quem escreve "--prazo 2026-09-25T09:00" não tem outra forma de saber em
+    que fuso aquilo foi lido — e prazo lido errado só aparece no dia da falta."""
+    run("init")
+    saida = run("add", "provar o eco", "--prazo", "2026-09-25T09:00").stdout
+    assert "25/09" in saida
+    assert "09:00" in saida
+
+
+def test_add_sem_prazo_nao_inventa_data(run):
+    run("init")
+    saida = run("add", "sem prazo").stdout
+    assert "sem prazo" in saida
+    assert "/" not in saida
+
+
+def test_agenda_sem_calendario_ensina_a_configurar(run):
+    """"Nada na agenda" fazia parecer dia livre, não assessor sem calendário."""
+    run("init")
+    saida = run("agenda").stdout
+    assert "Nenhum calendário configurado" in saida
+    assert "ics_url" in saida

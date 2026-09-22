@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import typer
 
-from aide.comandos.base import _ctx, _print_tasks, app, console
+from aide.channels import formato
+from aide.comandos.base import _ctx, _print_tasks, app, console, now_in
 from aide.tools import registry
 
 # O filtro é o nome que a tool entende; o título é o que você lê. Sem este mapa
@@ -48,7 +49,7 @@ def add(texto: str, prazo: str = typer.Option(None, "--prazo", "-d", help="ISO 8
         prioridade: int = typer.Option(2, "--prio", "-P"),
         projeto: str = typer.Option(None, "--projeto", "-p")) -> None:
     """Cria uma tarefa direto, sem passar pela LLM."""
-    _, _, ctx = _ctx()
+    config, _, ctx = _ctx()
     args = {"title": texto, "priority": prioridade}
     if prazo:
         args["due"] = prazo
@@ -58,7 +59,17 @@ def add(texto: str, prazo: str = typer.Option(None, "--prazo", "-d", help="ISO 8
     if not result.ok:
         console.print(f"[red]{result.error}[/]")
         raise typer.Exit(1)
-    console.print(f"[green]#{result.data['id']}[/] {result.data['title']}")
+
+    # ecoar o prazo como ele foi entendido: quem escreve "--prazo 2026-09-25T09:00"
+    # não tem outra forma de descobrir que o assessor leu a hora no fuso daqui,
+    # e um prazo lido errado só aparece no dia em que a cobrança não vem
+    linha = result.data
+    marca = ""
+    if linha.get("due_at"):
+        marca = f" [dim]· {formato.quando(linha['due_at'], now_in(config.timezone))}[/]"
+    elif prazo:
+        marca = " [yellow]· sem prazo (não entendi a data)[/]"
+    console.print(f"[green]#{linha['id']}[/] {linha['title']}{marca}")
 
 
 @app.command(rich_help_panel="Tarefas")
