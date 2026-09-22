@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from aide.channels import formato
 from aide.channels.formato import (
     Item,
     Mensagem,
@@ -184,3 +185,48 @@ def test_data_curta_aceita_vazio():
     from aide.channels.formato import data_curta
 
     assert data_curta(None, AGORA) == ""
+
+
+# ---------- número, plural e carimbo do banco ----------
+
+def test_numero_separa_milhar_com_ponto():
+    """`f"{n:,}"` escreveria 654,638 — número inglês ao lado de R$ escrito certo."""
+    assert formato.numero(654638) == "654.638"
+    assert formato.numero(0) == "0"
+    assert formato.numero(-1500) == "-1.500"
+
+
+def test_dolar_mantem_o_simbolo_em_ingles_e_o_numero_em_portugues():
+    assert formato.dolar(0.1369) == "US$ 0,1369"
+    assert formato.dolar(4.2, casas=2) == "US$ 4,20"
+    assert formato.dolar(1234.5) == "US$ 1.234,5000"
+
+
+@pytest.mark.parametrize("quantos,esperado", [
+    (0, "0 lançamentos"), (1, "1 lançamento"), (2, "2 lançamentos"),
+    (1200, "1.200 lançamentos"),
+])
+def test_plural_escreve_o_que_se_fala(quantos, esperado):
+    """"lançamento(s)" é o programador aparecendo no meio da frase."""
+    assert formato.plural(quantos, "lançamento") == esperado
+
+
+def test_plural_aceita_a_forma_irregular():
+    assert formato.plural(2, "mensagem", "mensagens") == "2 mensagens"
+    assert formato.plural(1, "mensagem", "mensagens") == "1 mensagem"
+
+
+def test_carimbo_do_banco_vira_hora_local():
+    """`datetime('now')` é UTC ingênuo: cru, ele adianta a hora em 4 e vira o dia."""
+    local = formato.de_utc("2026-09-22 00:29:30", AGORA)
+    assert local.strftime("%d/%m %H:%M") == "21/09 20:29"
+
+
+def test_carimbo_com_fuso_e_respeitado():
+    assert formato.de_utc("2026-09-21T09:00-04:00", AGORA).hour == 9
+
+
+def test_carimbo_ilegivel_nao_explode():
+    """Vem do banco; uma linha estranha não pode derrubar a tela inteira."""
+    assert formato.de_utc("nada disso", AGORA) is None
+    assert formato.de_utc(None, AGORA) is None

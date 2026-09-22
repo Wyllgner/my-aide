@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 
 DIAS = ("segunda", "terça", "quarta", "quinta", "sexta", "sábado", "domingo")
 MESES = ("janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho",
@@ -87,6 +87,50 @@ def data_curta(iso: str | None, agora: datetime) -> str:
     if 1 < dias < 7:
         return f"há {dias} dias"
     return momento.astimezone(agora.tzinfo).strftime("%d/%m")
+
+
+def de_utc(iso: str, agora: datetime) -> datetime | None:
+    """Converte o carimbo do banco para o fuso de quem lê.
+
+    Todo `datetime('now')` do SQLite é UTC ingênuo, com espaço no lugar do "T".
+    Imprimi-lo cru mostra hora de Londres numa interface de Porto Velho — sem
+    erro, só quatro horas adiantado, o que faz a última atividade parecer do
+    dia seguinte. Carimbo que já traz fuso é respeitado.
+    """
+    try:
+        momento = datetime.fromisoformat(iso.replace(" ", "T"))
+    except (ValueError, AttributeError):
+        return None
+    if momento.tzinfo is None:
+        momento = momento.replace(tzinfo=UTC)
+    return momento.astimezone(agora.tzinfo)
+
+
+def plural(quantos: int, singular: str, plural_: str = "") -> str:
+    """'1 nota', '2 notas' — em vez de 'nota(s)', que ninguém fala.
+
+    O plural_ existe para o que não termina em vogal: "mensagem" → "mensagens".
+    """
+    palavra = singular if abs(quantos) == 1 else (plural_ or f"{singular}s")
+    return f"{numero(quantos)} {palavra}"
+
+
+def numero(n: int) -> str:
+    """654.638, não 654,638: aqui o ponto separa milhar e a vírgula é decimal.
+
+    O padrão do Python é o inverso, então `f"{n:,}"` escreve o número inglês no
+    meio de uma interface em português — e ainda por cima ao lado de um valor
+    em reais escrito do jeito certo.
+    """
+    return f"{n:,}".replace(",", ".")
+
+
+def dolar(valor: float, casas: int = 4) -> str:
+    """US$ 0,1369 — símbolo em inglês, número em português, que é como se lê aqui."""
+    return f"US$ {valor:,.{casas}f}".translate(_MILHAR_DECIMAL)
+
+
+_MILHAR_DECIMAL = str.maketrans({",": ".", ".": ","})
 
 
 def atraso(iso: str, agora: datetime) -> str:
