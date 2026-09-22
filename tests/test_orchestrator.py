@@ -79,3 +79,35 @@ def test_sink_aceita_conexao_e_fabrica(tmp_path):
 
     linhas = conn.execute("SELECT input_tokens FROM llm_usage ORDER BY id").fetchall()
     assert [r["input_tokens"] for r in linhas] == [1, 4]
+
+
+# ---------- o prompt conhece as categorias declaradas ----------
+
+def test_prompt_usa_as_categorias_que_tem_teto(ctx):
+    """Sem isto o modelo escrevia "transporte" onde o teto é "uber", e a regra de
+    orçamento, que casa por nome exato, não encontrava nada."""
+    from aide.config import GastosConfig
+    from aide.core.context import system_prompt
+
+    object.__setattr__(ctx.config, "gastos",
+                       GastosConfig(tetos_centavos={"uber": 50_00, "dates": 200_00}))
+    texto = system_prompt(ctx.config).content
+    assert "uber, dates" in texto
+    assert "assinatura" not in texto
+
+
+def test_sem_teto_o_prompt_mantem_as_categorias_de_sempre(ctx):
+    from aide.core.context import system_prompt
+
+    texto = system_prompt(ctx.config).content
+    assert "alimentação" in texto
+
+
+def test_prompt_escreve_o_dia_da_semana_em_portugues(ctx):
+    """`%A` segue o locale da máquina, que aqui é C: o modelo lia "Monday"."""
+    from aide.core.context import system_prompt
+
+    texto = system_prompt(ctx.config).content
+    assert "Monday" not in texto and "Sunday" not in texto
+    assert any(dia in texto for dia in
+               ("Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"))

@@ -28,14 +28,35 @@ def profile_prompt(conn, config) -> Message | None:
     )
 
 
+CATEGORIAS_PADRAO = ("alimentação", "transporte", "mercado", "saúde", "casa",
+                     "lazer", "assinatura")
+
+
 def system_prompt(config) -> Message:
+    from aide.channels.formato import por_extenso
+
+    agora = now_in(config.timezone)
     template = (PROMPTS_DIR / "system.md").read_text()
     text = template.format(
         user_name=config.user_name or "seu usuário",
-        now=now_in(config.timezone).strftime("%A, %d/%m/%Y %H:%M"),
+        # `%A` segue o locale da máquina, que aqui é C: o modelo lia "Monday" no
+        # meio de um prompt em português e respondia o dia da semana em inglês
+        now=f"{por_extenso(agora)} de {agora.year}, {agora.strftime('%H:%M')}",
         timezone=config.timezone,
+        categorias=_categorias(config),
     )
     return Message(role="system", content=text)
+
+
+def _categorias(config) -> str:
+    """As categorias que a pessoa declarou teto para, quando existirem.
+
+    Sem isto o modelo inventava o nome ("transporte" quando o teto é "uber") e a
+    regra de orçamento, que casa por nome exato, não encontrava nada: o teto
+    ficava declarado e mudo.
+    """
+    declaradas = tuple(getattr(getattr(config, "gastos", None), "tetos_centavos", {}) or ())
+    return ", ".join(declaradas or CATEGORIAS_PADRAO)
 
 
 def state_snapshot(conn, config) -> Message | None:

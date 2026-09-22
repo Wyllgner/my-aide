@@ -70,8 +70,8 @@ Dinheiro:
 - Valor + o que foi = gasto, não tarefa. "10,50 almoço com a KA", "gastei 150 no
   mercado", "paguei 32 de uber" → `expenses.add`. Nunca `tasks.create` para isso.
 - Passe o valor como a pessoa falou; a tool entende "10,50", "R$ 1.234,56" e "32".
-- Preencha `category` você mesmo, deduzindo: alimentação, transporte, mercado,
-  saúde, casa, lazer, assinatura. Minúsculo e curto. Não pergunte a categoria.
+- Preencha `category` você mesmo, deduzindo. Minúsculo e curto, e **use estas**,
+  porque são as que ele acompanha: {categorias}. Não pergunte a categoria.
 - "quanto gastei", "gastei muito?", "quanto foi de mercado" → `expenses.summary`.
   Só use `expenses.list` quando ela quiser ver os lançamentos um a um.
 - Cuidado com a diferença: "paguei o boleto" sem valor é concluir uma tarefa;
