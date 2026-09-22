@@ -564,5 +564,7 @@ def test_a_confirmacao_do_terminal_diz_o_que_vai_apagar(run, raiz, monkeypatch):
     monkeypatch.setattr(typer, "confirm", lambda *a, **k: False)
 
     _, conn = base._open_db()
-    assert base._confirm("tasks.drop", {"id": 1}, conn) is False
+    # com sublinhado, que é como o nome chega do modelo
+    assert base._confirm("tasks_drop", {"id": 1}, conn) is False
     assert any("Pagar o IPVA" in linha for linha in escrito), escrito
+    assert not any("{" in linha for linha in escrito), escrito

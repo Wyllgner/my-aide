@@ -65,3 +65,41 @@ def test_o_verbo_acompanha_a_acao(ctx):
     assert alvo.verbo("memory.forget") == "esquecer"
     assert alvo.verbo("people.remove") == "parar de acompanhar"
     assert alvo.verbo("notes.delete") == "apagar"
+
+
+# ---------- o nome chega com sublinhado ----------
+
+def test_aceita_o_nome_que_o_modelo_devolve(ctx, registry):
+    """A OpenAI não aceita ponto em nome de tool, então o que chega pela
+    confirmação é `notes_delete`. Com o mapa só em ponto, toda pergunta caía no
+    formato cru: "Quer mesmo apagar notes_delete {'id': 7}?"."""
+    tarefa = registry.call("tasks.create", {"title": "Pagar o IPVA"}, ctx).data
+
+    com_sublinhado = alvo.descrever(ctx.conn, "tasks_drop", {"id": tarefa["id"]},
+                                    ver_privado=True)
+    com_ponto = alvo.descrever(ctx.conn, "tasks.drop", {"id": tarefa["id"]}, ver_privado=True)
+    assert com_sublinhado == com_ponto
+    assert "Pagar o IPVA" in com_sublinhado
+
+
+def test_o_verbo_tambem_aceita_sublinhado(ctx):
+    assert alvo.verbo("memory_forget") == "esquecer"
+    assert alvo.verbo("people_remove") == "parar de acompanhar"
+
+
+def test_memoria_e_gasto_tambem(ctx, registry, tmp_path):
+    object.__setattr__(ctx.config, "vault_dir", tmp_path / "v")
+    registry.call("memory.save", {"kind": "profile", "key": "cidade",
+                                  "value": "Porto Velho"}, ctx)
+    gasto = registry.call("expenses.add", {"amount": "10,50", "description": "almoço"}, ctx).data
+
+    assert "Porto Velho" in alvo.descrever(ctx.conn, "memory_forget", {"key": "cidade"},
+                                           ver_privado=True)
+    assert "almoço" in alvo.descrever(ctx.conn, "expenses_delete", {"id": gasto["id"]},
+                                      ver_privado=True)
+
+
+def test_tool_desconhecida_com_sublinhado_nao_e_traduzida_errado(ctx):
+    """`xpto_delete` não existe no registro: melhor mostrar cru do que inventar."""
+    frase = alvo.descrever(ctx.conn, "xpto_delete", {"id": 3})
+    assert "xpto_delete" in frase

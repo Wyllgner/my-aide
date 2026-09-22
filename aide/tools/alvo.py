@@ -34,12 +34,29 @@ VERBOS = {
 }
 
 
+def canonico(nome: str) -> str:
+    """`notes_delete` -> `notes.delete`.
+
+    A OpenAI não aceita ponto em nome de tool, então o modelo sempre devolve a
+    forma com sublinhado, e é essa que chega aqui pela confirmação. O registro já
+    aceitava as duas; este módulo não, e por isso toda pergunta caía no formato
+    cru: "Quer mesmo apagar notes_delete {'id': 7}?".
+    """
+    from aide.tools.registry import registry
+
+    tool = registry.get(nome)
+    if tool is not None:
+        return tool.name
+    return nome.replace("_", ".", 1) if "." not in nome else nome
+
+
 def verbo(nome: str) -> str:
-    return VERBOS.get(nome, "apagar")
+    return VERBOS.get(canonico(nome), "apagar")
 
 
 def descrever(conn, nome: str, args: dict, ver_privado: bool = False) -> str:
     """Uma frase curta sobre o alvo, do jeito que se fala."""
+    bruto, nome = nome, canonico(nome)
     if nome == "memory.forget":
         return _memoria(conn, args, ver_privado)
     if nome == "people.remove":
@@ -48,7 +65,7 @@ def descrever(conn, nome: str, args: dict, ver_privado: bool = False) -> str:
     alvo = _ALVOS.get(nome)
     identificador = args.get("id")
     if alvo is None or not isinstance(identificador, int):
-        return _sem_alvo(nome, args)
+        return _sem_alvo(bruto, args)
 
     tabela, coluna, artigo = alvo
     tem_privado = _tem_coluna(conn, tabela, "private")

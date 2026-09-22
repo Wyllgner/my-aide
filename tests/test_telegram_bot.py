@@ -501,7 +501,7 @@ def test_confirmacao_no_telegram_nao_revela_nota_privada(ctx, tmp_path):
     nota = tool_registry.call("notes.create", {"title": "Senha do cofre", "body": "x",
                                               "private": True}, bot._ctx(42)).data
 
-    pergunta = bot._perguntar(([("notes.delete", {"id": nota["id"]})], 0))
+    pergunta = bot._perguntar(([("notes_delete", {"id": nota["id"]})], 0))
     assert "Senha" not in pergunta
     assert "privada" in pergunta
 
@@ -510,6 +510,10 @@ def test_confirmacao_diz_o_que_e_e_nao_so_o_id(ctx, tmp_path):
     bot = _bot(ctx, tmp_path)
     tarefa = tool_registry.call("tasks.create", {"title": "Pagar o IPVA"}, bot._ctx(42)).data
 
-    pergunta = bot._perguntar(([("tasks.drop", {"id": tarefa["id"]})], 0))
+    # o nome vem do modelo, com sublinhado: é a forma que chega de verdade, e
+    # era ela que caía no formato cru
+    pergunta = bot._perguntar(([("tasks_drop", {"id": tarefa["id"]})], 0))
     assert "Pagar o IPVA" in pergunta
     assert "apagar" in pergunta
+    assert "tasks_drop" not in pergunta
+    assert "{" not in pergunta
