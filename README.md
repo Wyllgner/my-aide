@@ -64,12 +64,18 @@ myaide hoje                             # o que precisa de você
 myaide add "Pagar boleto" -d 2026-09-25T09:00
 myaide done 3
 myaide ls overdue                       # today, overdue, week, inbox, done, all
+myaide add "pagar o aluguel" -d "10/10 09:00" -r "todo mês"
 myaide lembrete "tirar o bolo" -q 20h   # "amanhã 9h", "quinta 20h", "25/09 14h"
 myaide lembretes                        # o que ainda vai disparar
 myaide chat                             # conversa; ele cria e altera tarefas sozinho
 myaide checar                           # o que as regras de condição estão vendo
 myaide status                           # retrato geral: estado, cobranças e custo
 ```
+
+Tarefa com repetição volta sozinha: concluir a do aluguel cria a próxima
+ocorrência na hora, contada a partir do prazo e não de hoje, e o terminal diz
+quando ela volta. As repetições são cinco: todo dia, dias úteis, toda semana,
+todo mês, todo ano.
 
 O `--help` é agrupado por assunto, então dá para achar um comando sem conhecer
 a lista inteira. O horário do lembrete é lido por um parser determinístico, o
@@ -84,6 +90,30 @@ myaide gastos                           # lançamentos do mês
 myaide quanto mes                       # hoje, ontem, semana, mes, ano, sempre
 myaide quanto mes -c mercado
 ```
+
+### Teto por categoria
+
+Declare um teto e o assessor passa a cobrar sozinho, em vez de só responder
+quando perguntado:
+
+```yaml
+gastos:
+  tetos:
+    alimentação: 800     # reais por mês
+    transporte: 300
+  avisar_em: 0.8         # a partir de quanto do teto ele avisa
+```
+
+Chegando em 80% ele avisa; passando do teto, a cobrança sobe para urgente e
+chega junto com o resto do que precisa de você. Sem teto declarado ele não diz
+nada, porque não teria como ter opinião sobre quanto é muito.
+
+Há também o gasto atípico, que não precisa de configuração: um lançamento muito
+acima do seu normal é apontado, comparado com a **mediana** dos últimos 90 dias
+(a média seria puxada pela própria compra grande) e só depois de existir
+histórico suficiente. Gasto marcado como privado entra na soma do teto e nunca
+no texto do aviso: somar mantém o total verdadeiro, nomear entregaria pelo aviso
+o que a listagem esconde.
 
 Por conversa funciona igual, e é o caminho normal no Telegram: ele deduz a
 categoria sozinho. Dois detalhes que valem saber:
