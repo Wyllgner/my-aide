@@ -5,7 +5,8 @@ from __future__ import annotations
 import typer
 from rich.table import Table
 
-from aide.comandos.base import _ctx, app, console
+from aide.channels import formato
+from aide.comandos.base import _ctx, app, console, now_in
 from aide.tools import registry
 
 
@@ -23,21 +24,29 @@ def agenda(dias: int = typer.Option(7, "--dias", "-d"),
         except ValueError as exc:
             console.print(f"[red]{exc}[/]")
             raise typer.Exit(1) from exc
-        console.print(f"[dim]{resultado['importados']} evento(s) importado(s)[/]")
+        console.print(f"[dim]{formato.plural(resultado['importados'], 'evento')} "
+                      f"importados[/]")
 
     eventos = registry.call("events.list", {"dias": dias}, ctx).data
     if not eventos:
-        console.print("[dim]Nada na agenda.[/]"
-                      + ("" if config.calendar_url else "  (nenhum calendário configurado)"))
+        # dizer só "nada na agenda" faz parecer que o dia está livre, quando o
+        # que existe é assessor sem calendário nenhum para olhar
+        if not config.calendar_url:
+            console.print("[dim]Nenhum calendário configurado.[/] Cole o endereço "
+                          "secreto em iCal da sua agenda em [bold]calendar.ics_url[/] "
+                          "(config.local.yaml) e rode [bold]myaide agenda --sync[/].")
+        else:
+            console.print(f"[dim]Nada na agenda nos próximos "
+                          f"{formato.plural(dias, 'dia')}.[/]")
         return
 
     table = Table(box=None)
     table.add_column("quando")
     table.add_column("compromisso")
     table.add_column("onde", style="dim")
+    agora = now_in(config.timezone)
     for e in eventos:
-        dia, _, hora = e["start_at"].partition("T")
-        table.add_row(f"{dia[8:10]}/{dia[5:7]} {hora[:5]}", e["title"], e["location"] or "")
+        table.add_row(formato.quando(e["start_at"], agora), e["title"], e["location"] or "")
     console.print(table)
 
     conflitos = registry.call("events.conflicts", {"dias": dias}, ctx).data
