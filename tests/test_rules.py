@@ -266,3 +266,21 @@ def test_gasto_privado_nunca_aparece_no_aviso(ctx):
         _gasto(ctx, 20_00, dias_atras=10)
     _gasto(ctx, 900_00, descricao="presente surpresa", dias_atras=1, privado=1)
     assert _sobre_dinheiro(ctx, "gasto_atipico") == []
+
+
+def test_teto_batido_no_valor_exato_nao_e_urgente(ctx):
+    """Conta fixa lançada no valor do teto não é notícia: cobrar "passou em
+    R$ 0,00" todo mês ensina a ignorar o aviso."""
+    config = _com_teto(ctx, aluguel=700_00)
+    _gasto(ctx, 700_00, descricao="aluguel", categoria="aluguel")
+
+    achado = _sobre_dinheiro(ctx, "orcamento_categoria", config)[0]
+    assert achado.severity == 2
+    assert "bateu o teto exato" in achado.summary
+    assert "R$ 0,00" not in achado.summary
+
+
+def test_um_centavo_acima_do_teto_ja_e_urgente(ctx):
+    config = _com_teto(ctx, aluguel=700_00)
+    _gasto(ctx, 700_01, categoria="aluguel")
+    assert _sobre_dinheiro(ctx, "orcamento_categoria", config)[0].severity == 1

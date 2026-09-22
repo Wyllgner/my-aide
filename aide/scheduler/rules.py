@@ -225,14 +225,23 @@ def orcamento_categoria(conn, now: datetime, config=None) -> list[Finding]:
         if not teto or total < teto * avisar_em:
             continue
         fracao = total / teto
+        if total > teto:
+            # só o que passou é urgente. Conta fixa lançada no valor exato do
+            # teto — aluguel de 700 com teto de 700 — não é notícia, e cobrar
+            # "passou em R$ 0,00" todo mês ensinaria você a ignorar o aviso.
+            severidade = 1
+            recado = f" — passou em {_reais(total - teto)}"
+        elif total == teto:
+            severidade = 2
+            recado = " — bateu o teto exato"
+        else:
+            severidade = 2
+            recado = f" ({fracao * 100:.0f}% do teto, e o mês ainda não acabou)"
+
         achados.append(Finding(
             rule="orcamento_categoria",
-            severity=1 if total >= teto else 2,
-            summary=(
-                f"{categoria}: {_reais(total)} dos {_reais(teto)} do mês"
-                + (f" — passou em {_reais(total - teto)}" if total >= teto
-                   else f" ({fracao * 100:.0f}% do teto, e o mês ainda não acabou)")
-            ),
+            severity=severidade,
+            summary=f"{categoria}: {_reais(total)} dos {_reais(teto)} do mês{recado}",
             refs=[],
         ))
     return achados
