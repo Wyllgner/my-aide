@@ -7,21 +7,17 @@ assunto. Importar cada um aqui é o que os registra no `app` — o decorador
 
 from __future__ import annotations
 
-from aide.comandos import (
-    conversa,
-    daemon,
-    fila,
-    gastos,
-    notas,
-    pessoas,
-    relatorios,
-    setup,
-    tarefas,
-)
+from importlib import import_module
+
 from aide.comandos.base import app, console
 
-# os módulos acima são importados pelo efeito colateral de registrar comandos;
-# nomeá-los aqui é o que impede o linter de apagar o import e a CLI de ficar vazia.
-_MODULOS = (setup, tarefas, notas, gastos, pessoas, fila, conversa, daemon, relatorios)
+# Um módulo por assunto, e a ordem importa duas vezes: ela registra os comandos
+# (o `@app.command()` só roda quando o módulo carrega) e, porque cada comando
+# declara seu painel, ela também é a ordem em que os painéis saem no --help. O
+# que se usa todo dia vem primeiro; instalação, por último.
+_MODULOS = tuple(import_module(f"aide.comandos.{nome}") for nome in (
+    "tarefas", "conversa", "notas", "gastos", "pessoas",
+    "relatorios", "fila", "daemon", "setup",
+))
 
 __all__ = ["app", "console"]

@@ -9,7 +9,7 @@ from aide.storage import connect, migrate
 from aide.tools import registry
 
 
-@app.command()
+@app.command(rich_help_panel="Instalação")
 def init() -> None:
     """Cria o banco e aplica as migrations."""
     config = load_config()
@@ -20,7 +20,7 @@ def init() -> None:
     console.print(f"[dim]{config.db_path}[/]")
 
 
-@app.command()
+@app.command(rich_help_panel="Instalação")
 def doctor() -> None:
     """Confere se o ambiente está pronto."""
     config = load_config()
@@ -58,7 +58,7 @@ def doctor() -> None:
     console.print(table)
 
 
-@app.command()
+@app.command(rich_help_panel="Instalação")
 def tools() -> None:
     """Lista as tools registradas."""
     table = Table(box=None)

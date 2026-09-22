@@ -8,7 +8,7 @@ from aide.comandos.base import _ctx, app, console
 from aide.tools import registry
 
 
-@app.command()
+@app.command(rich_help_panel="Fila de trabalho")
 def fila(status: str = typer.Argument("open", help="open|claimed|done|dropped|all")) -> None:
     """A fila de trabalho esperando por um executor externo."""
     _, _, ctx = _ctx()
@@ -30,7 +30,7 @@ def fila(status: str = typer.Argument("open", help="open|claimed|done|dropped|al
             console.print(f"    [green]→[/] {o['result_summary']}")
 
 
-@app.command()
+@app.command(rich_help_panel="Fila de trabalho")
 def enfileirar(objetivo: str,
                contexto: str = typer.Option(None, "--contexto", "-c"),
                criterio: str = typer.Option(None, "--criterio", "-k"),
@@ -49,7 +49,7 @@ def enfileirar(objetivo: str,
     console.print(f"[green]#{resultado.data['id']}[/] enfileirada")
 
 
-@app.command(name="mcp-config")
+@app.command(name="mcp-config", rich_help_panel="Fila de trabalho")
 def mcp_config() -> None:
     """Imprime a configuração para plugar um cliente MCP neste assessor."""
     import json

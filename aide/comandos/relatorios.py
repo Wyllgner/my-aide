@@ -13,7 +13,7 @@ from aide.comandos.base import _open_db, app, console, now_in
 from aide.scheduler import rules
 
 
-@app.command()
+@app.command(rich_help_panel="Diagnóstico")
 def checar() -> None:
     """Mostra o que as regras de condição estão vendo agora."""
     config, conn = _open_db()
@@ -29,11 +29,9 @@ def checar() -> None:
     console.print(table)
 
 
-@app.command()
+@app.command(rich_help_panel="Diagnóstico")
 def status() -> None:
     """Um retrato do assessor: o que ele guarda, o que cobra, quanto custa."""
-    from datetime import datetime
-
     config, conn = _open_db()
 
     def um(sql, p=()):
@@ -122,7 +120,7 @@ def status() -> None:
                       f"banco {config.db_path.stat().st_size // 1024} KB[/]")
 
 
-@app.command()
+@app.command(rich_help_panel="Diagnóstico")
 def historico(limite: int = typer.Option(15, "--limite", "-n"),
               canal: str = typer.Option(None, "--canal", "-c",
                                         help="cli | telegram")) -> None:
@@ -177,7 +175,7 @@ def historico(limite: int = typer.Option(15, "--limite", "-n"),
                       f"[cyan]{a['tool']}[/] [dim]{a['args_json']}[/]")
 
 
-@app.command()
+@app.command(rich_help_panel="Custo da LLM")
 def usage(days: int = 7) -> None:
     """Quanto o assessor consumiu de LLM nos últimos dias."""
     config, conn = _open_db()
@@ -219,7 +217,7 @@ def usage(days: int = 7) -> None:
     console.print(table)
 
 
-@app.command()
+@app.command(rich_help_panel="Instalação")
 def version() -> None:
     """Mostra a versão."""
     console.print(__version__)
@@ -229,7 +227,7 @@ if __name__ == "__main__":
     app()
 
 
-@app.command()
+@app.command(rich_help_panel="Custo da LLM")
 def custo(dias: int = typer.Option(0, "--dias", "-d",
                                    help="Janela em dias. Padrão: mês corrente.")) -> None:
     """Quanto o assessor está custando, e quanto ainda cabe no mês.
@@ -301,7 +299,7 @@ def custo(dias: int = typer.Option(0, "--dias", "-d",
                   f"[dim]({fonte})[/]")
 
 
-@app.command()
+@app.command(rich_help_panel="Custo da LLM")
 def saldo(valor: str = typer.Argument(None, help='O que o painel da OpenAI mostra, ex. "4.22"')) -> None:
     """Anota o saldo da API, ou mostra o estimado.
 

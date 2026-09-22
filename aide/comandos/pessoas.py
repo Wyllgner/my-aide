@@ -9,7 +9,7 @@ from aide.comandos.base import _ctx, app, console
 from aide.tools import registry
 
 
-@app.command()
+@app.command(rich_help_panel="Agenda e pessoas")
 def agenda(dias: int = typer.Option(7, "--dias", "-d"),
            sincronizar: bool = typer.Option(False, "--sync", "-s")) -> None:
     """Compromissos do calendário assinado."""
@@ -45,7 +45,7 @@ def agenda(dias: int = typer.Option(7, "--dias", "-d"),
         console.print(f"[red]conflito:[/] {c['a']}  ×  {c['b']}")
 
 
-@app.command()
+@app.command(rich_help_panel="Agenda e pessoas")
 def pessoas(atrasados: bool = typer.Option(False, "--atrasados", "-a")) -> None:
     """Com quem você combinou de manter contato."""
     _, _, ctx = _ctx()
@@ -70,7 +70,7 @@ def pessoas(atrasados: bool = typer.Option(False, "--atrasados", "-a")) -> None:
     console.print(table)
 
 
-@app.command()
+@app.command(rich_help_panel="Agenda e pessoas")
 def falei(nome: str, nota: str = typer.Argument(None)) -> None:
     """Registra que você falou com alguém agora."""
     _, _, ctx = _ctx()

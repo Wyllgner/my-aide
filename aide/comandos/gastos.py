@@ -11,7 +11,7 @@ from aide.tools import registry
 from aide.tools.expenses import PERIODOS, parse_lancamento
 
 
-@app.command()
+@app.command(rich_help_panel="Dinheiro")
 def gasto(texto: str,
           categoria: str = typer.Option(None, "--categoria", "-c"),
           quando: str = typer.Option(None, "--quando", "-q", help="ISO 8601"),
@@ -40,7 +40,7 @@ def gasto(texto: str,
     console.print(f"[green]#{linha['id']}[/] {linha['valor']} · {linha['description']}{marca}")
 
 
-@app.command()
+@app.command(rich_help_panel="Dinheiro")
 def gastos(periodo: str = typer.Argument("mes", help=" | ".join(PERIODOS)),
            categoria: str = typer.Option(None, "--categoria", "-c")) -> None:
     """Lista os gastos do período."""
@@ -75,7 +75,7 @@ def gastos(periodo: str = typer.Argument("mes", help=" | ".join(PERIODOS)),
                   f"{formato.plural(total['quantos'], 'lançamento')}")
 
 
-@app.command()
+@app.command(rich_help_panel="Dinheiro")
 def quanto(periodo: str = typer.Argument("mes", help=" | ".join(PERIODOS)),
            categoria: str = typer.Option(None, "--categoria", "-c")) -> None:
     """Quanto você gastou: myaide quanto mes."""

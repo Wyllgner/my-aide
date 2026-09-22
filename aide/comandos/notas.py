@@ -12,7 +12,7 @@ from aide.comandos.base import _ctx, app, console
 from aide.tools import registry
 
 
-@app.command()
+@app.command(rich_help_panel="Notas e memória")
 def nota(titulo: str, corpo: str = typer.Argument(None),
          tags: str = typer.Option(None, "--tags", "-t")) -> None:
     """Guarda uma nota. Sem corpo, lê da entrada padrão."""
@@ -29,7 +29,7 @@ def nota(titulo: str, corpo: str = typer.Argument(None),
     console.print(f"[green]#{resultado.data['id']}[/] {resultado.data['path']}")
 
 
-@app.command()
+@app.command(rich_help_panel="Notas e memória")
 def notas(limite: int = typer.Option(20, "--limite", "-n")) -> None:
     """Lista as notas mais recentes."""
     _, _, ctx = _ctx()
@@ -46,7 +46,7 @@ def notas(limite: int = typer.Option(20, "--limite", "-n")) -> None:
     console.print(table)
 
 
-@app.command()
+@app.command(rich_help_panel="Notas e memória")
 def buscar(consulta: str, limite: int = typer.Option(5, "--limite", "-n")) -> None:
     """Busca nas notas por significado e palavra-chave."""
     _, _, ctx = _ctx()
@@ -60,7 +60,7 @@ def buscar(consulta: str, limite: int = typer.Option(5, "--limite", "-n")) -> No
             console.print(f"  [dim]{a['trecho'].strip()[:160]}[/]")
 
 
-@app.command()
+@app.command(rich_help_panel="Notas e memória")
 def perfil() -> None:
     """Mostra o que o assessor sabe sobre você."""
     _, _, ctx = _ctx()
@@ -75,7 +75,7 @@ def perfil() -> None:
     console.print(table)
 
 
-@app.command()
+@app.command(rich_help_panel="Notas e memória")
 def reindexar() -> None:
     """Reconstrói o índice a partir dos arquivos do vault.
 

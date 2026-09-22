@@ -355,3 +355,12 @@ def test_barra_de_custo_diz_o_que_mede(run, raiz):
     assert "já foi" in saida
     assert "US$ 4,22" in saida
     assert "US$ 4.22" not in saida
+
+
+def test_ajuda_agrupa_os_comandos_por_assunto(run):
+    """Trinta e oito comandos numa lista só obrigam a ler tudo para achar um."""
+    saida = run("--help").stdout
+    for painel in ("Tarefas", "Dinheiro", "Notas e memória", "Diagnóstico", "Instalação"):
+        assert painel in saida, painel
+    # o que se usa todo dia aparece antes da instalação
+    assert saida.index("Tarefas") < saida.index("Instalação")

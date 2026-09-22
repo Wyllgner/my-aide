@@ -70,7 +70,7 @@ def _start_bot(config, deps):
     return bot
 
 
-@app.command()
+@app.command(rich_help_panel="Serviço")
 def serve(log_level: str = typer.Option("INFO", "--log-level")) -> None:
     """Roda o daemon: lembretes, cobranças, briefings e o bot do Telegram."""
     import signal
@@ -108,7 +108,7 @@ def serve(log_level: str = typer.Option("INFO", "--log-level")) -> None:
     console.print("[dim]encerrado[/]")
 
 
-@app.command(name="telegram-id")
+@app.command(name="telegram-id", rich_help_panel="Serviço")
 def telegram_id(espera: int = typer.Option(60, "--espera", "-t",
                                            help="segundos aguardando a mensagem")) -> None:
     """Descobre o chat id: rode isto e mande qualquer mensagem para o bot."""
@@ -149,7 +149,7 @@ def telegram_id(espera: int = typer.Option(60, "--espera", "-t",
     console.print(f"[dim]  allowed_chat_ids: [{next(iter(ids))}][/]")
 
 
-@app.command(name="job")
+@app.command(name="job", rich_help_panel="Serviço")
 def rodar_job(nome: str = typer.Argument(..., help=" | ".join(JOBS))) -> None:
     """Roda um job do daemon agora, para testar."""
     if nome not in JOBS:

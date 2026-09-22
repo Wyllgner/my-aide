@@ -20,7 +20,7 @@ TITULOS = {
 }
 
 
-@app.command()
+@app.command(rich_help_panel="Tarefas")
 def hoje() -> None:
     """O que precisa de você hoje."""
     config, _, ctx = _ctx()
@@ -28,7 +28,7 @@ def hoje() -> None:
     _print_tasks(rows, config, "Hoje")
 
 
-@app.command(name="ls")
+@app.command(name="ls", rich_help_panel="Tarefas")
 def listar(filtro: str = typer.Argument("today", help="today|overdue|week|inbox|done|all"),
            projeto: str = typer.Option(None, "--projeto", "-p")) -> None:
     """Lista tarefas por filtro."""
@@ -43,7 +43,7 @@ def listar(filtro: str = typer.Argument("today", help="today|overdue|week|inbox|
     _print_tasks(result.data, config, TITULOS.get(filtro, filtro))
 
 
-@app.command()
+@app.command(rich_help_panel="Tarefas")
 def add(texto: str, prazo: str = typer.Option(None, "--prazo", "-d", help="ISO 8601"),
         prioridade: int = typer.Option(2, "--prio", "-P"),
         projeto: str = typer.Option(None, "--projeto", "-p")) -> None:
@@ -61,7 +61,7 @@ def add(texto: str, prazo: str = typer.Option(None, "--prazo", "-d", help="ISO 8
     console.print(f"[green]#{result.data['id']}[/] {result.data['title']}")
 
 
-@app.command()
+@app.command(rich_help_panel="Tarefas")
 def done(task_id: int) -> None:
     """Conclui uma tarefa."""
     _, _, ctx = _ctx()
