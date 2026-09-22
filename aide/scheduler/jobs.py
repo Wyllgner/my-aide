@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from aide.channels.formato import plural
 from aide.core.context import now_in
 from aide.scheduler import briefing, rules
 from aide.tools import reminders
@@ -149,7 +150,8 @@ def queue_work(deps: JobDeps) -> int:
         criadas += 1
 
     if criadas:
-        log.info("%s ordem(ns) de trabalho enfileirada(s)", criadas)
+        log.info("enfileirou %s", plural(criadas, "ordem de trabalho",
+                                         "ordens de trabalho"))
     return criadas
 
 
@@ -218,7 +220,7 @@ def sync_calendar(deps: JobDeps) -> int:
         # feed fora do ar não pode derrubar o daemon nem calar os outros jobs
         log.warning("sincronização do calendário falhou", exc_info=True)
         return 0
-    log.info("%s evento(s) importado(s) do calendário", resultado["importados"])
+    log.info("importou %s do calendário", plural(resultado["importados"], "evento"))
     return resultado["importados"]
 
 

@@ -7,6 +7,7 @@ import sys
 import typer
 from rich.table import Table
 
+from aide.channels import formato
 from aide.comandos.base import _ctx, app, console
 from aide.tools import registry
 
@@ -110,7 +111,8 @@ def reindexar() -> None:
                               ctx.embedder.modelo)
         reindexadas += 1
 
-    console.print(f"[green]{reindexadas} nota(s) reindexada(s)[/]"
-                  + (f" · [yellow]{sumidas} arquivo(s) sumido(s)[/]" if sumidas else ""))
+    console.print(f"[green]{formato.plural(reindexadas, 'nota reindexada')}[/]"
+                  + (f" · [yellow]{formato.plural(sumidas, 'arquivo sumido')}[/]"
+                     if sumidas else ""))
 
 

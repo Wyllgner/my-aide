@@ -10,6 +10,7 @@ import logging
 import threading
 import time
 
+from aide.channels import formato
 from aide.channels.telegram import TelegramClient, TelegramError
 from aide.core.orchestrator import Orchestrator
 
@@ -307,7 +308,8 @@ class TelegramBot:
                 return dados.error
             if not dados.data["quantos"]:
                 return "Nenhum gasto nesse período."
-            linhas = [f"{dados.data['total']} em {dados.data['quantos']} lançamento(s)"]
+            linhas = [f"{dados.data['total']} em "
+                      f"{formato.plural(dados.data['quantos'], 'lançamento')}"]
             linhas += [f"  {c['category']}: {c['valor']}"
                        for c in dados.data["por_categoria"]]
             return "\n".join(linhas)

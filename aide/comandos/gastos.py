@@ -5,6 +5,7 @@ from __future__ import annotations
 import typer
 from rich.table import Table
 
+from aide.channels import formato
 from aide.comandos.base import _ctx, app, console
 from aide.tools import registry
 from aide.tools.expenses import PERIODOS, parse_lancamento
@@ -70,7 +71,8 @@ def gastos(periodo: str = typer.Argument("mes", help=" | ".join(PERIODOS)),
     console.print(table)
 
     total = registry.call("expenses.summary", {k: v for k, v in args.items()}, ctx).data
-    console.print(f"\n[bold]{total['total']}[/] em {total['quantos']} lançamento(s)")
+    console.print(f"\n[bold]{total['total']}[/] em "
+                  f"{formato.plural(total['quantos'], 'lançamento')}")
 
 
 @app.command()
@@ -92,7 +94,8 @@ def quanto(periodo: str = typer.Argument("mes", help=" | ".join(PERIODOS)),
         console.print("[dim]Nenhum gasto nesse período.[/]")
         return
 
-    console.print(f"[bold]{dados['total']}[/] · {dados['quantos']} lançamento(s) "
+    console.print(f"[bold]{dados['total']}[/] · "
+                  f"{formato.plural(dados['quantos'], 'lançamento')} "
                   f"· média {dados['media']}")
 
     if len(dados["por_categoria"]) > 1:

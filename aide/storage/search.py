@@ -9,6 +9,8 @@ from __future__ import annotations
 import logging
 import re
 
+from aide.channels.formato import plural
+
 log = logging.getLogger(__name__)
 
 # Só letras e números viram termo de busca. Tudo o mais — aspas, parênteses,
@@ -141,9 +143,10 @@ def buscar_semantico(conn, vetor: list[float], modelo: str | None = None,
         atrasados = vetores_de_outro_modelo(conn, modelo)
         if atrasados:
             log.warning(
-                "%s vetor(es) de outro modelo (%s) ignorados; a busca semântica só "
+                "%s de outro modelo (%s) ignorados; a busca semântica só "
                 "enxerga %s. Rode `myaide reindexar` para regerá-los.",
-                sum(atrasados.values()), ", ".join(atrasados), modelo,
+                plural(sum(atrasados.values()), "vetor", "vetores"),
+                ", ".join(atrasados), modelo,
             )
 
     sql = (

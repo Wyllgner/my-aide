@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from html import escape
 
+from aide.channels import formato
 from aide.channels.formato import por_extenso, quando
 from aide.web import consultas, graficos
 from aide.web.icones import icone
@@ -57,12 +58,12 @@ def painel(ctx, registry, agora: datetime) -> str:
         por_regra[f.rule] = por_regra.get(f.rule, 0) + 1
 
     indicadores = "".join([
-        _indicador("Tarefas abertas", str(n["abertas"]), f'{n["lembretes"]} lembrete(s)'),
+        _indicador("Tarefas abertas", str(n["abertas"]), formato.plural(n["lembretes"], "lembrete")),
         _indicador("Atrasadas", str(n["atrasadas"]), "pedindo decisão",
                    alerta=bool(n["atrasadas"])),
-        _indicador("Gasto do mês", gasto["total"], f'{gasto["quantos"]} lançamento(s)'),
+        _indicador("Gasto do mês", gasto["total"], formato.plural(gasto["quantos"], "lançamento")),
         _indicador("Chamadas de LLM", str(n["chamadas"]), "desde o começo"),
-        _indicador("Notas", str(n["notas"]), f'{n["perfil"]} fato(s) no perfil'),
+        _indicador("Notas", str(n["notas"]), f'{formato.plural(n["perfil"], "fato")} no perfil'),
     ])
 
     regras_html = "".join(
@@ -132,7 +133,7 @@ def hoje(ctx, registry, agora: datetime) -> str:
 
     contagem = []
     if atrasadas.data:
-        contagem.append(f"{len(atrasadas.data)} atrasada(s)")
+        contagem.append(formato.plural(len(atrasadas.data), "atrasada"))
     if hoje_sem_atraso:
         contagem.append(f"{len(hoje_sem_atraso)} para hoje")
 
@@ -239,7 +240,8 @@ def _detalhe_do_dia(itens: list[dict], dia: int, mes: int, ano: int) -> str:
     return (f'<div class="card">'
             f'<div style="padding:16px 20px 12px;display:flex;align-items:baseline;gap:10px">'
             f'<span class="eyebrow">{dia:02d}/{mes:02d}/{ano}</span>'
-            f'<span style="font-size:12.5px;color:var(--faint)">{len(itens)} item(ns)</span>'
+            f'<span style="font-size:12.5px;color:var(--faint)">'
+            f'{formato.plural(len(itens), "item", "itens")}</span>'
             f'<a href="/calendario?ano={ano}&mes={mes}" style="margin-left:auto;'
             f'font-size:12.5px">fechar</a></div>'
             f'<div style="border-top:1px solid var(--line-soft)">{linhas}</div></div>')
@@ -334,7 +336,7 @@ def calendario(ctx, registry, agora: datetime, ano: int | None = None,
     return f"""
 {cabecalho(MESES[mes - 1].capitalize(), str(ano), navegacao)}
 <p style="margin:-14px 0 16px;font-size:13px;color:var(--muted)">
-  {total} compromisso(s) no mês{" · clique num dia para ver" if total else ""}</p>
+  {formato.plural(total, "compromisso")} no mês{" · clique num dia para ver" if total else ""}</p>
 <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;margin-bottom:6px">
   {cabeca}
 </div>
@@ -515,7 +517,7 @@ def custo(ctx, registry, agora: datetime) -> str:
            + f'<p class="mono" style="margin:10px 0 0;font-size:20px">'
              f'{escape(usd(gasto.estimado_usd))}</p>'
              f'<p style="margin:3px 0 0;font-size:12px;color:var(--faint)">'
-             f'estimado no mês · {gasto.chamadas} chamada(s)</p>{real}{sem_preco}')}
+             f'estimado no mês · {formato.plural(gasto.chamadas, "chamada")}</p>{real}{sem_preco}')}
 </div>
 
 <div style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);
@@ -545,13 +547,10 @@ def _hora_curta(iso: str, agora: datetime) -> str:
     return momento.strftime("%d/%m")
 
 
-def _milhar(n: int) -> str:
-    return f"{n:,}".replace(",", ".")
-
-
-def _dolar(v: float) -> str:
-    """4 casas e vírgula, como o resto da página. `usd()` arredonda em 2."""
-    return f"US$ {v:.4f}".replace(".", ",")
+# a página e o terminal escrevem número do mesmo jeito; as duas funções moram
+# no formato para não divergirem de novo
+_milhar = formato.numero
+_dolar = formato.dolar
 
 
 def _selo_custo(gasto: dict | None) -> str:
@@ -615,7 +614,8 @@ def conversas(ctx, registry, agora: datetime, sessao: str | None = None) -> str:
             f'<span class="mono" style="font-size:11px;color:{fraco};flex-shrink:0">'
             f'{escape(_hora_curta(s["fim"], agora))}</span></div>'
             f'<p style="margin:3px 0 0;font-size:12.5px;color:{fraco}">'
-            f'{escape(s["canal"])} · {s["mensagens"]} mensagem(ns)</p></a>')
+            f'{escape(s["canal"])} · {formato.plural(s["mensagens"], "mensagem", "mensagens")}'
+            f'</p></a>')
 
     por_turno = consultas.custo_por_turno(ctx.conn, escolhida, ctx.config.llm.precos)
     total_usd = sum(g["usd"] for g in por_turno.values())
@@ -705,7 +705,7 @@ def ferramentas(ctx, registry, agora: datetime) -> str:
             f'<span class="mono" style="font-size:13.5px;font-weight:500;color:var(--ink)">'
             f'{escape(familia)}</span>'
             f'<span style="margin-left:auto;font-size:11.5px;color:var(--faint)">'
-            f'{uso.get(familia, 0)} uso(s)</span></div>{linhas}</div>')
+            f'{formato.plural(uso.get(familia, 0), "uso")}</span></div>{linhas}</div>')
 
     confirmam = sum(1 for n in registry.names() if registry.get(n).safety == "confirm")
     return f"""
@@ -817,7 +817,7 @@ def notas(ctx, registry, agora: datetime, nota: int | None = None,
             corpo = f'<p class="vazio">{escape(lida.error)}</p>'
 
     return f"""
-{cabecalho("Notas", f"{len(lista)} nota(s)" + (f' para "{escape(busca)}"' if busca else ""),
+{cabecalho("Notas", formato.plural(len(lista), "nota") + (f' para "{escape(busca)}"' if busca else ""),
            f'<form method="get" action="/notas" style="display:flex;gap:6px">'
            f'<input name="busca" value="{escape(busca or "")}" placeholder="buscar por significado"'
            f' style="font:inherit;font-size:13px;padding:7px 13px;border:1px solid var(--line);'
@@ -898,7 +898,7 @@ def pessoas(ctx, registry, agora: datetime) -> str:
 
     atrasados = sum(1 for p in gente if p.get("atrasado"))
     return f"""
-{cabecalho("Pessoas", f"{len(gente)} acompanhada(s)",
+{cabecalho("Pessoas", formato.plural(len(gente), "acompanhada"),
            f'<p style="margin:0;font-size:13px;color:'
            f'{"var(--accent)" if atrasados else "var(--muted)"}">'
            f'{atrasados} em atraso</p>')}

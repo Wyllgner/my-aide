@@ -388,7 +388,7 @@ def test_dia_cheio_corta_e_avisa_quantos_faltam(app, registry):
 def test_mes_sem_nada_ainda_desenha_a_grade(cliente):
     """A grade é a informação: mostra que a semana está livre."""
     html = cliente.get("/calendario").text
-    assert "0 compromisso(s) no mês" in html
+    assert "0 compromissos no mês" in html
     assert html.count("border-radius:12px") > 20
 
 
