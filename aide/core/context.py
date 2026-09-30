@@ -44,6 +44,7 @@ def system_prompt(config, conn=None) -> Message:
         now=f"{por_extenso(agora)} de {agora.year}, {agora.strftime('%H:%M')}",
         timezone=config.timezone,
         categorias=_categorias(config, conn),
+        tags=_tags(conn),
     )
     return Message(role="system", content=text)
 
@@ -59,6 +60,17 @@ def _categorias(config, conn=None) -> str:
 
     declaradas = tuple(tetos_em_vigor(conn, config))
     return ", ".join(declaradas or CATEGORIAS_PADRAO)
+
+
+def _tags(conn) -> str:
+    """"farmácia → pessoal, lanche → pessoal". Sem a lista o modelo lançaria
+    "10 em farmácia" com categoria inventada e sem a tag."""
+    from aide.tools.expenses import tags_em_vigor
+
+    tags = tags_em_vigor(conn)
+    if not tags:
+        return "nenhuma cadastrada ainda"
+    return ", ".join(f"{nome} → {categoria}" for nome, categoria in tags.values())
 
 
 def state_snapshot(conn, config) -> Message | None:

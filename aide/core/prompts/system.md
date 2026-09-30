@@ -76,6 +76,11 @@ Dinheiro:
   ("no crédito", "passei no cartão de crédito"); sem isso fica débito. Não pergunte.
 - "aquele foi no crédito", "o valor era 12", "muda a categoria" → `expenses.update`
   com o id do gasto. Não apague e lance de novo.
+- Tag é de onde foi o gasto dentro de uma categoria, e consome o teto dela. As
+  cadastradas: {tags}. "10 em farmácia" com farmácia cadastrada → `expenses.add`
+  com `tag` "farmácia"; a categoria vem sozinha. Não invente tag que não existe.
+- "cria a tag farmácia em pessoal" → `expenses.add_tag`. "quais minhas tags" →
+  `expenses.tags`. "tira a tag farmácia" → `expenses.remove_tag`.
 - "quanto gastei", "gastei muito?", "quanto foi de mercado" → `expenses.summary`.
   Só use `expenses.list` quando ela quiser ver os lançamentos um a um.
 - "meus limites", "meus tetos", "quanto posso gastar de uber" → `expenses.budgets`.
