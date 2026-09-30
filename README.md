@@ -111,6 +111,9 @@ myaide gasto "10,50 almoço com a KA"    # valor na frente, o resto é descriç�
 myaide gasto "187,90 mercado" -c mercado
 myaide gasto "300 tênis" --credito      # sem dizer, é débito
 myaide corrige-gasto 12 --credito       # ou --debito, --valor, -c, -d, -q
+myaide tag farmácia pessoal             # farmácia passa a consumir o teto de pessoal
+myaide gasto "10 remédio" -t farmacia   # vai para pessoal, com a tag farmácia
+myaide tag                              # lista; --remover descadastra
 myaide gastos                           # lançamentos do mês
 myaide quanto mes                       # hoje, ontem, semana, mes, ano, sempre
 myaide quanto mes -c mercado
@@ -132,6 +135,12 @@ gastos:
 Chegando em 80% ele avisa; passando do teto, a cobrança sobe para urgente e
 chega junto com o resto do que precisa de você. Sem teto declarado ele não diz
 nada, porque não teria como ter opinião sobre quanto é muito.
+
+**Tags** dizem de onde foi o gasto dentro de uma categoria. Cadastre "farmácia
+em pessoal" e "10 em farmácia" vai para `pessoal` com a tag `farmácia`: consome o
+teto de pessoal, e a página de gastos mostra quanto de cada teto saiu de cada
+tag. A categoria de uma tag cadastrada é decidida pelo cadastro, não pelo modelo,
+então um erro de dedução não fura o teto.
 
 Pelo Telegram dá para ver e mudar sem abrir o arquivo: "quais meus limites",
 "aumenta o uber pra 80", "tira o teto de dates". O que muda pela conversa fica
