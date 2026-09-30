@@ -405,6 +405,15 @@ def test_gastos_soma_o_periodo(cliente, app, registry):
     assert "almoço" in html and "mercado" in html
 
 
+def test_gastos_separa_debito_de_credito(cliente, app, registry):
+    ctx = app.state.contexto()
+    registry.call("expenses.add", {"amount": "10,50", "description": "almoço"}, ctx)
+    registry.call("expenses.add", {"amount": "300", "description": "tênis",
+                                   "method": "credito"}, ctx)
+    html = cliente.get("/gastos").text
+    assert "débito R$ 10,50 · crédito R$ 300,00" in html
+
+
 def test_o_periodo_vem_da_url_e_volta_no_historico(cliente):
     """Link, não botão: a página é de leitura e o voltar do navegador funciona."""
     html = cliente.get("/gastos?periodo=ano").text

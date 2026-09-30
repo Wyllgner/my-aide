@@ -468,7 +468,7 @@ def _cartao_tetos(ctx, agora: datetime) -> str:
 
 
 def gastos(ctx, registry, agora: datetime, periodo: str = "mes") -> str:
-    from aide.tools.expenses import PERIODOS, formatar, intervalo
+    from aide.tools.expenses import PERIODOS, formatar, intervalo, por_extenso
 
     if periodo not in PERIODOS:
         periodo = "mes"
@@ -499,6 +499,10 @@ def gastos(ctx, registry, agora: datetime, periodo: str = "mes") -> str:
             etiqueta = (f'<span style="font-size:11px;color:var(--muted);background:#F5F6F8;'
                         f'padding:2px 8px;border-radius:var(--r-pill)">'
                         f'{escape(g["category"])}</span>')
+        if g["method"] == "credito":
+            etiqueta += ('<span style="font-size:11px;color:var(--muted);'
+                         'border:1px solid var(--line-soft);padding:1px 7px;'
+                         'border-radius:var(--r-pill)">crédito</span>')
         return (f'<div class="linha" style="padding:10px 18px">'
                 f'<span class="mono" style="font-size:12px;color:var(--faint);width:46px;'
                 f'flex-shrink:0">{escape(dia)}</span>'
@@ -508,6 +512,7 @@ def gastos(ctx, registry, agora: datetime, periodo: str = "mes") -> str:
                 f'{escape(g["valor"])}</span></div>')
 
     linhas = "".join(_linha_gasto(g) for g in lancamentos)
+    formas = " · ".join(f'{por_extenso(f["method"])} {f["valor"]}' for f in dados["por_forma"])
     tetos = _cartao_tetos(ctx, agora)
 
     return f"""
@@ -517,6 +522,7 @@ def gastos(ctx, registry, agora: datetime, periodo: str = "mes") -> str:
     <p class="eyebrow" style="margin-bottom:6px">Acumulado</p>
     <p class="mono" style="margin:0 0 6px;font-size:26px;letter-spacing:-.01em">
       {escape(dados["total"])}</p>
+    <p style="margin:0 0 6px;font-size:12px;color:var(--muted)">{escape(formas)}</p>
     {acum}
   </div>
   {_indicador("Lançamentos", str(dados["quantos"]), "no período")}
