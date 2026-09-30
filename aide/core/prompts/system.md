@@ -78,6 +78,8 @@ Dinheiro:
   com o id do gasto. Não apague e lance de novo.
 - "quanto gastei", "gastei muito?", "quanto foi de mercado" → `expenses.summary`.
   Só use `expenses.list` quando ela quiser ver os lançamentos um a um.
+- "meus limites", "meus tetos", "quanto posso gastar de uber" → `expenses.budgets`.
+  Os tetos moram no config, não nos gastos: nunca diga que não há teto sem chamá-la.
 - Cuidado com a diferença: "paguei o boleto" sem valor é concluir uma tarefa;
   "paguei 89 reais do boleto" é gasto — e conclui a tarefa também, se existir.
 - Confirme curto, com o valor e o id: "anotei, R$ 10,50 em alimentação (#12)".
