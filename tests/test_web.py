@@ -1026,3 +1026,15 @@ def test_notas_conta_o_que_esta_na_lixeira(cliente, app, registry, tmp_path):
 
     html = cliente.get("/notas").text
     assert "1 arquivo na lixeira" in html
+
+
+def test_teto_mudado_pela_conversa_diz_que_vale_no_lugar_do_config(cliente, app, registry,
+                                                                  com_tetos):
+    ctx = app.state.contexto()
+    registry.call("expenses.set_budget", {"category": "cinema", "amount": "60"}, ctx)
+    html = cliente.get("/gastos").text
+    assert "R$ 60,00" in html
+    assert "mudados pela conversa" in html and "cinema em" in html
+
+def test_tetos_dizem_quanto_sobra(cliente, com_tetos):
+    assert "sobram R$ 59,00" in cliente.get("/gastos").text

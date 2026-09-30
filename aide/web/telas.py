@@ -431,8 +431,9 @@ def _cartao_tetos(ctx, agora: datetime) -> str:
             '<div class="card" style="padding:16px 20px;margin-top:16px">'
             '<p class="eyebrow" style="margin-bottom:8px">Tetos do mês</p>'
             '<p style="margin:0;font-size:12.5px;color:var(--faint);line-height:1.5">'
-            'Nenhum teto declarado. Em <span class="mono">config.local.yaml</span>, '
-            'em <span class="mono">gastos.tetos</span>, e o assessor passa a cobrar '
+            'Nenhum teto declarado. Diga no Telegram "põe teto de 300 em mercado", '
+            'ou declare em <span class="mono">gastos.tetos</span> no '
+            '<span class="mono">config.local.yaml</span>, e o assessor passa a cobrar '
             'a categoria que passar do combinado.</p></div>')
 
     medidores = graficos.medidores([
@@ -447,6 +448,8 @@ def _cartao_tetos(ctx, agora: datetime) -> str:
     teto_total = sum(linha["teto"] for linha in linhas)
     estourados = [linha for linha in linhas if linha["gasto"] > linha["teto"]]
     resumo = f'{formatar(gasto_total)} de {formatar(teto_total)} em tetos'
+    sobra = sum(max(linha["teto"] - linha["gasto"], 0) for linha in linhas)
+    resumo += f' · sobram {formatar(sobra)}'
     if estourados:
         resumo += f' · {formato.plural(len(estourados), "categoria estourada")}'
 
@@ -459,6 +462,18 @@ def _cartao_tetos(ctx, agora: datetime) -> str:
         itens = " · ".join(f'{escape(c)} {escape(formatar(v))}' for c, v in fora[:6])
         rodape = (f'<p style="margin:12px 0 0;font-size:12px;color:var(--faint);'
                   f'line-height:1.5">sem teto: {itens}</p>')
+
+    # teto mudado pela conversa vence o config: sem dizer isso, quem abrir o
+    # config.local.yaml vê outro número e não sabe qual vale
+    mudados = [linha for linha in linhas if linha.get("mudado_em")]
+    if mudados:
+        itens = " · ".join(
+            f'{escape(linha["categoria"])} em '
+            f'{escape(linha["mudado_em"][8:10])}/{escape(linha["mudado_em"][5:7])}'
+            for linha in mudados)
+        rodape += (f'<p style="margin:8px 0 0;font-size:12px;color:var(--faint);'
+                   f'line-height:1.5">mudados pela conversa, valem no lugar do config: '
+                   f'{itens}</p>')
 
     return (f'<div class="card" style="padding:16px 20px;margin-top:16px">'
             f'<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px">'
