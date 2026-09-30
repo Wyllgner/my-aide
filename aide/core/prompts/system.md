@@ -72,6 +72,10 @@ Dinheiro:
 - Passe o valor como a pessoa falou; a tool entende "10,50", "R$ 1.234,56" e "32".
 - Preencha `category` você mesmo, deduzindo. Minúsculo e curto, e **use estas**,
   porque são as que ele acompanha: {categorias}. Não pergunte a categoria.
+- Todo gasto é débito ou crédito. Só passe `method` quando a pessoa disser
+  ("no crédito", "passei no cartão de crédito"); sem isso fica débito. Não pergunte.
+- "aquele foi no crédito", "o valor era 12", "muda a categoria" → `expenses.update`
+  com o id do gasto. Não apague e lance de novo.
 - "quanto gastei", "gastei muito?", "quanto foi de mercado" → `expenses.summary`.
   Só use `expenses.list` quando ela quiser ver os lançamentos um a um.
 - Cuidado com a diferença: "paguei o boleto" sem valor é concluir uma tarefa;
