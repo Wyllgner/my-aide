@@ -1036,8 +1036,10 @@ def test_teto_mudado_pela_conversa_diz_que_vale_no_lugar_do_config(cliente, app,
     assert "R$ 60,00" in html
     assert "mudados pela conversa" in html and "cinema em" in html
 
+
 def test_tetos_dizem_quanto_sobra(cliente, com_tetos):
     assert "sobram R$ 59,00" in cliente.get("/gastos").text
+
 
 def test_lancamento_mostra_o_id_para_corrigir(cliente, app, registry):
     ctx = app.state.contexto()
@@ -1046,3 +1048,10 @@ def test_lancamento_mostra_o_id_para_corrigir(cliente, app, registry):
     html = cliente.get("/gastos").text
     assert f'#{gasto["id"]}' in html
     assert "Débito e crédito" in html
+
+
+def test_painel_diz_quanto_foi_no_credito(cliente, app, registry):
+    ctx = app.state.contexto()
+    registry.call("expenses.add", {"amount": "300", "description": "tênis",
+                                   "method": "credito"}, ctx)
+    assert "R$ 300,00 no crédito" in cliente.get("/").text

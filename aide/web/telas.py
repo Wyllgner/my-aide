@@ -81,6 +81,17 @@ def _indicador_teto(ctx, agora: datetime) -> str:
                       alerta=bool(estourados))
 
 
+def _nota_gasto(gasto: dict) -> str:
+    """Quantos lançamentos e, havendo, quanto foi no crédito: é o que chega na
+    fatura depois, e some dentro do total se ninguém disser."""
+    from aide.tools.expenses import formatar
+
+    nota = formato.plural(gasto["quantos"], "lançamento")
+    credito = next((f["cents"] for f in gasto.get("por_forma", [])
+                    if f["method"] == "credito"), 0)
+    return f"{nota} · {formatar(credito)} no crédito" if credito else nota
+
+
 def painel(ctx, registry, agora: datetime) -> str:
     conn = ctx.conn
     n = consultas.contagens(conn, agora)
@@ -100,7 +111,7 @@ def painel(ctx, registry, agora: datetime) -> str:
         _indicador("Tarefas abertas", str(n["abertas"]), formato.plural(n["lembretes"], "lembrete")),
         _indicador("Atrasadas", str(n["atrasadas"]), "pedindo decisão",
                    alerta=bool(n["atrasadas"])),
-        _indicador("Gasto do mês", gasto["total"], formato.plural(gasto["quantos"], "lançamento")),
+        _indicador("Gasto do mês", gasto["total"], _nota_gasto(gasto)),
         _indicador("Chamadas de LLM", str(n["chamadas"]), "desde o começo"),
         _indicador("Notas", str(n["notas"]), f'{formato.plural(n["perfil"], "fato")} no perfil'),
         _indicador_teto(ctx, agora),
