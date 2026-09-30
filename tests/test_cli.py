@@ -241,6 +241,26 @@ def test_quanto_sem_gasto_nenhum(run):
     assert "Nenhum gasto" in run("quanto", "hoje").output
 
 
+def test_gasto_sem_forma_e_debito(run):
+    assert "débito" in run("gasto", "10,50 almoço").output
+    assert "crédito" in run("gasto", "300 tênis", "--credito").output
+
+
+def test_corrige_gasto_troca_para_credito(run):
+    run("gasto", "10,50 almoço")
+    saida = run("corrige-gasto", "1", "--credito").output
+    assert "crédito" in saida
+    assert "R$ 10,50" in saida
+    assert "crédito R$ 10,50" in run("quanto", "mes").output
+
+
+def test_corrige_gasto_sem_nada_explica(run):
+    run("gasto", "10,50 almoço")
+    resultado = run("corrige-gasto", "1")
+    assert resultado.exit_code == 1
+    assert "nada para alterar" in resultado.output
+
+
 # ---------- status ----------
 
 def test_status_nao_conta_atrasada_como_vencendo_hoje(run):

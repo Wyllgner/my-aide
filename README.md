@@ -109,6 +109,8 @@ que significa que criar um lembrete não custa chamada de API e funciona offline
 ```bash
 myaide gasto "10,50 almoço com a KA"    # valor na frente, o resto é descrição
 myaide gasto "187,90 mercado" -c mercado
+myaide gasto "300 tênis" --credito      # sem dizer, é débito
+myaide corrige-gasto 12 --credito       # ou --debito, --valor, -c, -d, -q
 myaide gastos                           # lançamentos do mês
 myaide quanto mes                       # hoje, ontem, semana, mes, ano, sempre
 myaide quanto mes -c mercado
