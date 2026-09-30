@@ -390,9 +390,17 @@ def test_ajuda_agrupa_os_comandos_por_assunto(run):
 def test_add_ecoa_o_prazo_como_entendeu(run):
     """Quem escreve "--prazo 2026-09-25T09:00" não tem outra forma de saber em
     que fuso aquilo foi lido — e prazo lido errado só aparece no dia da falta."""
+    from datetime import timedelta
+
+    from aide.config import load_config
+    from aide.core.context import now_in
+
+    # daqui a 3 dias, e não uma data fixa: prazo passado ou a mais de uma
+    # semana é ecoado sem a hora, e o teste quebrava sozinho com o calendário
+    dia = now_in(load_config().timezone) + timedelta(days=3)
     run("init")
-    saida = run("add", "provar o eco", "--prazo", "2026-09-25T09:00").stdout
-    assert "25/09" in saida
+    saida = run("add", "provar o eco", "--prazo", f"{dia:%Y-%m-%d}T09:00").stdout
+    assert f"{dia:%d/%m}" in saida
     assert "09:00" in saida
 
 
