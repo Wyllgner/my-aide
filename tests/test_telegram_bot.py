@@ -22,6 +22,9 @@ def _bot(ctx, tmp_path, permitidos=(42,), llm=None):
     caminho = tmp_path / "b.db"
     migrate(connect(caminho))
     bot = TelegramBot(ctx.config, lambda: connect(caminho), llm or FakeLLM(), tool_registry)
+    # sinais de vida vão para uma thread no bot de verdade; aqui rodam na hora
+    # para os testes lerem o que foi mandado sem esperar
+    bot._sinal = lambda fn: fn()
     bot.enviadas = []
     bot.editadas = []
 
@@ -683,3 +686,34 @@ def test_o_progresso_nao_chega_ao_modelo(ctx, tmp_path):
 
     tudo = " ".join(conteudo for volta in vistas for _, conteudo in volta)
     assert "vendo o que você tem pra hoje" not in tudo
+
+
+def test_sinal_de_vida_nao_segura_o_trabalho(ctx, tmp_path):
+    """Cada chamada à Bot API leva perto de um segundo daqui. Esperar por elas
+    no meio do caminho era o que deixava lançar um gasto lento."""
+    import threading
+    import time
+
+    object.__setattr__(ctx.config.telegram, "token", "x")
+    bot = TelegramBot(ctx.config, lambda: None, FakeLLM(), tool_registry)
+    liberar, feitos = threading.Event(), []
+
+    def rede_lenta(chat_id, action="typing"):
+        liberar.wait(5)
+        feitos.append(chat_id)
+
+    bot.client.send_action = rede_lenta
+    bot.client.send_message = lambda *a, **k: {"message_id": 1}
+    inicio = time.time()
+    passo = bot._contar_passo(42)
+    passo("tasks_list")
+    passo("expenses_add")
+    assert time.time() - inicio < 1     # voltou sem esperar a rede
+    assert feitos == []
+
+    liberar.set()
+    for _ in range(50):
+        if len(feitos) == 2:
+            break
+        time.sleep(0.02)
+    assert feitos == [42, 42]           # os sinais chegam, na ordem, depois

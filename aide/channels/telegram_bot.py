@@ -7,6 +7,7 @@ mesmo orquestrador e o mesmo toolbelt.
 from __future__ import annotations
 
 import logging
+import queue
 import threading
 import time
 
@@ -80,6 +81,35 @@ class TelegramBot:
         # apagaria uma e perderia a outra caladamente.
         self._pendentes: dict[int, tuple[list[tuple[str, dict]], float]] = {}
         self._conn = None
+        self._sinais: queue.Queue | None = None
+
+    # ---------- sinais de vida ----------
+
+    def _sinal(self, fn) -> None:
+        """Manda um sinal de vida (digitando, a lista de passos) sem esperar por ele.
+
+        Cada chamada à Bot API abre conexão nova, e daqui isso leva perto de um
+        segundo, às vezes três. Com os sinais no meio do caminho, um "10,50
+        almoço" esperava quatro deles antes de lançar o gasto: o aviso de que ele
+        estava trabalhando era o que mais atrasava o trabalho.
+
+        Uma fila e uma thread só, e não uma thread por sinal: a ordem importa —
+        a lista precisa existir antes de ser editada e antes de ser apagada.
+        """
+        if self._sinais is None:
+            self._sinais = queue.Queue()
+            threading.Thread(target=self._despachar_sinais, name="telegram-sinais",
+                             daemon=True).start()
+        self._sinais.put(fn)
+
+    def _despachar_sinais(self) -> None:
+        while True:
+            fn = self._sinais.get()
+            try:
+                fn()
+            except Exception:
+                # sinal perdido é só um "digitando" a menos; a resposta não depende dele
+                log.debug("sinal de vida não foi entregue", exc_info=True)
 
     # ---------- ciclo de vida ----------
 
@@ -147,7 +177,7 @@ class TelegramBot:
 
         # antes de qualquer trabalho: é o que diz "chegou, estou nisso" e evita
         # que você mande a mesma coisa de novo achando que não chegou
-        self.client.send_action(chat_id)
+        self._sinal(lambda: self.client.send_action(chat_id))
 
         try:
             resposta = self._resolver(chat_id, texto)
@@ -208,7 +238,7 @@ class TelegramBot:
         existe antes do primeiro passo, quando o modelo só está pensando.
         """
         tools: list[str] = []
-        estado = {"id": None, "ultima_edicao": 0.0}
+        estado = {"id": None, "ultima_edicao": 0.0, "fechado": False}
 
         def texto() -> str:
             linhas = [f"{passos.PRONTO} {passos.feito(t)}" for t in tools[:-1]]
@@ -216,6 +246,14 @@ class TelegramBot:
             return "\n".join(linhas)
 
         def passo(nome: str) -> None:
+            # quem chama é o orquestrador, no meio do trabalho: nada aqui pode
+            # esperar pela rede
+            self._sinal(lambda: _passo(nome))
+
+        def _passo(nome: str) -> None:
+            if estado["fechado"]:
+                # a resposta já foi: um "digitando" agora diria que vem mais
+                return
             self.client.send_action(chat_id)
             if nome == passos.PENSANDO:
                 # pensar não é passo: o indicador de digitando já diz isso, e
@@ -243,6 +281,10 @@ class TelegramBot:
             diga. O que foi consultado continua registrado na trilha de
             auditoria, que é onde se confere isso depois.
             """
+            self._sinal(_fechar)
+
+        def _fechar() -> None:
+            estado["fechado"] = True
             if estado["id"] is not None:
                 self.client.delete_message(chat_id, estado["id"])
 
