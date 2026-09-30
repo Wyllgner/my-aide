@@ -336,3 +336,101 @@ def test_teto_mudado_vale_na_cobranca(ctx, registry):
                                    "category": "uber"}, ctx)
     registry.call("expenses.set_budget", {"category": "uber", "amount": "200"}, ctx)
     assert orcamento_categoria(ctx.conn, now_in(ctx.config.timezone), ctx.config) == []
+
+
+# ---------- tags ----------
+
+def _tag(ctx, registry, tag="farmácia", categoria="pessoal"):
+    assert registry.call("expenses.add_tag", {"tag": tag, "category": categoria}, ctx).ok
+
+
+def test_tag_cadastrada_puxa_a_categoria(ctx, registry):
+    _tag(ctx, registry)
+    gasto = registry.call("expenses.add", {"amount": "10", "description": "remédio",
+                                           "tag": "farmácia"}, ctx).data
+    assert (gasto["category"], gasto["tag"]) == ("pessoal", "farmácia")
+
+
+def test_tag_mandada_como_categoria_tambem_vai_para_a_mae(ctx, registry):
+    """O modelo erra a dedução; o teto não pode ficar furado por isso."""
+    _tag(ctx, registry)
+    gasto = registry.call("expenses.add", {"amount": "10", "description": "remédio",
+                                           "category": "Farmacia"}, ctx).data
+    assert (gasto["category"], gasto["tag"]) == ("pessoal", "farmácia")
+
+
+def test_a_tag_vence_a_categoria_errada(ctx, registry):
+    _tag(ctx, registry)
+    gasto = registry.call("expenses.add", {"amount": "10", "description": "remédio",
+                                           "category": "saúde", "tag": "farmacia"}, ctx).data
+    assert gasto["category"] == "pessoal"
+
+
+def test_gasto_com_tag_consome_o_teto_da_categoria(ctx, registry):
+    object.__setattr__(ctx.config.gastos, "tetos_centavos", {"pessoal": 15000})
+    _tag(ctx, registry)
+    registry.call("expenses.add", {"amount": "10", "description": "remédio",
+                                   "tag": "farmácia"}, ctx)
+    teto = registry.call("expenses.budgets", {}, ctx).data["tetos"][0]
+    assert (teto["categoria"], teto["gasto"]) == ("pessoal", "R$ 10,00")
+
+
+def test_resumo_abre_a_categoria_por_tag(ctx, registry):
+    _tag(ctx, registry)
+    _tag(ctx, registry, "lanche")
+    for valor, tag in (("10", "farmácia"), ("25", "lanche"), ("5", "farmácia")):
+        registry.call("expenses.add", {"amount": valor, "description": "x", "tag": tag}, ctx)
+    registry.call("expenses.add", {"amount": "7", "description": "x",
+                                   "category": "pessoal"}, ctx)
+    pessoal = registry.call("expenses.summary", {"periodo": "hoje"}, ctx).data["por_categoria"][0]
+    assert pessoal["cents"] == 4700                     # a tag não conta duas vezes
+    assert [(t["tag"], t["cents"]) for t in pessoal["tags"]] == [("lanche", 2500),
+                                                              ("farmácia", 1500)]
+
+
+def test_lista_as_tags_por_categoria(ctx, registry):
+    _tag(ctx, registry)
+    _tag(ctx, registry, "uber noturno", "uber")
+    assert registry.call("expenses.tags", {}, ctx).data["por_categoria"] == {
+        "pessoal": ["farmácia"], "uber": ["uber noturno"]}
+
+
+def test_recadastrar_muda_a_categoria(ctx, registry):
+    _tag(ctx, registry)
+    mudou = registry.call("expenses.add_tag", {"tag": "farmacia", "category": "saúde"}, ctx).data
+    assert mudou["antes"] == "pessoal"
+    gasto = registry.call("expenses.add", {"amount": "10", "description": "x",
+                                           "tag": "farmácia"}, ctx).data
+    assert gasto["category"] == "saúde"
+
+
+def test_tag_dentro_de_tag_e_recusada(ctx, registry):
+    _tag(ctx, registry)
+    assert "já é uma tag" in registry.call("expenses.add_tag",
+                                           {"tag": "genérico", "category": "farmácia"}, ctx).error
+
+
+def test_remover_tag_nao_mexe_nos_gastos(ctx, registry):
+    _tag(ctx, registry)
+    gasto = registry.call("expenses.add", {"amount": "10", "description": "x",
+                                           "tag": "farmácia"}, ctx).data
+    assert registry.call("expenses.remove_tag", {"tag": "Farmácia"}, ctx).ok
+    lista = registry.call("expenses.list", {"periodo": "hoje"}, ctx).data
+    assert [g["tag"] for g in lista if g["id"] == gasto["id"]] == ["farmácia"]
+    assert registry.call("expenses.tags", {}, ctx).data["por_categoria"] == {}
+
+
+def test_corrigir_a_tag_depois_move_para_a_categoria_dela(ctx, registry):
+    _tag(ctx, registry)
+    gasto = registry.call("expenses.add", {"amount": "10", "description": "remédio"}, ctx).data
+    alterado = registry.call("expenses.update", {"id": gasto["id"], "tag": "farmácia"}, ctx).data
+    assert (alterado["category"], alterado["tag"]) == ("pessoal", "farmácia")
+    sem_tag = registry.call("expenses.update", {"id": gasto["id"], "tag": ""}, ctx).data
+    assert (sem_tag["category"], sem_tag["tag"]) == ("pessoal", None)
+
+
+def test_o_prompt_mostra_as_tags(ctx, registry):
+    from aide.core.context import system_prompt
+
+    _tag(ctx, registry)
+    assert "farmácia → pessoal" in system_prompt(ctx.config, ctx.conn).content

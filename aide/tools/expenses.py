@@ -11,12 +11,13 @@ O valor mora em centavos inteiros. Ver a migration 006.
 from __future__ import annotations
 
 import re
+import unicodedata
 from datetime import datetime, timedelta
 
 from aide.core.context import now_in
 from aide.tools.registry import ToolContext, registry
 
-CAMPOS = "id, cents, description, category, spent_at, method"
+CAMPOS = "id, cents, description, category, tag, spent_at, method"
 
 # "10,50 almoço com a KA" — valor na frente, resto é descrição.
 _LANCAMENTO = re.compile(r"^\s*(?:R\$\s*)?([\d.,]+)\s+(.*\S)\s*$", re.IGNORECASE)
@@ -158,6 +159,47 @@ def tetos_em_vigor(conn, config) -> dict[str, int]:
     return tetos
 
 
+# ---------- tags ----------
+
+
+def _chave(texto: str) -> str:
+    """"Farmácia" -> "farmacia". A tag é achada do jeito que for escrita."""
+    sem_acento = unicodedata.normalize("NFKD", texto.strip().lower())
+    return "".join(c for c in sem_acento if not unicodedata.combining(c))
+
+
+def tags_em_vigor(conn) -> dict[str, tuple[str, str]]:
+    """chave -> (tag como foi escrita, categoria a que pertence)."""
+    if conn is None:
+        return {}
+    return {r[0]: (r[1], r[2]) for r in conn.execute(
+        "SELECT key, tag, category FROM expense_tags ORDER BY category, tag").fetchall()}
+
+
+def resolver_categoria(conn, category: str | None, tag: str | None) -> tuple[str | None, str | None]:
+    """Categoria e tag de um lançamento, com a tag puxando a categoria dela.
+
+    Quem decide a categoria de uma tag conhecida é o cadastro, não o modelo: se
+    ele mandar "farmácia" como categoria, ou "farmácia" com categoria "saúde",
+    o gasto vai para `pessoal` do mesmo jeito. Senão o teto de pessoal ficaria
+    furado sempre que o modelo errasse a dedução.
+    """
+    categoria = (category or "").strip().lower() or None
+    tags = tags_em_vigor(conn)
+
+    if tag and tag.strip():
+        conhecida = tags.get(_chave(tag))
+        if conhecida:
+            return conhecida[1], conhecida[0]
+        # tag solta, sem cadastro: vale como etiqueta, sem mexer na categoria
+        return categoria, tag.strip().lower()
+
+    if categoria and _chave(categoria) in tags:
+        nome, mae = tags[_chave(categoria)]
+        return mae, nome
+    return categoria, None
+
+
 # ---------- períodos ----------
 
 PERIODOS = ("hoje", "ontem", "semana", "mes", "ano", "sempre")
@@ -223,6 +265,13 @@ def _filtro_privado(ctx: ToolContext) -> str:
                     "saúde, casa, lazer, assinatura. Deduza do que foi gasto."
                 ),
             },
+            "tag": {
+                "type": "string",
+                "description": (
+                    "Opcional: de onde foi, dentro da categoria (farmácia, lanche). Se a "
+                    "tag estiver cadastrada, a categoria dela é posta sozinha."
+                ),
+            },
             "when": {"type": "string", "description": "ISO 8601. Padrão: agora."},
             "method": {
                 "type": "string", "enum": list(FORMAS),
@@ -234,7 +283,8 @@ def _filtro_privado(ctx: ToolContext) -> str:
     },
 )
 def add(ctx: ToolContext, amount: str, description: str, category: str | None = None,
-        when: str | None = None, method: str | None = None, private: bool = False) -> dict:
+        when: str | None = None, method: str | None = None, private: bool = False,
+        tag: str | None = None) -> dict:
     cents = parse_valor(amount)
     if not description.strip():
         raise ValueError("todo gasto precisa de uma descrição")
@@ -245,10 +295,11 @@ def add(ctx: ToolContext, amount: str, description: str, category: str | None = 
     except ValueError as exc:
         raise ValueError(f"when precisa ser ISO 8601. Recebido: {when!r}") from exc
 
+    categoria, etiqueta = resolver_categoria(ctx.conn, category, tag)
     cur = ctx.conn.execute(
-        "INSERT INTO expenses (cents, description, category, spent_at, method, private)"
-        " VALUES (?, ?, ?, ?, ?, ?)",
-        (cents, description.strip(), (category or None) and category.strip().lower(),
+        "INSERT INTO expenses (cents, description, category, tag, spent_at, method, private)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (cents, description.strip(), categoria, etiqueta,
          quando, normalizar_forma(method), int(private)),
     )
     return _linha(ctx.conn.execute(
@@ -312,9 +363,16 @@ def summary(ctx: ToolContext, periodo: str = "mes", category: str | None = None)
         f"SELECT COALESCE(SUM(cents), 0), COUNT(*) FROM expenses {onde}", params
     ).fetchone()
 
+    por_tag: dict[str | None, list[dict]] = {}
+    for r in ctx.conn.execute(
+        f"SELECT category, tag, SUM(cents) FROM expenses {onde} AND tag IS NOT NULL"
+        " GROUP BY category, tag ORDER BY SUM(cents) DESC", params
+    ).fetchall():
+        por_tag.setdefault(r[0], []).append({"tag": r[1], "cents": r[2], "valor": formatar(r[2])})
+
     por_categoria = [
         {"category": r[0] or "sem categoria", "cents": r[1],
-         "valor": formatar(r[1]), "quantos": r[2]}
+         "valor": formatar(r[1]), "quantos": r[2], "tags": por_tag.get(r[0], [])}
         for r in ctx.conn.execute(
             f"SELECT category, SUM(cents), COUNT(*) FROM expenses {onde}"
             " GROUP BY category ORDER BY SUM(cents) DESC", params
@@ -410,6 +468,70 @@ def set_budget(ctx: ToolContext, category: str, amount: str | None = None,
 
 
 @registry.register(
+    name="expenses.add_tag",
+    description=(
+        "Cadastra uma tag dentro de uma categoria: 'cria a tag farmácia em pessoal'. "
+        "Daí em diante '10 em farmácia' vai para pessoal com a tag farmácia, e "
+        "consome o teto de pessoal. Cadastrar de novo muda a categoria da tag."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "tag": {"type": "string"},
+            "category": {"type": "string", "description": "A categoria que ela consome."},
+        },
+        "required": ["tag", "category"],
+    },
+)
+def add_tag(ctx: ToolContext, tag: str, category: str) -> dict:
+    nome, categoria = tag.strip().lower(), category.strip().lower()
+    if not nome or not categoria:
+        raise ValueError("diga a tag e a categoria dela, como: farmácia em pessoal")
+    if _chave(nome) == _chave(categoria):
+        raise ValueError("a tag não pode ter o mesmo nome da categoria")
+    if _chave(categoria) in tags_em_vigor(ctx.conn):
+        raise ValueError(f"{categoria} já é uma tag; tag dentro de tag não soma em teto nenhum")
+    antes = tags_em_vigor(ctx.conn).get(_chave(nome))
+    ctx.conn.execute(
+        "INSERT INTO expense_tags (key, tag, category) VALUES (?, ?, ?)"
+        " ON CONFLICT (key) DO UPDATE SET tag = excluded.tag, category = excluded.category",
+        (_chave(nome), nome, categoria))
+    resposta = {"tag": nome, "category": categoria}
+    if antes and antes[1] != categoria:
+        # os gastos antigos ficam na categoria de antes: foram contados naquele
+        # teto, e mudá-los agora reescreveria um mês que já fechou
+        resposta["antes"] = antes[1]
+    return resposta
+
+
+@registry.register(
+    name="expenses.tags",
+    description="As tags cadastradas, agrupadas pela categoria que cada uma consome.",
+    parameters={"type": "object", "properties": {}, "required": []},
+)
+def list_tags(ctx: ToolContext) -> dict:
+    grupos: dict[str, list[str]] = {}
+    for nome, categoria in tags_em_vigor(ctx.conn).values():
+        grupos.setdefault(categoria, []).append(nome)
+    return {"por_categoria": grupos}
+
+
+@registry.register(
+    name="expenses.remove_tag",
+    description=("Descadastra uma tag. Os gastos que já têm a tag continuam com ela; "
+                 "só os novos deixam de ir sozinhos para a categoria."),
+    parameters={"type": "object", "properties": {"tag": {"type": "string"}},
+                "required": ["tag"]},
+)
+def remove_tag(ctx: ToolContext, tag: str) -> dict:
+    conhecida = tags_em_vigor(ctx.conn).get(_chave(tag))
+    if conhecida is None:
+        raise ValueError(f"a tag {tag!r} não está cadastrada")
+    ctx.conn.execute("DELETE FROM expense_tags WHERE key = ?", (_chave(tag),))
+    return {"tag": conhecida[0], "category": conhecida[1], "removida": True}
+
+
+@registry.register(
     name="expenses.update",
     description=(
         "Corrige um gasto já lançado: débito virou crédito, valor errado, "
@@ -423,6 +545,7 @@ def set_budget(ctx: ToolContext, category: str, amount: str | None = None,
             "amount": {"type": "string", "description": "Novo valor, como a pessoa falou."},
             "description": {"type": "string"},
             "category": {"type": "string"},
+            "tag": {"type": "string", "description": "\"\" tira a tag."},
             "when": {"type": "string", "description": "ISO 8601."},
         },
         "required": ["id"],
@@ -430,9 +553,9 @@ def set_budget(ctx: ToolContext, category: str, amount: str | None = None,
 )
 def update(ctx: ToolContext, id: int, method: str | None = None, amount: str | None = None,
            description: str | None = None, category: str | None = None,
-           when: str | None = None) -> dict:
+           when: str | None = None, tag: str | None = None) -> dict:
     row = ctx.conn.execute(
-        "SELECT private FROM expenses WHERE id = ? AND deleted_at IS NULL", (id,)
+        "SELECT private, category, tag FROM expenses WHERE id = ? AND deleted_at IS NULL", (id,)
     ).fetchone()
     if row is None:
         raise ValueError(f"gasto {id} não existe")
@@ -451,9 +574,18 @@ def update(ctx: ToolContext, id: int, method: str | None = None, amount: str | N
             raise ValueError("todo gasto precisa de uma descrição")
         sets.append("description = ?")
         params.append(description.strip())
-    if category is not None:
-        sets.append("category = ?")
-        params.append(category.strip().lower() or None)
+    if category is not None or tag is not None:
+        if tag is not None and not tag.strip():
+            # tirar a tag deixa a categoria onde está
+            categoria, etiqueta = (category.strip().lower() or None
+                                   if category is not None else row["category"]), None
+        else:
+            categoria, etiqueta = resolver_categoria(
+                ctx.conn,
+                category if category is not None else row["category"],
+                tag if tag is not None else (None if category is not None else row["tag"]))
+        sets += ["category = ?", "tag = ?"]
+        params += [categoria, etiqueta]
     if when is not None:
         try:
             quando = datetime.fromisoformat(when).isoformat(timespec="minutes")
