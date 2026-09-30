@@ -506,6 +506,11 @@ def gastos(ctx, registry, agora: datetime, periodo: str = "mes") -> str:
 
     maior = max(lancamentos, key=lambda g: g["cents"], default=None)
     categorias = [(c["category"], c["cents"] / 100) for c in dados["por_categoria"]]
+    por_forma = ([(por_extenso(f["method"]), f["cents"] / 100) for f in dados["por_forma"]]
+                 if dados["quantos"] else [])
+
+    def reais(v: float) -> str:
+        return f"R$ {v:,.2f}".replace(",", "@").replace(".", ",").replace("@", ".")
 
     def _linha_gasto(g: dict) -> str:
         dia = f'{g["spent_at"][8:10]}/{g["spent_at"][5:7]}'
@@ -521,6 +526,8 @@ def gastos(ctx, registry, agora: datetime, periodo: str = "mes") -> str:
         return (f'<div class="linha" style="padding:10px 18px">'
                 f'<span class="mono" style="font-size:12px;color:var(--faint);width:46px;'
                 f'flex-shrink:0">{escape(dia)}</span>'
+                f'<span class="mono" style="font-size:11.5px;color:var(--faint)">'
+                f'#{g["id"]}</span>'
                 f'<span style="font-size:13.5px">{escape(g["description"])}</span>'
                 f'{etiqueta}'
                 f'<span class="quando mono" style="color:var(--ink);font-size:13.5px">'
@@ -553,10 +560,16 @@ def gastos(ctx, registry, agora: datetime, periodo: str = "mes") -> str:
 
 <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);
             gap:16px;margin-top:16px;align-items:start">
+  <div style="display:flex;flex-direction:column;gap:16px">
   {_cartao("Por categoria",
            graficos.barras(categorias, rotulo_px=104, vazio="nenhuma categoria ainda",
-                           formatar=lambda v: f"R$ {v:,.2f}".replace(",", "@")
-                                               .replace(".", ",").replace("@", ".")))}
+                           formatar=reais))}
+  {_cartao("Débito e crédito",
+           graficos.barras(por_forma, rotulo_px=104, vazio="nada lançado ainda",
+                           formatar=reais)
+           + '<p style="margin:10px 0 0;font-size:12px;color:var(--faint);line-height:1.5">'
+             'o que não foi dito é débito; no Telegram, "o #12 foi no crédito" corrige</p>')}
+  </div>
   <div class="card">
     <div style="padding:15px 18px 11px"><span class="eyebrow">Lançamentos</span></div>
     <div style="border-top:1px solid var(--line-soft)">

@@ -1038,3 +1038,11 @@ def test_teto_mudado_pela_conversa_diz_que_vale_no_lugar_do_config(cliente, app,
 
 def test_tetos_dizem_quanto_sobra(cliente, com_tetos):
     assert "sobram R$ 59,00" in cliente.get("/gastos").text
+
+def test_lancamento_mostra_o_id_para_corrigir(cliente, app, registry):
+    ctx = app.state.contexto()
+    gasto = registry.call("expenses.add", {"amount": "10,50", "description": "almoço"},
+                          ctx).data
+    html = cliente.get("/gastos").text
+    assert f'#{gasto["id"]}' in html
+    assert "Débito e crédito" in html
