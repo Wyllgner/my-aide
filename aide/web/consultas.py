@@ -260,7 +260,9 @@ def tetos_do_mes(conn, config, agora: datetime) -> list[dict]:
     categoria e total, então somar mantém o total verdadeiro sem contar o que a
     listagem esconde.
     """
-    tetos = getattr(getattr(config, "gastos", None), "tetos_centavos", None) or {}
+    from aide.tools.expenses import tetos_em_vigor
+
+    tetos = tetos_em_vigor(conn, config)
     if not tetos:
         return []
 
@@ -296,7 +298,9 @@ def gasto_fora_dos_tetos(conn, config, agora: datetime) -> list[tuple[str, int]]
     mostra. Sem categoria nenhuma entra como "sem categoria", que é o caso mais
     fácil de acumular sem perceber.
     """
-    tetos = getattr(getattr(config, "gastos", None), "tetos_centavos", None) or {}
+    from aide.tools.expenses import tetos_em_vigor
+
+    tetos = tetos_em_vigor(conn, config)
     inicio = agora.replace(day=1, hour=0, minute=0).isoformat(timespec="minutes")
     fim = agora.isoformat(timespec="minutes")
     linhas = conn.execute(

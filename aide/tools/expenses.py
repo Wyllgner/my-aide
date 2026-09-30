@@ -138,6 +138,26 @@ def por_extenso(forma: str | None) -> str:
     return "crédito" if forma == "credito" else "débito"
 
 
+# ---------- tetos ----------
+
+
+def tetos_em_vigor(conn, config) -> dict[str, int]:
+    """Teto de cada categoria, em centavos: o config, com o que foi mudado por cima.
+
+    Todo lugar que olha teto — a cobrança, a página, o prompt, a tool — passa
+    por aqui, senão o teto mudado pelo Telegram valeria numa tela e não na outra.
+    """
+    tetos = dict(getattr(getattr(config, "gastos", None), "tetos_centavos", None) or {})
+    if conn is None:
+        return tetos
+    for r in conn.execute("SELECT category, cents FROM expense_caps").fetchall():
+        if r[1] is None:
+            tetos.pop(r[0], None)
+        else:
+            tetos[r[0]] = r[1]
+    return tetos
+
+
 # ---------- períodos ----------
 
 PERIODOS = ("hoje", "ontem", "semana", "mes", "ano", "sempre")

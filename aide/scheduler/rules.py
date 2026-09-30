@@ -197,14 +197,16 @@ FATOR_ATIPICO = 3
 def orcamento_categoria(conn, now: datetime, config=None) -> list[Finding]:
     """Categoria que passou (ou está perto de passar) do teto do mês.
 
-    Sem teto declarado em `config.yaml` esta regra não diz nada: o assessor não
+    Sem teto declarado (no config ou pela conversa) esta regra não diz nada: o assessor não
     tem opinião própria sobre quanto é muito, e inventar um número seria cobrar
     por um limite que você nunca combinou.
 
     O gasto privado entra na soma e nunca no texto. Somar é o que mantém o total
     verdadeiro; nomear entregaria pelo aviso o que a listagem esconde.
     """
-    tetos = getattr(getattr(config, "gastos", None), "tetos_centavos", None)
+    from aide.tools.expenses import tetos_em_vigor
+
+    tetos = tetos_em_vigor(conn, config)
     if not tetos:
         return []
 

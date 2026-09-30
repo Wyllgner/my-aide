@@ -32,7 +32,7 @@ CATEGORIAS_PADRAO = ("alimentação", "transporte", "mercado", "saúde", "casa",
                      "lazer", "assinatura")
 
 
-def system_prompt(config) -> Message:
+def system_prompt(config, conn=None) -> Message:
     from aide.channels.formato import por_extenso
 
     agora = now_in(config.timezone)
@@ -43,19 +43,21 @@ def system_prompt(config) -> Message:
         # meio de um prompt em português e respondia o dia da semana em inglês
         now=f"{por_extenso(agora)} de {agora.year}, {agora.strftime('%H:%M')}",
         timezone=config.timezone,
-        categorias=_categorias(config),
+        categorias=_categorias(config, conn),
     )
     return Message(role="system", content=text)
 
 
-def _categorias(config) -> str:
+def _categorias(config, conn=None) -> str:
     """As categorias que a pessoa declarou teto para, quando existirem.
 
     Sem isto o modelo inventava o nome ("transporte" quando o teto é "uber") e a
     regra de orçamento, que casa por nome exato, não encontrava nada: o teto
     ficava declarado e mudo.
     """
-    declaradas = tuple(getattr(getattr(config, "gastos", None), "tetos_centavos", {}) or ())
+    from aide.tools.expenses import tetos_em_vigor
+
+    declaradas = tuple(tetos_em_vigor(conn, config))
     return ", ".join(declaradas or CATEGORIAS_PADRAO)
 
 
@@ -105,7 +107,7 @@ def state_snapshot(conn, config) -> Message | None:
 
 
 def build(config, history: list[Message], conn=None) -> list[Message]:
-    messages = [system_prompt(config)]
+    messages = [system_prompt(config, conn)]
     if conn is not None:
         perfil = profile_prompt(conn, config)
         if perfil:
