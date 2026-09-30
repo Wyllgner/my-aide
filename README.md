@@ -133,6 +133,11 @@ Chegando em 80% ele avisa; passando do teto, a cobrança sobe para urgente e
 chega junto com o resto do que precisa de você. Sem teto declarado ele não diz
 nada, porque não teria como ter opinião sobre quanto é muito.
 
+Pelo Telegram dá para ver e mudar sem abrir o arquivo: "quais meus limites",
+"aumenta o uber pra 80", "tira o teto de dates". O que muda pela conversa fica
+no banco e vence o config para aquela categoria; o YAML não é reescrito, então
+os comentários dele continuam lá.
+
 Há também o gasto atípico, que não precisa de configuração: um lançamento muito
 acima do seu normal é apontado, comparado com a **mediana** dos últimos 90 dias
 (a média seria puxada pela própria compra grande) e só depois de existir
