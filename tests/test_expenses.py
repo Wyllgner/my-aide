@@ -253,3 +253,30 @@ def test_resumo_separa_debito_de_credito(ctx, registry):
     formas = {f["method"]: f["cents"] for f in
               registry.call("expenses.summary", {"periodo": "hoje"}, ctx).data["por_forma"]}
     assert formas == {"debito": 3000, "credito": 10000}
+
+
+def test_altera_a_forma_depois(ctx, registry):
+    gasto = registry.call("expenses.add", {"amount": "10", "description": "café"}, ctx).data
+    alterado = registry.call("expenses.update", {"id": gasto["id"], "method": "crédito"}, ctx)
+    assert alterado.ok
+    assert alterado.data["method"] == "credito"
+    assert alterado.data["cents"] == 1000  # o resto fica como estava
+
+
+def test_altera_valor_e_categoria(ctx, registry):
+    gasto = registry.call("expenses.add", {"amount": "10", "description": "café"}, ctx).data
+    alterado = registry.call("expenses.update", {"id": gasto["id"], "amount": "12,50",
+                                                 "category": "Alimentação"}, ctx).data
+    assert alterado["valor"] == "R$ 12,50"
+    assert alterado["category"] == "alimentação"
+    assert alterado["method"] == "debito"
+
+
+def test_alterar_sem_dizer_o_que_e_recusado(ctx, registry):
+    gasto = registry.call("expenses.add", {"amount": "10", "description": "café"}, ctx).data
+    assert "nada para alterar" in registry.call("expenses.update", {"id": gasto["id"]}, ctx).error
+
+
+def test_alterar_gasto_que_nao_existe(ctx, registry):
+    assert "não existe" in registry.call("expenses.update", {"id": 999, "method": "credito"},
+                                         ctx).error

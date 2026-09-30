@@ -321,6 +321,67 @@ def summary(ctx: ToolContext, periodo: str = "mes", category: str | None = None)
 
 
 @registry.register(
+    name="expenses.update",
+    description=(
+        "Corrige um gasto já lançado: débito virou crédito, valor errado, "
+        "categoria trocada. Passe só o que muda."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "id": {"type": "integer"},
+            "method": {"type": "string", "enum": list(FORMAS)},
+            "amount": {"type": "string", "description": "Novo valor, como a pessoa falou."},
+            "description": {"type": "string"},
+            "category": {"type": "string"},
+            "when": {"type": "string", "description": "ISO 8601."},
+        },
+        "required": ["id"],
+    },
+)
+def update(ctx: ToolContext, id: int, method: str | None = None, amount: str | None = None,
+           description: str | None = None, category: str | None = None,
+           when: str | None = None) -> dict:
+    row = ctx.conn.execute(
+        "SELECT private FROM expenses WHERE id = ? AND deleted_at IS NULL", (id,)
+    ).fetchone()
+    if row is None:
+        raise ValueError(f"gasto {id} não existe")
+    if row["private"] and not ctx.ver_privado:
+        raise ValueError(f"gasto {id} é privado; ele não sai desta máquina")
+
+    sets, params = [], []
+    if method is not None:
+        sets.append("method = ?")
+        params.append(normalizar_forma(method))
+    if amount is not None:
+        sets.append("cents = ?")
+        params.append(parse_valor(amount))
+    if description is not None:
+        if not description.strip():
+            raise ValueError("todo gasto precisa de uma descrição")
+        sets.append("description = ?")
+        params.append(description.strip())
+    if category is not None:
+        sets.append("category = ?")
+        params.append(category.strip().lower() or None)
+    if when is not None:
+        try:
+            quando = datetime.fromisoformat(when).isoformat(timespec="minutes")
+        except ValueError as exc:
+            raise ValueError(f"when precisa ser ISO 8601. Recebido: {when!r}") from exc
+        sets.append("spent_at = ?")
+        params.append(quando)
+
+    if not sets:
+        raise ValueError("nada para alterar")
+
+    ctx.conn.execute(f"UPDATE expenses SET {', '.join(sets)} WHERE id = ?", (*params, id))
+    return _linha(ctx.conn.execute(
+        f"SELECT {CAMPOS} FROM expenses WHERE id = ?", (id,)).fetchone())
+
+
+@registry.register(
     name="expenses.delete",
     description="Apaga um gasto lançado por engano.",
     parameters={"type": "object", "properties": {"id": {"type": "integer"}},
