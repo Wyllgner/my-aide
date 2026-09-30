@@ -39,6 +39,7 @@ FRASES = {
     "expenses.add": ("anotando o gasto", "anotei o gasto"),
     "expenses.list": ("vendo seus lançamentos", "vi seus lançamentos"),
     "expenses.summary": ("somando seus gastos do mês", "somei seus gastos do mês"),
+    "expenses.budgets": ("vendo seus tetos de gasto", "vi seus tetos de gasto"),
     "expenses.update": ("corrigindo o gasto", "corrigi o gasto"),
     "expenses.delete": ("apagando o gasto", "apaguei o gasto"),
     "events.list": ("vendo seus compromissos", "vi seus compromissos"),

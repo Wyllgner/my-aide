@@ -280,3 +280,21 @@ def test_alterar_sem_dizer_o_que_e_recusado(ctx, registry):
 def test_alterar_gasto_que_nao_existe(ctx, registry):
     assert "não existe" in registry.call("expenses.update", {"id": 999, "method": "credito"},
                                          ctx).error
+
+
+# ---------- tetos ----------
+
+def test_tetos_mostram_o_que_sobra(ctx, registry):
+    object.__setattr__(ctx.config.gastos, "tetos_centavos", {"uber": 5000})
+    registry.call("expenses.add", {"amount": "20", "description": "corrida",
+                                   "category": "uber"}, ctx)
+    tetos = registry.call("expenses.budgets", {}, ctx).data["tetos"]
+    assert tetos == [{"categoria": "uber", "teto": "R$ 50,00", "gasto": "R$ 20,00",
+                      "sobra": "R$ 30,00", "usado": "40%"}]
+
+
+def test_sem_teto_diz_onde_declarar(ctx, registry):
+    object.__setattr__(ctx.config.gastos, "tetos_centavos", {})
+    resposta = registry.call("expenses.budgets", {}, ctx).data
+    assert resposta["tetos"] == []
+    assert "gastos.tetos" in resposta["aviso"]

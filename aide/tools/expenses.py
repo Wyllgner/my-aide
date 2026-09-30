@@ -321,6 +321,32 @@ def summary(ctx: ToolContext, periodo: str = "mes", category: str | None = None)
 
 
 @registry.register(
+    name="expenses.budgets",
+    description=(
+        "Os tetos de gasto por categoria que a pessoa declarou, com quanto já foi "
+        "usado no mês e quanto sobra. É a tool para 'quais meus limites', 'quanto "
+        "posso gastar de uber', 'estourei algum teto'."
+    ),
+    parameters={"type": "object", "properties": {}, "required": []},
+)
+def budgets(ctx: ToolContext) -> dict:
+    # a mesma conta da página e da cobrança: as três precisam dizer o mesmo
+    # número. Sem esta tool o modelo só via o gasto, e respondia "você não
+    # definiu limites" com os tetos declarados no config.
+    from aide.web.consultas import tetos_do_mes
+
+    linhas = tetos_do_mes(ctx.conn, ctx.config, now_in(ctx.config.timezone))
+    if not linhas:
+        return {"tetos": [], "aviso": "nenhum teto declarado em gastos.tetos no config"}
+    return {"tetos": [
+        {"categoria": linha["categoria"], "teto": formatar(linha["teto"]),
+         "gasto": formatar(linha["gasto"]), "sobra": formatar(linha["teto"] - linha["gasto"]),
+         "usado": f'{linha["gasto"] / linha["teto"] * 100:.0f}%' if linha["teto"] else "—"}
+        for linha in linhas
+    ]}
+
+
+@registry.register(
     name="expenses.update",
     description=(
         "Corrige um gasto já lançado: débito virou crédito, valor errado, "
