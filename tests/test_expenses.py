@@ -220,3 +220,36 @@ def test_a_moeda_dita_nao_vira_parte_da_descricao(texto, esperado):
 def test_valor_sozinho_pede_a_descricao():
     with pytest.raises(ValueError, match="faltou dizer o que foi"):
         parse_lancamento("10 reais")
+
+
+# ---------- débito ou crédito ----------
+
+def test_sem_dizer_a_forma_e_debito(ctx, registry):
+    gasto = registry.call("expenses.add", {"amount": "10", "description": "café"}, ctx).data
+    assert gasto["method"] == "debito"
+
+
+@pytest.mark.parametrize("dito,forma", [
+    ("crédito", "credito"), ("Credito", "credito"), ("débito", "debito"),
+    ("pix", "debito"), ("dinheiro", "debito"),
+])
+def test_entende_a_forma_como_foi_dita(ctx, registry, dito, forma):
+    gasto = registry.call("expenses.add", {"amount": "10", "description": "x",
+                                           "method": dito}, ctx).data
+    assert gasto["method"] == forma
+
+
+def test_forma_desconhecida_e_recusada(ctx, registry):
+    erro = registry.call("expenses.add", {"amount": "10", "description": "x",
+                                          "method": "cheque"}, ctx)
+    assert not erro.ok
+    assert "débito ou crédito" in erro.error
+
+
+def test_resumo_separa_debito_de_credito(ctx, registry):
+    registry.call("expenses.add", {"amount": "100", "description": "a",
+                                   "method": "credito"}, ctx)
+    registry.call("expenses.add", {"amount": "30", "description": "b"}, ctx)
+    formas = {f["method"]: f["cents"] for f in
+              registry.call("expenses.summary", {"periodo": "hoje"}, ctx).data["por_forma"]}
+    assert formas == {"debito": 3000, "credito": 10000}
