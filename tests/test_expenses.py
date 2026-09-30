@@ -297,4 +297,42 @@ def test_sem_teto_diz_onde_declarar(ctx, registry):
     object.__setattr__(ctx.config.gastos, "tetos_centavos", {})
     resposta = registry.call("expenses.budgets", {}, ctx).data
     assert resposta["tetos"] == []
-    assert "gastos.tetos" in resposta["aviso"]
+    assert "expenses.set_budget" in resposta["aviso"]
+
+
+def test_muda_o_teto_pela_conversa(ctx, registry):
+    object.__setattr__(ctx.config.gastos, "tetos_centavos", {"uber": 5000})
+    mudou = registry.call("expenses.set_budget", {"category": "Uber", "amount": "80"}, ctx).data
+    assert mudou == {"categoria": "uber", "antes": "R$ 50,00", "agora": "R$ 80,00"}
+    tetos = registry.call("expenses.budgets", {}, ctx).data["tetos"]
+    assert tetos[0]["teto"] == "R$ 80,00"
+
+
+def test_cria_teto_em_categoria_nova(ctx, registry):
+    object.__setattr__(ctx.config.gastos, "tetos_centavos", {})
+    registry.call("expenses.set_budget", {"category": "mercado", "amount": "300"}, ctx)
+    assert [t["categoria"] for t in
+            registry.call("expenses.budgets", {}, ctx).data["tetos"]] == ["mercado"]
+
+
+def test_tirar_o_teto_vence_o_config(ctx, registry):
+    object.__setattr__(ctx.config.gastos, "tetos_centavos", {"uber": 5000, "dates": 20000})
+    registry.call("expenses.set_budget", {"category": "dates", "remove": True}, ctx)
+    assert [t["categoria"] for t in
+            registry.call("expenses.budgets", {}, ctx).data["tetos"]] == ["uber"]
+
+
+def test_teto_zero_e_recusado(ctx, registry):
+    assert "remove" in registry.call("expenses.set_budget",
+                                     {"category": "uber", "amount": "0"}, ctx).error
+
+
+def test_teto_mudado_vale_na_cobranca(ctx, registry):
+    """A regra e a tool precisam ver o mesmo teto."""
+    from aide.scheduler.rules import orcamento_categoria
+
+    object.__setattr__(ctx.config.gastos, "tetos_centavos", {"uber": 5000})
+    registry.call("expenses.add", {"amount": "45", "description": "corrida",
+                                   "category": "uber"}, ctx)
+    registry.call("expenses.set_budget", {"category": "uber", "amount": "200"}, ctx)
+    assert orcamento_categoria(ctx.conn, now_in(ctx.config.timezone), ctx.config) == []

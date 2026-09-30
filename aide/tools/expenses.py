@@ -357,13 +357,56 @@ def budgets(ctx: ToolContext) -> dict:
 
     linhas = tetos_do_mes(ctx.conn, ctx.config, now_in(ctx.config.timezone))
     if not linhas:
-        return {"tetos": [], "aviso": "nenhum teto declarado em gastos.tetos no config"}
+        return {"tetos": [], "aviso": "nenhum teto declarado; defina com expenses.set_budget"}
     return {"tetos": [
         {"categoria": linha["categoria"], "teto": formatar(linha["teto"]),
          "gasto": formatar(linha["gasto"]), "sobra": formatar(linha["teto"] - linha["gasto"]),
          "usado": f'{linha["gasto"] / linha["teto"] * 100:.0f}%' if linha["teto"] else "—"}
         for linha in linhas
     ]}
+
+
+@registry.register(
+    name="expenses.set_budget",
+    description=(
+        "Define, muda ou tira o teto mensal de uma categoria. 'aumenta o uber pra "
+        "80', 'põe teto de 300 em mercado', 'tira o teto de dates'."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "category": {"type": "string", "description": "Minúsculo, como nos gastos."},
+            "amount": {"type": "string", "description": "Novo teto por mês, como a pessoa falou."},
+            "remove": {"type": "boolean", "description": "true para tirar o teto."},
+        },
+        "required": ["category"],
+    },
+)
+def set_budget(ctx: ToolContext, category: str, amount: str | None = None,
+               remove: bool = False) -> dict:
+    categoria = category.strip().lower()
+    if not categoria:
+        raise ValueError("diga de qual categoria é o teto")
+    antes = tetos_em_vigor(ctx.conn, ctx.config).get(categoria)
+
+    if remove:
+        if antes is None:
+            raise ValueError(f"{categoria} não tem teto")
+        cents = None
+    else:
+        if amount is None:
+            raise ValueError("diga o valor do teto, ou remove=true para tirá-lo")
+        cents = parse_valor(amount)
+        if cents == 0:
+            raise ValueError("teto zero cobraria qualquer gasto; para tirar o teto, use remove")
+
+    ctx.conn.execute(
+        "INSERT INTO expense_caps (category, cents) VALUES (?, ?)"
+        " ON CONFLICT (category) DO UPDATE SET cents = excluded.cents,"
+        " updated_at = datetime('now')", (categoria, cents))
+    return {"categoria": categoria,
+            "antes": formatar(antes) if antes is not None else "sem teto",
+            "agora": formatar(cents) if cents is not None else "sem teto"}
 
 
 @registry.register(
