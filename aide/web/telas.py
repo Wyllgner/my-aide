@@ -474,6 +474,15 @@ def _cartao_tetos(ctx, agora: datetime) -> str:
         rodape = (f'<p style="margin:12px 0 0;font-size:12px;color:var(--faint);'
                   f'line-height:1.5">sem teto: {itens}</p>')
 
+    por_tag = consultas.tags_do_mes(ctx.conn, agora)
+    abertos = [
+        f'{escape(linha["categoria"])}: ' + ", ".join(
+            f'{escape(t)} {escape(formatar(v))}' for t, v in por_tag[linha["categoria"]])
+        for linha in linhas if por_tag.get(linha["categoria"])]
+    if abertos:
+        rodape += (f'<p style="margin:8px 0 0;font-size:12px;color:var(--faint);'
+                   f'line-height:1.5">por tag — {" · ".join(abertos)}</p>')
+
     # teto mudado pela conversa vence o config: sem dizer isso, quem abrir o
     # config.local.yaml vê outro número e não sabe qual vale
     mudados = [linha for linha in linhas if linha.get("mudado_em")]
@@ -519,6 +528,10 @@ def gastos(ctx, registry, agora: datetime, periodo: str = "mes") -> str:
     categorias = [(c["category"], c["cents"] / 100) for c in dados["por_categoria"]]
     por_forma = ([(por_extenso(f["method"]), f["cents"] / 100) for f in dados["por_forma"]]
                  if dados["quantos"] else [])
+    # rótulo com a categoria: "farmácia" sozinho não diz qual teto consumiu
+    por_tag = sorted(((f'{t["tag"]} · {c["category"]}', t["cents"] / 100)
+                      for c in dados["por_categoria"] for t in c.get("tags", [])),
+                     key=lambda par: -par[1])
 
     def reais(v: float) -> str:
         return f"R$ {v:,.2f}".replace(",", "@").replace(".", ",").replace("@", ".")
@@ -527,9 +540,11 @@ def gastos(ctx, registry, agora: datetime, periodo: str = "mes") -> str:
         dia = f'{g["spent_at"][8:10]}/{g["spent_at"][5:7]}'
         etiqueta = ""
         if g["category"]:
+            onde = escape(g["category"])
+            if g.get("tag"):
+                onde += f' <span style="color:var(--faint)">· {escape(g["tag"])}</span>'
             etiqueta = (f'<span style="font-size:11px;color:var(--muted);background:#F5F6F8;'
-                        f'padding:2px 8px;border-radius:var(--r-pill)">'
-                        f'{escape(g["category"])}</span>')
+                        f'padding:2px 8px;border-radius:var(--r-pill)">{onde}</span>')
         if g["method"] == "credito":
             etiqueta += ('<span style="font-size:11px;color:var(--muted);'
                          'border:1px solid var(--line-soft);padding:1px 7px;'
@@ -580,6 +595,10 @@ def gastos(ctx, registry, agora: datetime, periodo: str = "mes") -> str:
                            formatar=reais)
            + '<p style="margin:10px 0 0;font-size:12px;color:var(--faint);line-height:1.5">'
              'o que não foi dito é débito; no Telegram, "o #12 foi no crédito" corrige</p>')}
+  {_cartao("Por tag",
+           graficos.barras(por_tag, rotulo_px=150, formatar=reais,
+                           vazio='nenhuma tag ainda; no Telegram, '
+                                 '"cria a tag farmácia em pessoal"'))}
   </div>
   <div class="card">
     <div style="padding:15px 18px 11px"><span class="eyebrow">Lançamentos</span></div>

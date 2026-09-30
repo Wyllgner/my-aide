@@ -1055,3 +1055,18 @@ def test_painel_diz_quanto_foi_no_credito(cliente, app, registry):
     registry.call("expenses.add", {"amount": "300", "description": "tênis",
                                    "method": "credito"}, ctx)
     assert "R$ 300,00 no crédito" in cliente.get("/").text
+
+
+def test_gastos_mostra_a_tag_e_de_onde_saiu_o_teto(cliente, app, registry, com_tetos):
+    ctx = app.state.contexto()
+    registry.call("expenses.add_tag", {"tag": "pipoca", "category": "cinema"}, ctx)
+    registry.call("expenses.add", {"amount": "12", "description": "combo",
+                                   "tag": "pipoca"}, ctx)
+    html = cliente.get("/gastos").text
+    assert "Por tag" in html
+    assert "pipoca · cinema" in html                    # o gráfico diz qual teto
+    assert "por tag — cinema: pipoca R$ 12,00" in html  # e o cartão de tetos também
+
+
+def test_sem_tag_o_cartao_ensina_a_criar(cliente):
+    assert "cria a tag farmácia em pessoal" in cliente.get("/gastos").text

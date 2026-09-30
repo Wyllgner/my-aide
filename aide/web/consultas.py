@@ -283,6 +283,23 @@ def tetos_do_mes(conn, config, agora: datetime) -> list[dict]:
             for categoria, teto in sorted(tetos.items(), key=lambda kv: -kv[1])]
 
 
+def tags_do_mes(conn, agora: datetime) -> dict[str, list[tuple[str, int]]]:
+    """Categoria -> [(tag, centavos)] do mês corrente, da maior para a menor.
+
+    Mês corrente como os tetos, porque é ao lado deles que aparece: é o que diz
+    de onde saiu o que já foi consumido de cada teto.
+    """
+    inicio = agora.replace(day=1, hour=0, minute=0).isoformat(timespec="minutes")
+    fim = agora.isoformat(timespec="minutes")
+    grupos: dict[str, list[tuple[str, int]]] = {}
+    for r in conn.execute(
+            "SELECT lower(category) categoria, tag, SUM(cents) total FROM expenses"
+            " WHERE deleted_at IS NULL AND tag IS NOT NULL AND spent_at BETWEEN ? AND ?"
+            " GROUP BY lower(category), tag ORDER BY total DESC", (inicio, fim)).fetchall():
+        grupos.setdefault(r["categoria"] or "", []).append((r["tag"], r["total"]))
+    return grupos
+
+
 def notas_na_lixeira(vault_dir) -> int:
     """Quantos arquivos estão na lixeira do vault.
 
