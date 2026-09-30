@@ -254,6 +254,20 @@ def test_corrige_gasto_troca_para_credito(run):
     assert "crédito R$ 10,50" in run("quanto", "mes").output
 
 
+def test_tag_cadastrada_lanca_na_categoria_dela(run):
+    assert "farmácia → pessoal" in run("tag", "farmácia", "pessoal").output
+    assert "pessoal · farmácia" in run("gasto", "10 remédio", "-t", "farmacia").output
+    saida = run("quanto", "mes").output
+    assert "pessoal" in saida and "└ farmácia" in saida
+
+
+def test_tag_sem_argumento_lista(run):
+    run("tag", "farmácia", "pessoal")
+    assert "farmácia" in run("tag").output
+    run("tag", "farmácia", "--remover")
+    assert "Nenhuma tag" in run("tag").output
+
+
 def test_corrige_gasto_sem_nada_explica(run):
     run("gasto", "10,50 almoço")
     resultado = run("corrige-gasto", "1")
