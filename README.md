@@ -110,6 +110,8 @@ que significa que criar um lembrete não custa chamada de API e funciona offline
 myaide gasto "10,50 almoço com a KA"    # valor na frente, o resto é descrição
 myaide gasto "187,90 mercado" -c mercado
 myaide gasto "300 tênis" --credito      # sem dizer, é débito
+myaide gasto "2000 tv" -x 10            # parcelado: 10 parcelas de 200, uma por mês
+myaide gasto "50 curso" -x 6 --valor-da-parcela   # 6x de 50
 myaide corrige-gasto 12 --credito       # ou --debito, --valor, -c, -d, -q
 myaide tag farmácia pessoal             # farmácia passa a consumir o teto de pessoal
 myaide gasto "10 remédio" -t farmacia   # vai para pessoal, com a tag farmácia
@@ -141,6 +143,11 @@ em pessoal" e "10 em farmácia" vai para `pessoal` com a tag `farmácia`: consom
 teto de pessoal, e a página de gastos mostra quanto de cada teto saiu de cada
 tag. A categoria de uma tag cadastrada é decidida pelo cadastro, não pelo modelo,
 então um erro de dedução não fura o teto.
+
+**Parcelas**: "comprei uma TV de 2000 em 10x" vira dez lançamentos de R$ 200, um
+por mês, e cada um consome o teto do mês em que cai. "10x de 200" dá no mesmo.
+Se você disser que parcelou sem dizer em quantas vezes, ele pergunta antes de
+lançar. Parcelado sem forma dita é crédito, e apagar uma parcela apaga a compra.
 
 Pelo Telegram dá para ver e mudar sem abrir o arquivo: "quais meus limites",
 "aumenta o uber pra 80", "tira o teto de dates". O que muda pela conversa fica
