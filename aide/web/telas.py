@@ -596,7 +596,11 @@ def _cartao_busca(ctx, agora: datetime, periodo: str, de: str, ate: str,
         # o dia inteiro, de 00:00 até o fim
         return f[chave] + ("T99" if fim else "")
 
-    inicio, fim = dia("de", False) or de, dia("ate", True) or ate
+    # "tudo" na busca vai até a última parcela marcada: o período da página
+    # para hoje, e as parcelas dos meses que vêm ficariam de fora justo quando
+    # se procura por "parcelado"
+    inicio = dia("de", False) or de
+    fim = dia("ate", True) or ("9999" if periodo == "sempre" else ate)
     achados = consultas.buscar_gastos(
         ctx.conn, de=inicio, ate=fim, ver_privado=ctx.ver_privado, texto=f["q"],
         categoria=f["categoria"], tag=f["tag"], forma=f["forma"], tipo=f["tipo"],
@@ -644,7 +648,8 @@ def _cartao_busca(ctx, agora: datetime, periodo: str, de: str, ate: str,
            f'color:var(--muted)">limpar</a>' if filtrando else "")
         + '</div></form>')
 
-    recorte = ("período escolhido acima" if not (f["de"] or f["ate"])
+    recorte = ("tudo, com as parcelas futuras" if periodo == "sempre" and not (f["de"] or f["ate"])
+               else "período escolhido acima" if not (f["de"] or f["ate"])
                else f'{f["de"] or "início"} a {f["ate"] or "hoje"}')
     resumo = (f'{formato.plural(achados["quantos"], "lançamento")} · '
               f'{formatar(achados["total"])} · débito {formatar(achados["debito"])}'

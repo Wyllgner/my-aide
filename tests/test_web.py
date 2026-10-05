@@ -1214,3 +1214,10 @@ def test_busca_sem_resultado_diz_que_e_o_filtro(cliente, com_gastos_variados):
     busca = _achados(cliente.get("/gastos?q=inexistente").text)
     assert "Nenhum gasto com esses filtros." in busca
     assert "limpar" in busca
+
+
+def test_tudo_inclui_as_parcelas_dos_meses_que_vem(cliente, com_gastos_variados):
+    busca = _achados(cliente.get("/gastos?periodo=sempre&tipo=parcelado").text)
+    assert "1/3" in busca and "2/3" in busca and "3/3" in busca
+    busca = _achados(cliente.get("/gastos?periodo=mes&tipo=parcelado").text)
+    assert "1/3" in busca and "2/3" not in busca
