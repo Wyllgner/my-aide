@@ -25,7 +25,10 @@ TRILHO = "#F0F1F4"
 # leva legenda com o valor escrito: a cor nunca carrega o número sozinha.
 SERIES = ("#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#4a3aa7")
 DEBITO, CREDITO = SERIES[0], SERIES[1]
-RESTO = "#C9CDD4"   # "sem tag" e "outras": o que não tem identidade própria
+RESTO = "#C9CDD4"   # "sem tag": o que não tem identidade própria
+# "outras": tags reais que passaram das cores. Cinza também, porque não é cor
+# gerada, mas mais escuro, para não se confundir com o que não tem tag nenhuma.
+OUTRAS = "#7D838E"
 
 _seq = [0]
 

@@ -1086,6 +1086,27 @@ def test_categoria_aberta_por_tag_com_legenda(cliente, app, registry):
     assert "R$ 15,00" in html                         # e a barra, o total
 
 
+def test_tag_nunca_tem_a_cor_do_sem_tag(cliente, app, registry):
+    """Oito tags num mês: com uma paleta só, as duas últimas do alfabeto saíam
+    no cinza do "sem tag". Cada categoria tem as próprias cores."""
+    from aide.web import graficos
+
+    ctx = app.state.contexto()
+    for categoria, tags in (("pessoal", "claude compra farmácia presente viagem"),
+                            ("alimentação", "casal pessoal trabalho")):
+        for tag in tags.split():
+            registry.call("expenses.add", {"amount": "10", "description": tag,
+                                           "category": categoria, "tag": tag}, ctx)
+    registry.call("expenses.add", {"amount": "5", "description": "y",
+                                   "category": "casa"}, ctx)
+    html = cliente.get("/gastos").text
+    for tag in ("trabalho", "viagem"):
+        trecho = html.split(f'title="{tag}: R$ 10,00"')[1][:120]
+        assert graficos.RESTO not in trecho and graficos.OUTRAS not in trecho
+    assert 'title="sem tag: R$ 5,00" style="width:' in html
+    assert graficos.RESTO in html.split('title="sem tag: R$ 5,00"')[1][:120]
+
+
 def test_por_dia_separa_debito_de_credito_no_mouse(cliente, app, registry):
     ctx = app.state.contexto()
     registry.call("expenses.add", {"amount": "10", "description": "a"}, ctx)
