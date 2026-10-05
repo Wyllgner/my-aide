@@ -526,8 +526,6 @@ def gastos(ctx, registry, agora: datetime, periodo: str = "mes") -> str:
 
     por_dia = consultas.gastos_por_dia(ctx.conn, de, ate, agora.tzinfo)
     # séries longas em barra diária viram cerca; acima de 40 dias só o acumulado
-    diario = graficos.colunas([(r, v / 100) for r, v in por_dia], 1260, 76,
-                              vazio="nenhum gasto neste período") if len(por_dia) <= 40 else ""
     acum = graficos.area([(r, v / 100) for r, v in consultas.acumulado(por_dia)], 300, 62,
                          vazio="nada lançado ainda")
 
@@ -542,6 +540,36 @@ def gastos(ctx, registry, agora: datetime, periodo: str = "mes") -> str:
 
     def reais(v: float) -> str:
         return f"R$ {v:,.2f}".replace(",", "@").replace(".", ",").replace("@", ".")
+
+    # por dia, débito embaixo e crédito em cima
+    dia_forma = consultas.gastos_por_dia_e_forma(ctx.conn, de, ate, agora.tzinfo)
+    deb_total = sum(d for _, d, _ in dia_forma)
+    cred_total = sum(c for _, _, c in dia_forma)
+    diario = "" if len(dia_forma) > 40 else (
+        graficos.colunas_empilhadas(
+            [r for r, _, _ in dia_forma],
+            [("débito", graficos.DEBITO, [d / 100 for _, d, _ in dia_forma]),
+             ("crédito", graficos.CREDITO, [c / 100 for _, _, c in dia_forma])],
+            1260, 96, vazio="nenhum gasto neste período", formatar=reais)
+        + graficos.legenda([("débito", graficos.DEBITO, formatar(deb_total)),
+                            ("crédito", graficos.CREDITO, formatar(cred_total))]))
+
+    # últimos meses: a régua do "este mês está fora do normal?"
+    mensal = consultas.gastos_por_mes(ctx.conn, agora, 6)
+    meses_com_gasto = [d + c for _, d, c in mensal if d + c]
+    media_mensal = sum(meses_com_gasto) / len(meses_com_gasto) if meses_com_gasto else 0
+    historico = (
+        graficos.colunas_empilhadas(
+            [r for r, _, _ in mensal],
+            [("débito", graficos.DEBITO, [d / 100 for _, d, _ in mensal]),
+             ("crédito", graficos.CREDITO, [c / 100 for _, _, c in mensal])],
+            600, 110, vazio="nenhum mês com gasto ainda", formatar=reais)
+        + graficos.legenda([("débito", graficos.DEBITO,
+                             formatar(sum(d for _, d, _ in mensal))),
+                            ("crédito", graficos.CREDITO,
+                             formatar(sum(c for _, _, c in mensal)))])
+        + (f'<p style="margin:8px 0 0;font-size:12px;color:var(--faint)">média dos meses '
+           f'com gasto: {escape(formatar(round(media_mensal)))}</p>' if media_mensal else ""))
 
     def _linha_gasto(g: dict) -> str:
         dia = f'{g["spent_at"][8:10]}/{g["spent_at"][5:7]}'
@@ -589,7 +617,10 @@ def gastos(ctx, registry, agora: datetime, periodo: str = "mes") -> str:
 {tetos}
 
 {f'<div class="card" style="padding:16px 20px;margin-top:16px">'
- f'<p class="eyebrow" style="margin-bottom:8px">Por dia</p>{diario}</div>' if diario else ''}
+ f'<p class="eyebrow" style="margin-bottom:8px">Por dia, débito e crédito</p>{diario}</div>'
+ if diario else ''}
+
+{_cartao("Últimos 6 meses", historico, "margin-top:16px")}
 
 <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);
             gap:16px;margin-top:16px;align-items:start">

@@ -435,7 +435,9 @@ def test_o_periodo_e_escrito_por_extenso(cliente):
 def test_gastos_vazio_mantem_os_graficos(cliente):
     """Decisão do dono: a moldura fica para não mudar de forma quando encher."""
     html = cliente.get("/gastos").text
-    assert "Por categoria" in html
+    for moldura in ("Por categoria", "Por dia, débito e crédito", "Últimos 6 meses",
+                    "Débito e crédito", "Por tag"):
+        assert moldura in html, moldura
     assert "R$ 0,00" in html
     assert "Nenhum gasto neste período" in html
 
@@ -1072,5 +1074,29 @@ def test_sem_tag_o_cartao_ensina_a_criar(cliente):
     assert "cria a tag farmácia em pessoal" in cliente.get("/gastos").text
 
 
+def test_por_dia_separa_debito_de_credito_no_mouse(cliente, app, registry):
+    ctx = app.state.contexto()
+    registry.call("expenses.add", {"amount": "10", "description": "a"}, ctx)
+    registry.call("expenses.add", {"amount": "30", "description": "b",
+                                   "method": "credito"}, ctx)
+    html = cliente.get("/gastos").text
+    assert "débito R$ 10,00 · crédito R$ 30,00 · total R$ 40,00" in html
+
+
+def test_historico_tem_seis_meses(cliente):
+    html = cliente.get("/gastos").text
+    assert "Últimos 6 meses" in html
+
+
 def test_tetos_mostram_o_ritmo_do_mes(cliente, com_tetos):
     assert "o traço escuro é o ritmo do mês" in cliente.get("/gastos").text
+
+
+def test_gastos_por_mes_volta_seis_meses_com_o_atual_por_ultimo(ctx):
+    from datetime import datetime
+
+    from aide.web import consultas
+
+    agora = datetime(2026, 2, 10)
+    meses = consultas.gastos_por_mes(ctx.conn, agora, 6)
+    assert [m for m, _, _ in meses] == ["set", "out", "nov", "dez", "jan", "fev"]

@@ -19,6 +19,13 @@ TINTA = "#15171C"
 FRACO = "#9CA2AD"
 TRILHO = "#F0F1F4"
 
+# Séries com identidade (débito e crédito, as tags). Ordem fixa, validada para
+# daltonismo contra a superfície clara; a cor segue a entidade, nunca a posição.
+# Três delas têm contraste baixo com o fundo, por isso todo gráfico que as usa
+# leva legenda com o valor escrito: a cor nunca carrega o número sozinha.
+SERIES = ("#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#4a3aa7")
+DEBITO, CREDITO = SERIES[0], SERIES[1]
+
 _seq = [0]
 
 
@@ -212,3 +219,64 @@ def anel(fracao: float, rotulo: str, tamanho: int = 92) -> str:
         f'transform="rotate(-90 {tamanho/2} {tamanho/2})"/>'
         f'<text x="{tamanho/2}" y="{tamanho/2 + 5}" text-anchor="middle" font-size="15" '
         f'fill="{TINTA}" font-family="IBM Plex Mono, monospace">{escape(rotulo)}</text></svg>')
+
+
+def legenda(itens: list[tuple[str, str, str]]) -> str:
+    """[(nome, cor, valor)]. Nome e valor em tinta; a cor só no quadradinho."""
+    if not itens:
+        return ""
+    partes = "".join(
+        f'<span style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap">'
+        f'<span style="width:9px;height:9px;border-radius:2px;background:{cor};'
+        f'flex-shrink:0"></span>'
+        f'<span style="color:var(--muted)">{escape(nome)}</span>'
+        f'<span class="mono" style="color:var(--ink)">{escape(valor)}</span></span>'
+        for nome, cor, valor in itens)
+    return (f'<div style="display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:10px;'
+            f'font-size:12px">{partes}</div>')
+
+
+def colunas_empilhadas(rotulos: list[str], series: list[tuple[str, str, list[float]]],
+                       largura: int = 600, altura: int = 110, vazio: str = "nada neste período",
+                       formatar=None) -> str:
+    """Colunas com partes empilhadas: [(nome, cor, valores)], a primeira embaixo.
+
+    Uma folga de 2px separa as partes, para a divisa não depender da cor. Passar
+    o mouse mostra o dia com cada parte e o total.
+    """
+    escrever = formatar or (lambda v: f"{v:g}")
+    totais = [sum(serie[2][i] for serie in series) for i in range(len(rotulos))]
+    if not rotulos or max(totais, default=0) <= 0:
+        return _sem_dado(largura, altura, vazio) + (_eixo(rotulos, 2) if rotulos else "")
+
+    maximo = max(totais)
+    n = len(rotulos)
+    vago = 3 if n > 20 else 5
+    bw = (largura - vago * (n - 1)) / n
+    util = altura - 4
+    corpo = ""
+    for i, rotulo in enumerate(rotulos):
+        x = i * (bw + vago)
+        if not totais[i]:
+            corpo += (f'<rect x="{x:.1f}" y="{altura - 2}" width="{bw:.1f}" height="2" '
+                      f'rx="1" fill="{TRILHO}"/>')
+            continue
+        base = altura
+        dica = f"{rotulo}: " + " · ".join(
+            f"{nome} {escrever(valores[i])}" for nome, _, valores in series if valores[i])
+        dica += f" · total {escrever(totais[i])}" if len([s for s in series if s[2][i]]) > 1 else ""
+        for nome, cor, valores in series:
+            v = valores[i]
+            if not v:
+                continue
+            h = max(v / maximo * util, 2)
+            y = base - h
+            corpo += (f'<rect x="{x:.1f}" y="{y:.1f}" width="{bw:.1f}" height="{h:.1f}" '
+                      f'rx="2" fill="{cor}"/>')
+            base = y - 2
+        # alvo do mouse do tamanho da coluna inteira, não da parte
+        corpo += (f'<rect x="{x:.1f}" y="0" width="{bw:.1f}" height="{altura}" '
+                  f'fill="transparent"><title>{escape(dica)}</title></rect>')
+    return (f'<svg width="100%" height="{altura}" viewBox="0 0 {largura} {altura}" '
+            f'preserveAspectRatio="none" role="img">{corpo}</svg>'
+            + _eixo(rotulos, 2 if n > 14 else 1))

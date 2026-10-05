@@ -214,6 +214,52 @@ def gastos_por_dia(conn, de: str, ate: str, tz) -> list[tuple[str, float]]:
             for i in range(max(dias, 1))]
 
 
+def gastos_por_dia_e_forma(conn, de: str, ate: str, tz) -> list[tuple[str, int, int]]:
+    """(dia, débito, crédito) em centavos. Dia sem gasto entra zerado."""
+    from datetime import datetime, timedelta
+
+    linhas: dict[str, dict[str, int]] = {}
+    for r in conn.execute(
+            "SELECT substr(spent_at, 1, 10) d, COALESCE(method, 'debito') f, SUM(cents) t"
+            " FROM expenses WHERE deleted_at IS NULL AND spent_at BETWEEN ? AND ?"
+            " GROUP BY d, f", (de, ate)).fetchall():
+        linhas.setdefault(r["d"], {})[r["f"]] = r["t"]
+
+    inicio = datetime.fromisoformat(de).astimezone(tz).date()
+    fim = datetime.fromisoformat(ate).astimezone(tz).date()
+    saida = []
+    for i in range(max((fim - inicio).days + 1, 1)):
+        dia = inicio + timedelta(days=i)
+        do_dia = linhas.get(dia.isoformat(), {})
+        saida.append((dia.strftime("%d"), do_dia.get("debito", 0), do_dia.get("credito", 0)))
+    return saida
+
+
+def gastos_por_mes(conn, agora: datetime, meses: int = 6) -> list[tuple[str, int, int]]:
+    """(mês, débito, crédito) dos últimos `meses`, o corrente incluído.
+
+    Fixo no tempo e não no período escolhido: é a régua para saber se este mês
+    está fora do normal, e ela não pode encolher quando a tela mostra "hoje".
+    """
+    abrev = ("jan", "fev", "mar", "abr", "mai", "jun",
+             "jul", "ago", "set", "out", "nov", "dez")
+    chaves = []
+    ano, mes = agora.year, agora.month
+    for _ in range(meses):
+        chaves.append(f"{ano:04d}-{mes:02d}")
+        ano, mes = (ano, mes - 1) if mes > 1 else (ano - 1, 12)
+    chaves.reverse()
+
+    linhas: dict[str, dict[str, int]] = {}
+    for r in conn.execute(
+            "SELECT substr(spent_at, 1, 7) m, COALESCE(method, 'debito') f, SUM(cents) t"
+            " FROM expenses WHERE deleted_at IS NULL AND substr(spent_at, 1, 7) >= ?"
+            " GROUP BY m, f", (chaves[0],)).fetchall():
+        linhas.setdefault(r["m"], {})[r["f"]] = r["t"]
+    return [(abrev[int(c[5:7]) - 1], linhas.get(c, {}).get("debito", 0),
+             linhas.get(c, {}).get("credito", 0)) for c in chaves]
+
+
 def acumulado(pares: list[tuple[str, float]]) -> list[tuple[str, float]]:
     """A mesma série somando — mostra o ritmo, que a barra diária esconde."""
     total = 0.0
