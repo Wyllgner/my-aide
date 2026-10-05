@@ -688,7 +688,8 @@ def update(ctx: ToolContext, id: int, method: str | None = None, amount: str | N
 
 @registry.register(
     name="expenses.delete",
-    description="Apaga um gasto lançado por engano.",
+    description=("Apaga um gasto lançado por engano. Numa compra parcelada, "
+                 "apaga todas as parcelas dela."),
     parameters={"type": "object", "properties": {"id": {"type": "integer"}},
                 "required": ["id"]},
     safety="confirm",
@@ -701,6 +702,16 @@ def delete(ctx: ToolContext, id: int) -> dict:
         raise ValueError(f"gasto {id} não existe")
     if row["private"] and not ctx.ver_privado:
         raise ValueError(f"gasto {id} é privado; ele não sai desta máquina")
+    grupo = row["installment_group"]
+    if grupo:
+        # parcela não se apaga sozinha: a compra lançada por engano é a compra
+        # inteira, e sobrar 9 de 10 parcelas é pior que não ter nenhuma
+        apagadas = ctx.conn.execute(
+            "UPDATE expenses SET deleted_at = datetime('now')"
+            " WHERE installment_group = ? AND deleted_at IS NULL", (grupo,)).rowcount
+        return {"id": id, "deleted": True, "description": row["description"],
+                "valor": formatar(row["cents"]), "category": row["category"],
+                "parcelas_apagadas": apagadas}
     ctx.conn.execute("UPDATE expenses SET deleted_at = datetime('now') WHERE id = ?", (id,))
     # devolve o que era: com {"id": 8, "deleted": true} a única coisa que o
     # modelo podia repetir de volta era o número, e "apaguei o 8" não confirma

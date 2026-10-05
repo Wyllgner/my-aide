@@ -499,3 +499,11 @@ def test_a_vista_nao_mostra_parcela(ctx, registry):
     gasto = registry.call("expenses.add", {"amount": "10", "description": "café"}, ctx)
     assert "parcela" not in gasto.data
     assert "installments" not in gasto.data
+
+
+def test_apagar_uma_parcela_apaga_a_compra(ctx, registry):
+    gasto = _parcelado(ctx, registry)
+    apagado = registry.call("expenses.delete", {"id": gasto.data["id"] + 1}, ctx)
+    assert apagado.ok
+    assert apagado.data["parcelas_apagadas"] == 3
+    assert _parcelas(ctx) == []
