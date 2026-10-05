@@ -434,3 +434,68 @@ def test_o_prompt_mostra_as_tags(ctx, registry):
 
     _tag(ctx, registry)
     assert "farmácia → pessoal" in system_prompt(ctx.config, ctx.conn).content
+
+
+# ---------- parcelas ----------
+
+def _parcelado(ctx, registry, **extra):
+    args = {"amount": "1000", "description": "tv", "installments": 3,
+            "when": "2026-01-31T10:00", **extra}
+    return registry.call("expenses.add", args, ctx)
+
+
+def _parcelas(ctx):
+    return ctx.conn.execute(
+        "SELECT cents, spent_at, installment, installments, method FROM expenses"
+        " WHERE deleted_at IS NULL ORDER BY installment").fetchall()
+
+
+def test_parcelado_lanca_uma_parcela_por_mes(ctx, registry):
+    gasto = _parcelado(ctx, registry)
+    assert gasto.ok
+    assert gasto.data["parcela"] == "1/3"
+    assert gasto.data["total"] == "R$ 1.000,00"
+    assert gasto.data["ultima_parcela"] == "03/2026"
+
+    linhas = _parcelas(ctx)
+    assert [r["cents"] for r in linhas] == [33334, 33333, 33333]
+    # 31/01 + 1 mês cai no último dia de fevereiro
+    assert [r["spent_at"][:10] for r in linhas] == ["2026-01-31", "2026-02-28", "2026-03-31"]
+    assert [r["installment"] for r in linhas] == [1, 2, 3]
+
+
+def test_valor_da_parcela_multiplica(ctx, registry):
+    gasto = _parcelado(ctx, registry, amount="50", amount_is_installment=True)
+    assert gasto.data["total"] == "R$ 150,00"
+    assert [r["cents"] for r in _parcelas(ctx)] == [5000, 5000, 5000]
+
+
+def test_parcelado_sem_forma_dita_e_credito(ctx, registry):
+    _parcelado(ctx, registry)
+    assert {r["method"] for r in _parcelas(ctx)} == {"credito"}
+
+
+def test_parcelado_sem_quantidade_pede_para_perguntar(ctx, registry):
+    gasto = registry.call("expenses.add", {
+        "amount": "1000", "description": "tv", "in_installments": True}, ctx)
+    assert not gasto.ok
+    assert "pergunte" in gasto.error
+    assert ctx.conn.execute("SELECT COUNT(*) FROM expenses").fetchone()[0] == 0
+
+
+def test_quantidade_absurda_e_recusada(ctx, registry):
+    assert not _parcelado(ctx, registry, installments=0).ok
+    assert not _parcelado(ctx, registry, installments=500).ok
+
+
+def test_so_a_parcela_do_mes_conta_no_mes(ctx, registry):
+    registry.call("expenses.add", {"amount": "300", "description": "tv",
+                                   "installments": 3}, ctx)
+    # as outras duas caem nos meses seguintes
+    assert registry.call("expenses.summary", {"periodo": "mes"}, ctx).data["total_cents"] == 10000
+
+
+def test_a_vista_nao_mostra_parcela(ctx, registry):
+    gasto = registry.call("expenses.add", {"amount": "10", "description": "café"}, ctx)
+    assert "parcela" not in gasto.data
+    assert "installments" not in gasto.data

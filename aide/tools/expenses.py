@@ -10,6 +10,7 @@ O valor mora em centavos inteiros. Ver a migration 006.
 
 from __future__ import annotations
 
+import calendar
 import re
 import unicodedata
 from datetime import datetime, timedelta
@@ -17,7 +18,8 @@ from datetime import datetime, timedelta
 from aide.core.context import now_in
 from aide.tools.registry import ToolContext, registry
 
-CAMPOS = "id, cents, description, category, tag, spent_at, method"
+CAMPOS = ("id, cents, description, category, tag, spent_at, method,"
+          " installment_group, installment, installments")
 
 # "10,50 almoço com a KA" — valor na frente, resto é descrição.
 _LANCAMENTO = re.compile(r"^\s*(?:R\$\s*)?([\d.,]+)\s+(.*\S)\s*$", re.IGNORECASE)
@@ -139,6 +141,37 @@ def por_extenso(forma: str | None) -> str:
     return "crédito" if forma == "credito" else "débito"
 
 
+# ---------- parcelas ----------
+
+# Nenhuma loja parcela em mais que isso; um número maior é engano de digitação
+# ou de leitura, e lançaria anos de parcelas de uma vez.
+MAX_PARCELAS = 48
+
+
+def somar_meses(quando: datetime, meses: int) -> datetime:
+    """31/01 + 1 mês = 28/02 (ou 29): a parcela cai no último dia do mês curto."""
+    total = quando.month - 1 + meses
+    ano, mes = quando.year + total // 12, total % 12 + 1
+    dia = min(quando.day, calendar.monthrange(ano, mes)[1])
+    return quando.replace(year=ano, month=mes, day=dia)
+
+
+def dividir(cents: int, parcelas: int) -> list[int]:
+    """1000 em 3 -> [334, 333, 333]. A sobra vai na primeira, como na fatura."""
+    base, sobra = divmod(cents, parcelas)
+    return [base + sobra] + [base] * (parcelas - 1)
+
+
+def _parcelas(installments) -> int:
+    try:
+        n = int(installments)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"quantidade de parcelas {installments!r} não é um número") from exc
+    if n < 1 or n > MAX_PARCELAS:
+        raise ValueError(f"parcelas vai de 1 a {MAX_PARCELAS}; recebido {n}")
+    return n
+
+
 # ---------- tetos ----------
 
 
@@ -233,6 +266,11 @@ def _linha(r) -> dict:
     dados = dict(r)
     dados["valor"] = formatar(dados["cents"])
     dados["method"] = dados["method"] or "debito"
+    if dados.get("installments"):
+        dados["parcela"] = f'{dados["installment"]}/{dados["installments"]}'
+    else:
+        for chave in ("installment_group", "installment", "installments"):
+            dados.pop(chave, None)
     return dados
 
 
@@ -248,7 +286,10 @@ def _filtro_privado(ctx: ToolContext) -> str:
     description=(
         "Registra um gasto. Use sempre que a pessoa mencionar que gastou, "
         "pagou ou comprou algo com um valor — 'almocei 32 reais', "
-        "'gastei 150 no mercado', '10,50 café'. Não crie tarefa para isso."
+        "'gastei 150 no mercado', '10,50 café'. Não crie tarefa para isso. "
+        "Compra parcelada vira uma parcela por mês, cada uma no mês em que cai. "
+        "Se a pessoa disse que parcelou mas não disse em quantas vezes, não "
+        "chame ainda: pergunte em quantas parcelas foi."
     ),
     parameters={
         "type": "object",
@@ -278,32 +319,75 @@ def _filtro_privado(ctx: ToolContext) -> str:
                 "description": "debito ou credito. Se a pessoa não disse, deixe de fora: vira debito.",
             },
             "private": {"type": "boolean", "description": "Não sai desta máquina."},
+            "in_installments": {
+                "type": "boolean",
+                "description": "true quando a pessoa disse que foi parcelado, mesmo sem dizer em quantas vezes.",
+            },
+            "installments": {
+                "type": "integer",
+                "description": "Em quantas parcelas: '10x' -> 10. Só o que a pessoa disse; nunca chute.",
+            },
+            "amount_is_installment": {
+                "type": "boolean",
+                "description": (
+                    "true quando o valor dito é o de cada parcela ('10x de 50'); "
+                    "false ou ausente quando é o total da compra ('500 em 10x')."
+                ),
+            },
         },
         "required": ["amount", "description"],
     },
 )
 def add(ctx: ToolContext, amount: str, description: str, category: str | None = None,
         when: str | None = None, method: str | None = None, private: bool = False,
-        tag: str | None = None) -> dict:
+        tag: str | None = None, in_installments: bool = False,
+        installments: int | None = None, amount_is_installment: bool = False) -> dict:
     cents = parse_valor(amount)
     if not description.strip():
         raise ValueError("todo gasto precisa de uma descrição")
 
     quando = when or now_in(ctx.config.timezone).isoformat(timespec="minutes")
     try:
-        quando = datetime.fromisoformat(quando).isoformat(timespec="minutes")
+        inicio = datetime.fromisoformat(quando)
     except ValueError as exc:
         raise ValueError(f"when precisa ser ISO 8601. Recebido: {when!r}") from exc
 
+    if installments is None and (in_installments or amount_is_installment):
+        # lançar à vista o que foi parcelado poria a compra inteira num mês só;
+        # o erro volta para o modelo, que pergunta em vez de chutar
+        raise ValueError("foi parcelado, mas não sei em quantas vezes; "
+                         "pergunte à pessoa em quantas parcelas foi antes de lançar")
+    parcelas = _parcelas(installments) if installments is not None else 1
+
     categoria, etiqueta = resolver_categoria(ctx.conn, category, tag)
-    cur = ctx.conn.execute(
-        "INSERT INTO expenses (cents, description, category, tag, spent_at, method, private)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (cents, description.strip(), categoria, etiqueta,
-         quando, normalizar_forma(method), int(private)),
-    )
-    return _linha(ctx.conn.execute(
-        f"SELECT {CAMPOS} FROM expenses WHERE id = ?", (cur.lastrowid,)).fetchone())
+    # parcelado sem forma dita é crédito: débito não parcela
+    forma = normalizar_forma(method if method or parcelas == 1 else "credito")
+    valores = [cents] * parcelas if amount_is_installment else dividir(cents, parcelas)
+
+    ids = []
+    for n, valor in enumerate(valores, start=1):
+        cur = ctx.conn.execute(
+            "INSERT INTO expenses (cents, description, category, tag, spent_at, method,"
+            " private, installment_group, installment, installments)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (valor, description.strip(), categoria, etiqueta,
+             somar_meses(inicio, n - 1).isoformat(timespec="minutes"), forma, int(private),
+             ids[0] if ids else None, n if parcelas > 1 else None,
+             parcelas if parcelas > 1 else None),
+        )
+        ids.append(cur.lastrowid)
+    if parcelas > 1:
+        # a primeira não sabia o próprio id antes de existir
+        ctx.conn.execute("UPDATE expenses SET installment_group = ? WHERE id = ?",
+                         (ids[0], ids[0]))
+
+    primeira = _linha(ctx.conn.execute(
+        f"SELECT {CAMPOS} FROM expenses WHERE id = ?", (ids[0],)).fetchone())
+    if parcelas > 1:
+        total = sum(valores)
+        primeira["total"] = formatar(total)
+        primeira["ultima_parcela"] = somar_meses(inicio, parcelas - 1).strftime("%m/%Y")
+    return primeira
 
 
 @registry.register(
