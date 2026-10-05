@@ -459,11 +459,16 @@ def _cartao_tetos(ctx, agora: datetime) -> str:
         {"rotulo": linha["categoria"],
          "valor": linha["gasto"],
          "meta": linha["teto"],
-         "texto": f'{formatar(linha["gasto"])} / {formatar(linha["teto"])}'}
+         "texto": f'{formatar(linha["gasto"])} / {formatar(linha["teto"])}',
+         # o que falta para o teto, ou quanto passou dele: a conta que a
+         # barra só sugere
+         "diferenca": (f'passou {formatar(linha["gasto"] - linha["teto"])}', True)
+         if linha["gasto"] > linha["teto"]
+         else (f'sobram {formatar(linha["teto"] - linha["gasto"])}', False)}
         for linha in linhas
     ] + [
         {"rotulo": categoria, "valor": valor, "meta": None,
-         "texto": f'{formatar(valor)} · sem teto'}
+         "texto": f'{formatar(valor)} · sem teto', "diferenca": None}
         for categoria, valor in fora
     ], ritmo=ritmo) + (
         f'<p style="margin:8px 0 0;font-size:12px;color:var(--faint)">'

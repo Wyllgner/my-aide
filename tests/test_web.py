@@ -1221,3 +1221,13 @@ def test_tudo_inclui_as_parcelas_dos_meses_que_vem(cliente, com_gastos_variados)
     assert "1/3" in busca and "2/3" in busca and "3/3" in busca
     busca = _achados(cliente.get("/gastos?periodo=mes&tipo=parcelado").text)
     assert "1/3" in busca and "2/3" not in busca
+
+
+def test_teto_mostra_quanto_sobra_ou_quanto_passou(cliente, app, registry, com_tetos):
+    ctx = app.state.contexto()
+    registry.call("expenses.add", {"amount": "12", "description": "x", "category": "cinema"}, ctx)
+    registry.call("expenses.add", {"amount": "20", "description": "y",
+                                   "category": "barbearia"}, ctx)
+    html = cliente.get("/gastos").text
+    assert "sobram R$ 30,00" in html                  # cinema: 12 de 42
+    assert "passou R$ 3,00" in html                   # barbearia: 20 de 17

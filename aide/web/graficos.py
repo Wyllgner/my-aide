@@ -171,7 +171,8 @@ def medidores(linhas: list[dict], rotulo_px: int = 104,
     o traço marca 100% e o que passa do teto aparece em cor distinta — com o
     número ao lado, porque cor sozinha não carrega dado.
 
-    Cada linha: {rotulo, valor, meta, texto}. Linha com `meta` None não tem
+    Cada linha: {rotulo, valor, meta, texto}, e `diferenca` opcional:
+    (texto, passou) numa coluna à direita, ou None para deixá-la vazia. Linha com `meta` None não tem
     teto: a barra sai neutra, sem traço de 100% nem de ritmo, medida contra a
     maior das linhas sem teto — só diz o tamanho, não se é muito.
     """
@@ -210,7 +211,7 @@ def medidores(linhas: list[dict], rotulo_px: int = 104,
             f'background:{TINTA};opacity:.16"></span>{marca_ritmo}</div>'
             f'<span class="mono" style="white-space:nowrap;text-align:right;font-size:12.5px;'
             f'color:{cor if fracao >= 0.8 else "var(--ink)"}">'
-            f'{escape(linha["texto"])}</span></div>')
+            f'{escape(linha["texto"])}</span>{_diferenca(linha)}</div>')
     return f'<div style="display:flex;flex-direction:column;gap:7px">{html}</div>'
 
 
@@ -224,7 +225,18 @@ def _barra_sem_meta(linha: dict, fracao: float, rotulo_px: int) -> str:
         f'<div style="width:{min(fracao, 1.0) * 100:.1f}%;height:100%;background:{RESTO};'
         f'border-radius:5px"></div></div>'
         f'<span class="mono" style="white-space:nowrap;text-align:right;font-size:12.5px;'
-        f'color:var(--muted)">{escape(linha["texto"])}</span></div>')
+        f'color:var(--muted)">{escape(linha["texto"])}</span>{_diferenca(linha)}</div>')
+
+
+def _diferenca(linha: dict) -> str:
+    """A coluna de quanto sobra ou passou do teto. Largura fixa, e vazia na linha
+    sem teto, para as barras de cima e de baixo terminarem no mesmo lugar."""
+    if "diferenca" not in linha:
+        return ""
+    texto, passou = linha["diferenca"] or ("", False)
+    return (f'<span class="mono" style="width:132px;flex-shrink:0;white-space:nowrap;'
+            f'text-align:right;font-size:12.5px;'
+            f'color:{ALERTA if passou else "var(--muted)"}">{escape(texto)}</span>')
 
 
 def anel(fracao: float, rotulo: str, tamanho: int = 92) -> str:
