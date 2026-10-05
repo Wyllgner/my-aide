@@ -435,7 +435,7 @@ def test_o_periodo_e_escrito_por_extenso(cliente):
 def test_gastos_vazio_mantem_os_graficos(cliente):
     """Decisão do dono: a moldura fica para não mudar de forma quando encher."""
     html = cliente.get("/gastos").text
-    for moldura in ("Por categoria", "Por dia, débito e crédito", "Últimos 6 meses",
+    for moldura in ("Categorias e tags", "Por dia, débito e crédito", "Últimos 6 meses",
                     "Débito e crédito", "Por tag"):
         assert moldura in html, moldura
     assert "R$ 0,00" in html
@@ -1072,6 +1072,18 @@ def test_gastos_mostra_a_tag_e_de_onde_saiu_o_teto(cliente, app, registry, com_t
 
 def test_sem_tag_o_cartao_ensina_a_criar(cliente):
     assert "cria a tag farmácia em pessoal" in cliente.get("/gastos").text
+
+
+def test_categoria_aberta_por_tag_com_legenda(cliente, app, registry):
+    ctx = app.state.contexto()
+    registry.call("expenses.add_tag", {"tag": "farmácia", "category": "pessoal"}, ctx)
+    registry.call("expenses.add", {"amount": "10", "description": "x", "tag": "farmácia"}, ctx)
+    registry.call("expenses.add", {"amount": "5", "description": "y",
+                                   "category": "pessoal"}, ctx)
+    html = cliente.get("/gastos").text
+    assert 'title="farmácia: R$ 10,00"' in html      # a parte diz o que é
+    assert 'title="sem tag: R$ 5,00"' in html
+    assert "R$ 15,00" in html                         # e a barra, o total
 
 
 def test_por_dia_separa_debito_de_credito_no_mouse(cliente, app, registry):

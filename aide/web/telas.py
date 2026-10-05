@@ -530,7 +530,6 @@ def gastos(ctx, registry, agora: datetime, periodo: str = "mes") -> str:
                          vazio="nada lançado ainda")
 
     maior = max(lancamentos, key=lambda g: g["cents"], default=None)
-    categorias = [(c["category"], c["cents"] / 100) for c in dados["por_categoria"]]
     por_forma = ([(por_extenso(f["method"]), f["cents"] / 100) for f in dados["por_forma"]]
                  if dados["quantos"] else [])
     # rótulo com a categoria: "farmácia" sozinho não diz qual teto consumiu
@@ -580,6 +579,29 @@ def gastos(ctx, registry, agora: datetime, periodo: str = "mes") -> str:
         f'{graficos.barras(por_forma, rotulo_px=64, vazio="nada lançado ainda", formatar=reais)}'
         f'<p style="margin:8px 0 0;font-size:12px;color:var(--faint);line-height:1.5">'
         f'o anel é a parte no crédito, que chega depois na fatura</p></div></div>')
+
+    # categoria aberta por tag. A cor segue a tag (ordem alfabética, fixa entre
+    # períodos); da sétima em diante vira "outras", nunca uma cor gerada.
+    abertas = consultas.categorias_por_tag(ctx.conn, de, ate)
+    nomes_tag = sorted({t for _, partes in abertas for t, _ in partes if t})
+    cor_tag = {t: (graficos.SERIES[i] if i < len(graficos.SERIES) else graficos.RESTO)
+               for i, t in enumerate(nomes_tag)}
+    composicao = graficos.barras_empilhadas(
+        [(categoria, [(t or "sem tag", cor_tag.get(t, graficos.RESTO), v / 100)
+                      for t, v in partes])
+         for categoria, partes in abertas],
+        vazio="nenhuma categoria ainda", formatar=reais)
+    totais_tag = {}
+    for _, partes in abertas:
+        for t, v in partes:
+            if t:
+                totais_tag[t] = totais_tag.get(t, 0) + v
+    legenda_tags = graficos.legenda(
+        [(t, cor_tag[t], formatar(totais_tag[t])) for t in nomes_tag[:len(graficos.SERIES)]]
+        + ([("outras", graficos.RESTO, formatar(sum(totais_tag[t] for t in
+                                                     nomes_tag[len(graficos.SERIES):])))]
+           if len(nomes_tag) > len(graficos.SERIES) else [])
+        + [("sem tag", graficos.RESTO, "")])
 
     def _linha_gasto(g: dict) -> str:
         dia = f'{g["spent_at"][8:10]}/{g["spent_at"][5:7]}'
@@ -639,9 +661,7 @@ def gastos(ctx, registry, agora: datetime, periodo: str = "mes") -> str:
 <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);
             gap:16px;margin-top:16px;align-items:start">
   <div style="display:flex;flex-direction:column;gap:16px">
-  {_cartao("Por categoria",
-           graficos.barras(categorias, rotulo_px=104, vazio="nenhuma categoria ainda",
-                           formatar=reais))}
+  {_cartao("Categorias e tags", composicao + legenda_tags)}
   {_cartao("Por tag",
            graficos.barras(por_tag, rotulo_px=150, formatar=reais,
                            vazio='nenhuma tag ainda; no Telegram, '

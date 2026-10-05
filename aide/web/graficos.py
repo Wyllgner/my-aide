@@ -25,6 +25,7 @@ TRILHO = "#F0F1F4"
 # leva legenda com o valor escrito: a cor nunca carrega o número sozinha.
 SERIES = ("#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#4a3aa7")
 DEBITO, CREDITO = SERIES[0], SERIES[1]
+RESTO = "#C9CDD4"   # "sem tag" e "outras": o que não tem identidade própria
 
 _seq = [0]
 
@@ -280,3 +281,36 @@ def colunas_empilhadas(rotulos: list[str], series: list[tuple[str, str, list[flo
     return (f'<svg width="100%" height="{altura}" viewBox="0 0 {largura} {altura}" '
             f'preserveAspectRatio="none" role="img">{corpo}</svg>'
             + _eixo(rotulos, 2 if n > 14 else 1))
+
+
+def barras_empilhadas(linhas: list[tuple[str, list[tuple[str, str, float]]]],
+                      rotulo_px: int = 104, vazio: str = "nada registrado ainda",
+                      formatar=None) -> str:
+    """Uma barra por linha, dividida em partes: [(rótulo, [(parte, cor, valor)])].
+
+    A escala é a da maior linha, como `barras()`: responde qual é a maior e, de
+    dentro dela, de onde veio. O total vai escrito no fim.
+    """
+    escrever = formatar or (lambda v: f"{v:g}")
+    if not linhas:
+        return f'<p style="margin:0;font-size:12.5px;color:{FRACO}">{escape(vazio)}</p>'
+
+    maximo = max(sum(v for _, _, v in partes) for _, partes in linhas) or 1
+    html = ""
+    for rotulo, partes in linhas:
+        total = sum(v for _, _, v in partes)
+        segmentos = "".join(
+            f'<div title="{escape(nome)}: {escape(escrever(v))}" '
+            f'style="width:{v / maximo * 100:.2f}%;height:100%;background:{cor};'
+            f'border-radius:3px;flex-shrink:0"></div>'
+            for nome, cor, v in partes if v)
+        html += (
+            f'<div style="display:flex;align-items:center;gap:10px">'
+            f'<span style="width:{rotulo_px}px;flex-shrink:0;font-size:12.5px;'
+            f'color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap"'
+            f' title="{escape(rotulo)}">{escape(rotulo)}</span>'
+            f'<div style="flex:1;height:16px;display:flex;gap:2px;background:{TRILHO};'
+            f'border-radius:5px;overflow:hidden">{segmentos}</div>'
+            f'<span class="mono" style="white-space:nowrap;text-align:right;'
+            f'font-size:12.5px">{escape(escrever(total))}</span></div>')
+    return f'<div style="display:flex;flex-direction:column;gap:7px">{html}</div>'

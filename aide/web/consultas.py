@@ -260,6 +260,21 @@ def gastos_por_mes(conn, agora: datetime, meses: int = 6) -> list[tuple[str, int
              linhas.get(c, {}).get("credito", 0)) for c in chaves]
 
 
+def categorias_por_tag(conn, de: str, ate: str) -> list[tuple[str, list[tuple[str | None, int]]]]:
+    """Cada categoria do período com suas partes: [(tag ou None, centavos)].
+
+    None é o que foi lançado na categoria sem tag. Ordena pelo total da
+    categoria, e dentro dela pelo tamanho da parte.
+    """
+    grupos: dict[str, list[tuple[str | None, int]]] = {}
+    for r in conn.execute(
+            "SELECT COALESCE(lower(category), 'sem categoria') c, tag, SUM(cents) t"
+            " FROM expenses WHERE deleted_at IS NULL AND spent_at BETWEEN ? AND ?"
+            " GROUP BY c, tag ORDER BY t DESC", (de, ate)).fetchall():
+        grupos.setdefault(r["c"], []).append((r["tag"], r["t"]))
+    return sorted(grupos.items(), key=lambda kv: -sum(v for _, v in kv[1]))
+
+
 def acumulado(pares: list[tuple[str, float]]) -> list[tuple[str, float]]:
     """A mesma série somando — mostra o ritmo, que a barra diária esconde."""
     total = 0.0
