@@ -17,7 +17,11 @@ def gasto(texto: str,
           tag: str = typer.Option(None, "--tag", "-t", help="Tag cadastrada puxa a categoria."),
           quando: str = typer.Option(None, "--quando", "-q", help="ISO 8601"),
           credito: bool = typer.Option(False, "--credito", help="Padrão: débito."),
-          privado: bool = typer.Option(False, "--privado", "-p")) -> None:
+          privado: bool = typer.Option(False, "--privado", "-p"),
+          parcelas: int = typer.Option(None, "--parcelas", "-x",
+                                       help="Parcelado: uma parcela por mês."),
+          da_parcela: bool = typer.Option(False, "--valor-da-parcela",
+                                          help="O valor é o de cada parcela, não o total.")) -> None:
     """Registra um gasto: myaide gasto "10,50 almoço com a KA"."""
     try:
         cents, descricao = parse_lancamento(texto)
@@ -26,8 +30,13 @@ def gasto(texto: str,
         raise typer.Exit(1) from exc
 
     _, _, ctx = _ctx()
-    args = {"amount": str(cents / 100), "description": descricao, "private": privado,
-            "method": "credito" if credito else "debito"}
+    args = {"amount": str(cents / 100), "description": descricao, "private": privado}
+    if credito or not parcelas:
+        # parcelado sem forma dita fica para a tool, que põe crédito
+        args["method"] = "credito" if credito else "debito"
+    if parcelas:
+        args["installments"] = parcelas
+        args["amount_is_installment"] = da_parcela
     if categoria:
         args["category"] = categoria
     if tag:
@@ -50,8 +59,12 @@ def _onde(linha: dict) -> str:
 
 def _ecoar(linha: dict) -> None:
     marca = f" [dim]{_onde(linha)}[/]" if _onde(linha) else ""
+    parcela = f" [dim]{linha['parcela']}[/]" if linha.get("parcela") else ""
     console.print(f"[green]#{linha['id']}[/] {linha['valor']} · {linha['description']}"
-                  f"{marca} [dim]{por_extenso(linha['method'])}[/]")
+                  f"{parcela}{marca} [dim]{por_extenso(linha['method'])}[/]")
+    if linha.get("total"):
+        console.print(f"[dim]total {linha['total']} · última parcela em "
+                      f"{linha['ultima_parcela']}[/]")
 
 
 @app.command(name="corrige-gasto", rich_help_panel="Dinheiro")
@@ -107,7 +120,9 @@ def gastos(periodo: str = typer.Argument("mes", help=" | ".join(PERIODOS)),
     for g in resultado.data:
         dia, _, hora = g["spent_at"].partition("T")
         table.add_row(str(g["id"]), f"{dia[8:10]}/{dia[5:7]} {hora[:5]}",
-                      g["valor"], g["description"], _onde(g),
+                      g["valor"],
+                      g["description"] + (f" [dim]{g['parcela']}[/]" if g.get("parcela") else ""),
+                      _onde(g),
                       por_extenso(g["method"]))
     console.print(table)
 
