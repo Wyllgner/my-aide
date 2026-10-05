@@ -327,6 +327,13 @@ def _filtro_privado(ctx: ToolContext) -> str:
                 "type": "integer",
                 "description": "Em quantas parcelas: '10x' -> 10. Só o que a pessoa disse; nunca chute.",
             },
+            "first_installment": {
+                "type": "integer",
+                "description": (
+                    "Compra que já vinha sendo paga: em que parcela ela está agora. "
+                    "'parcela 3 de 10' -> 3, e lança da 3 à 10 a partir de `when`. Padrão: 1."
+                ),
+            },
             "amount_is_installment": {
                 "type": "boolean",
                 "description": (
@@ -341,7 +348,8 @@ def _filtro_privado(ctx: ToolContext) -> str:
 def add(ctx: ToolContext, amount: str, description: str, category: str | None = None,
         when: str | None = None, method: str | None = None, private: bool = False,
         tag: str | None = None, in_installments: bool = False,
-        installments: int | None = None, amount_is_installment: bool = False) -> dict:
+        installments: int | None = None, amount_is_installment: bool = False,
+        first_installment: int = 1) -> dict:
     cents = parse_valor(amount)
     if not description.strip():
         raise ValueError("todo gasto precisa de uma descrição")
@@ -358,20 +366,27 @@ def add(ctx: ToolContext, amount: str, description: str, category: str | None = 
         raise ValueError("foi parcelado, mas não sei em quantas vezes; "
                          "pergunte à pessoa em quantas parcelas foi antes de lançar")
     parcelas = _parcelas(installments) if installments is not None else 1
+    if not 1 <= int(first_installment) <= parcelas:
+        raise ValueError(f"a parcela atual vai de 1 a {parcelas}; recebido {first_installment}")
+    primeira_n = int(first_installment)
 
     categoria, etiqueta = resolver_categoria(ctx.conn, category, tag)
     # parcelado sem forma dita é crédito: débito não parcela
     forma = normalizar_forma(method if method or parcelas == 1 else "credito")
     valores = [cents] * parcelas if amount_is_installment else dividir(cents, parcelas)
+    # as parcelas que já passaram foram pagas em meses que não são deste
+    # lançamento; só entram as de agora em diante
+    valores = valores[primeira_n - 1:]
 
     ids = []
-    for n, valor in enumerate(valores, start=1):
+    for n, valor in enumerate(valores, start=primeira_n):
         cur = ctx.conn.execute(
             "INSERT INTO expenses (cents, description, category, tag, spent_at, method,"
             " private, installment_group, installment, installments)"
             " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (valor, description.strip(), categoria, etiqueta,
-             somar_meses(inicio, n - 1).isoformat(timespec="minutes"), forma, int(private),
+             somar_meses(inicio, n - primeira_n).isoformat(timespec="minutes"), forma,
+             int(private),
              ids[0] if ids else None, n if parcelas > 1 else None,
              parcelas if parcelas > 1 else None),
         )
@@ -384,9 +399,10 @@ def add(ctx: ToolContext, amount: str, description: str, category: str | None = 
     primeira = _linha(ctx.conn.execute(
         f"SELECT {CAMPOS} FROM expenses WHERE id = ?", (ids[0],)).fetchone())
     if parcelas > 1:
-        total = sum(valores)
-        primeira["total"] = formatar(total)
-        primeira["ultima_parcela"] = somar_meses(inicio, parcelas - 1).strftime("%m/%Y")
+        primeira["total"] = formatar(sum(valores))
+        primeira["lancadas"] = len(valores)
+        primeira["ultima_parcela"] = somar_meses(
+            inicio, parcelas - primeira_n).strftime("%m/%Y")
     return primeira
 
 

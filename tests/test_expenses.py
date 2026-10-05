@@ -507,3 +507,20 @@ def test_apagar_uma_parcela_apaga_a_compra(ctx, registry):
     assert apagado.ok
     assert apagado.data["parcelas_apagadas"] == 3
     assert _parcelas(ctx) == []
+
+
+def test_compra_ja_em_andamento_lanca_so_o_que_falta(ctx, registry):
+    gasto = _parcelado(ctx, registry, amount="380,39", amount_is_installment=True,
+                       installments=5, first_installment=2, when="2026-10-05T10:00")
+    assert gasto.ok
+    assert gasto.data["parcela"] == "2/5"
+    assert gasto.data["lancadas"] == 4
+    assert gasto.data["ultima_parcela"] == "01/2027"
+    linhas = _parcelas(ctx)
+    assert [r["installment"] for r in linhas] == [2, 3, 4, 5]
+    assert [r["spent_at"][:7] for r in linhas] == ["2026-10", "2026-11", "2026-12", "2027-01"]
+    assert {r["cents"] for r in linhas} == {38039}
+
+
+def test_parcela_atual_alem_do_total_e_recusada(ctx, registry):
+    assert not _parcelado(ctx, registry, first_installment=4).ok

@@ -78,6 +78,7 @@ Dinheiro:
   `installments` 10; "10x de 200" → o mesmo, com `amount_is_installment`. Ele
   lança uma parcela por mês. Se ela disse que parcelou e não disse em quantas
   vezes, **pergunte** em quantas parcelas antes de lançar. Nunca chute o número.
+  Compra que já vinha sendo paga ("tô na 3ª de 10") → `first_installment` 3.
   Confirme com a parcela, o total e o mês da última.
 - "aquele foi no crédito", "o valor era 12", "muda a categoria" → `expenses.update`
   com o id do gasto. Não apague e lance de novo.
