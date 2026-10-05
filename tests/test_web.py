@@ -1146,3 +1146,71 @@ def test_gastos_por_mes_volta_seis_meses_com_o_atual_por_ultimo(ctx):
     agora = datetime(2026, 2, 10)
     meses = consultas.gastos_por_mes(ctx.conn, agora, 6)
     assert [m for m, _, _ in meses] == ["set", "out", "nov", "dez", "jan", "fev"]
+
+
+# ---------- busca de gastos ----------
+
+@pytest.fixture
+def com_gastos_variados(app, registry):
+    ctx = app.state.contexto()
+    for args in (
+        {"amount": "15", "description": "remédio", "category": "pessoal", "tag": "farmácia"},
+        {"amount": "54", "description": "almoço", "category": "alimentação",
+         "tag": "trabalho", "method": "credito"},
+        {"amount": "700", "description": "aluguel", "category": "casa"},
+        {"amount": "600", "description": "tv", "category": "pessoal",
+         "installments": 3},
+        {"amount": "99", "description": "segredo", "category": "pessoal", "private": True},
+    ):
+        assert registry.call("expenses.add", args, ctx).ok
+    return app
+
+
+def _achados(html: str) -> str:
+    return html.split('id="busca"')[1]
+
+
+def test_busca_sem_filtro_mostra_os_lancamentos_do_periodo(cliente, com_gastos_variados):
+    busca = _achados(cliente.get("/gastos").text)
+    assert "Pesquisar gastos" in cliente.get("/gastos").text
+    for descricao in ("remédio", "almoço", "aluguel", "tv"):
+        assert descricao in busca
+    # a página é do dono, em loopback: privado aparece, como na lista de antes
+    assert "segredo" in busca
+
+
+def test_busca_por_texto_ignora_acento(cliente, com_gastos_variados):
+    busca = _achados(cliente.get("/gastos?q=farmacia").text)
+    assert "remédio" in busca and "aluguel" not in busca
+    assert "1 lançamento · R$ 15,00" in busca
+
+
+def test_filtra_por_forma_e_por_tag(cliente, com_gastos_variados):
+    busca = _achados(cliente.get("/gastos?forma=credito&tipo=avista").text)
+    assert "almoço" in busca and "aluguel" not in busca and "tv" not in busca
+    busca = _achados(cliente.get("/gastos?tag=trabalho").text)
+    assert "almoço" in busca and "remédio" not in busca
+
+
+def test_filtra_parcelado_e_mostra_a_parcela(cliente, com_gastos_variados):
+    busca = _achados(cliente.get("/gastos?tipo=parcelado").text)
+    assert "tv" in busca and "almoço" not in busca
+    assert "1/3" in busca
+
+
+def test_filtra_por_faixa_de_valor_e_ordena(cliente, com_gastos_variados):
+    busca = _achados(cliente.get("/gastos?min=50&max=300&ordem=maior").text)
+    assert "aluguel" not in busca and "remédio" not in busca
+    assert busca.index("tv") < busca.index("almoço")  # 200 antes de 54
+
+
+def test_valor_errado_avisa_e_nao_quebra(cliente, com_gastos_variados):
+    resposta = cliente.get("/gastos?min=abc")
+    assert resposta.status_code == 200
+    assert "não entendido" in resposta.text
+
+
+def test_busca_sem_resultado_diz_que_e_o_filtro(cliente, com_gastos_variados):
+    busca = _achados(cliente.get("/gastos?q=inexistente").text)
+    assert "Nenhum gasto com esses filtros." in busca
+    assert "limpar" in busca

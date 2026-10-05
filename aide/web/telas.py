@@ -515,7 +515,162 @@ def _cartao_tetos(ctx, agora: datetime) -> str:
             f'{medidores}{rodape}</div>')
 
 
-def gastos(ctx, registry, agora: datetime, periodo: str = "mes") -> str:
+def _linha_gasto(g: dict, ano: int) -> str:
+    from aide.tools.expenses import formatar
+
+    dia = f'{g["spent_at"][8:10]}/{g["spent_at"][5:7]}'
+    # parcela de ano que vem sem o ano pareceria deste
+    if g["spent_at"][:4] != str(ano):
+        dia += f'/{g["spent_at"][2:4]}'
+    etiqueta = ""
+    if g["category"]:
+        onde = escape(g["category"])
+        if g.get("tag"):
+            onde += f' <span style="color:var(--faint)">· {escape(g["tag"])}</span>'
+        etiqueta = (f'<span style="font-size:11px;color:var(--muted);background:#F5F6F8;'
+                    f'padding:2px 8px;border-radius:var(--r-pill)">{onde}</span>')
+    if g["method"] == "credito":
+        etiqueta += ('<span style="font-size:11px;color:var(--muted);'
+                     'border:1px solid var(--line-soft);padding:1px 7px;'
+                     'border-radius:var(--r-pill)">crédito</span>')
+    if g.get("installments"):
+        etiqueta += (f'<span class="mono" style="font-size:11px;color:var(--muted);'
+                     f'border:1px solid var(--line-soft);padding:1px 7px;'
+                     f'border-radius:var(--r-pill)">{g["installment"]}/{g["installments"]}</span>')
+    return (f'<div class="linha" style="padding:10px 18px">'
+            f'<span class="mono" style="font-size:12px;color:var(--faint);width:62px;'
+            f'flex-shrink:0">{escape(dia)}</span>'
+            f'<span class="mono" style="font-size:11.5px;color:var(--faint)">'
+            f'#{g["id"]}</span>'
+            f'<span style="font-size:13.5px">{escape(g["description"])}</span>'
+            f'{etiqueta}'
+            f'<span class="quando mono" style="color:var(--ink);font-size:13.5px">'
+            f'{escape(formatar(g["cents"]))}</span></div>')
+
+
+_CAMPO = ('font:inherit;font-size:13px;padding:7px 11px;border:1px solid var(--line);'
+          'border-radius:10px;background:var(--surface);color:var(--ink);min-width:0')
+
+
+def _opcoes(valores: list[tuple[str, str]], atual: str) -> str:
+    return "".join(
+        f'<option value="{escape(v)}"{" selected" if v == atual else ""}>{escape(r)}</option>'
+        for v, r in valores)
+
+
+def _cartao_busca(ctx, agora: datetime, periodo: str, de: str, ate: str,
+                  filtros: dict) -> str:
+    """Pesquisa nos lançamentos. Sem filtro nenhum, são os do período escolhido
+    lá em cima — é a lista de lançamentos de sempre, agora filtrável.
+
+    Formulário GET: o filtro fica na URL, e dá para voltar, recarregar e
+    guardar a busca nos favoritos.
+    """
+    from datetime import date
+
+    from aide.tools.expenses import formatar, parse_valor
+
+    f = {k: (filtros.get(k) or "").strip() for k in
+         ("q", "categoria", "tag", "forma", "tipo", "de", "ate", "min", "max", "ordem")}
+    avisos = []
+
+    def valor(chave: str) -> int | None:
+        if not f[chave]:
+            return None
+        try:
+            return parse_valor(f[chave])
+        except ValueError:
+            avisos.append(f'valor {"mínimo" if chave == "min" else "máximo"} '
+                          f'"{f[chave]}" não entendido; ignorei')
+            return None
+
+    def dia(chave: str, fim: bool) -> str | None:
+        if not f[chave]:
+            return None
+        try:
+            date.fromisoformat(f[chave])
+        except ValueError:
+            avisos.append(f'data "{f[chave]}" não entendida; ignorei')
+            return None
+        # spent_at é ISO com fuso: comparar como texto com o dia sozinho pega
+        # o dia inteiro, de 00:00 até o fim
+        return f[chave] + ("T99" if fim else "")
+
+    inicio, fim = dia("de", False) or de, dia("ate", True) or ate
+    achados = consultas.buscar_gastos(
+        ctx.conn, de=inicio, ate=fim, ver_privado=ctx.ver_privado, texto=f["q"],
+        categoria=f["categoria"], tag=f["tag"], forma=f["forma"], tipo=f["tipo"],
+        minimo=valor("min"), maximo=valor("max"), ordem=f["ordem"] or "recentes")
+    categorias, tags = consultas.opcoes_de_busca(ctx.conn, ctx.ver_privado)
+    filtrando = any(f[k] for k in f if k != "ordem")
+
+    estilo_rotulo = "display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:var(--muted)"
+    rotulo = f'style="{estilo_rotulo}"'
+    formulario = (
+        f'<form method="get" action="/gastos#busca" style="display:grid;'
+        f'grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px 12px;'
+        f'align-items:end;padding:0 18px 14px">'
+        f'<input type="hidden" name="periodo" value="{escape(periodo)}">'
+        f'<label style="{estilo_rotulo};grid-column:span 2">texto'
+        f'<input name="q" value="{escape(f["q"])}" placeholder="descrição, tag ou categoria"'
+        f' style="{_CAMPO}"></label>'
+        f'<label {rotulo}>categoria<select name="categoria" style="{_CAMPO}">'
+        f'{_opcoes([("", "todas")] + [(c, c) for c in categorias], f["categoria"])}</select></label>'
+        f'<label {rotulo}>tag<select name="tag" style="{_CAMPO}">'
+        f'{_opcoes([("", "todas")] + [(t, f"{t} · {c}" if c else t) for t, c in tags], f["tag"])}'
+        f'</select></label>'
+        f'<label {rotulo}>forma<select name="forma" style="{_CAMPO}">'
+        f'{_opcoes([("", "todas"), ("debito", "débito"), ("credito", "crédito")], f["forma"])}'
+        f'</select></label>'
+        f'<label {rotulo}>tipo<select name="tipo" style="{_CAMPO}">'
+        f'{_opcoes([("", "todos"), ("avista", "à vista"), ("parcelado", "parcelado")], f["tipo"])}'
+        f'</select></label>'
+        f'<label {rotulo}>de<input type="date" name="de" value="{escape(f["de"])}"'
+        f' style="{_CAMPO}"></label>'
+        f'<label {rotulo}>até<input type="date" name="ate" value="{escape(f["ate"])}"'
+        f' style="{_CAMPO}"></label>'
+        f'<label {rotulo}>valor mínimo<input name="min" value="{escape(f["min"])}"'
+        f' inputmode="decimal" placeholder="R$" style="{_CAMPO}"></label>'
+        f'<label {rotulo}>valor máximo<input name="max" value="{escape(f["max"])}"'
+        f' inputmode="decimal" placeholder="R$" style="{_CAMPO}"></label>'
+        f'<label {rotulo}>ordem<select name="ordem" style="{_CAMPO}">'
+        f'{_opcoes([("recentes", "mais recentes"), ("antigos", "mais antigos"), ("maior", "maior valor"), ("menor", "menor valor")], f["ordem"] or "recentes")}'
+        f'</select></label>'
+        f'<div style="display:flex;gap:8px;align-items:center">'
+        f'<button type="submit" style="font:inherit;font-size:13px;font-weight:600;'
+        f'padding:8px 16px;border:0;border-radius:var(--r-pill);background:var(--ink);'
+        f'color:var(--surface);cursor:pointer">filtrar</button>'
+        + (f'<a href="/gastos?periodo={escape(periodo)}#busca" style="font-size:12.5px;'
+           f'color:var(--muted)">limpar</a>' if filtrando else "")
+        + '</div></form>')
+
+    recorte = ("período escolhido acima" if not (f["de"] or f["ate"])
+               else f'{f["de"] or "início"} a {f["ate"] or "hoje"}')
+    resumo = (f'{formato.plural(achados["quantos"], "lançamento")} · '
+              f'{formatar(achados["total"])} · débito {formatar(achados["debito"])}'
+              f' · crédito {formatar(achados["credito"])} · {recorte}')
+    corte = (f'<p style="margin:0;padding:10px 18px;font-size:12px;color:var(--faint)">'
+             f'mostrando {len(achados["linhas"])} de {achados["quantos"]}; '
+             f'o total acima conta todos</p>'
+             if achados["quantos"] > len(achados["linhas"]) else "")
+    aviso = "".join(f'<p style="margin:0 18px 10px;font-size:12px;color:var(--accent)">'
+                    f'{escape(a)}</p>' for a in avisos)
+    linhas = "".join(_linha_gasto(g, agora.year) for g in achados["linhas"])
+    vazio = ('<p class="vazio">'
+             + ("Nenhum gasto com esses filtros." if filtrando else "Nenhum gasto neste período.")
+             + "</p>")
+
+    return (f'<div class="card" id="busca" style="margin-top:16px">'
+            f'<div style="padding:15px 18px 11px;display:flex;align-items:baseline;gap:10px;'
+            f'flex-wrap:wrap"><span class="eyebrow">Pesquisar gastos</span>'
+            f'<span style="font-size:12.5px;color:var(--muted)">{escape(resumo)}</span></div>'
+            f'{formulario}{aviso}'
+            f'<div style="border-top:1px solid var(--line-soft)">'
+            f'{linhas or vazio}{corte}</div></div>')
+
+
+def gastos(ctx, registry, agora: datetime, periodo: str = "mes",
+           filtros: dict | None = None) -> str:
     from aide.tools.expenses import PERIODOS, formatar, intervalo, por_extenso
 
     if periodo not in PERIODOS:
@@ -623,32 +778,9 @@ def gastos(ctx, registry, agora: datetime, periodo: str = "mes") -> str:
     if tem_sem_tag:
         legenda_tags += graficos.legenda([("sem tag", graficos.RESTO, "")])
 
-    def _linha_gasto(g: dict) -> str:
-        dia = f'{g["spent_at"][8:10]}/{g["spent_at"][5:7]}'
-        etiqueta = ""
-        if g["category"]:
-            onde = escape(g["category"])
-            if g.get("tag"):
-                onde += f' <span style="color:var(--faint)">· {escape(g["tag"])}</span>'
-            etiqueta = (f'<span style="font-size:11px;color:var(--muted);background:#F5F6F8;'
-                        f'padding:2px 8px;border-radius:var(--r-pill)">{onde}</span>')
-        if g["method"] == "credito":
-            etiqueta += ('<span style="font-size:11px;color:var(--muted);'
-                         'border:1px solid var(--line-soft);padding:1px 7px;'
-                         'border-radius:var(--r-pill)">crédito</span>')
-        return (f'<div class="linha" style="padding:10px 18px">'
-                f'<span class="mono" style="font-size:12px;color:var(--faint);width:46px;'
-                f'flex-shrink:0">{escape(dia)}</span>'
-                f'<span class="mono" style="font-size:11.5px;color:var(--faint)">'
-                f'#{g["id"]}</span>'
-                f'<span style="font-size:13.5px">{escape(g["description"])}</span>'
-                f'{etiqueta}'
-                f'<span class="quando mono" style="color:var(--ink);font-size:13.5px">'
-                f'{escape(g["valor"])}</span></div>')
-
-    linhas = "".join(_linha_gasto(g) for g in lancamentos)
     formas = " · ".join(f'{por_extenso(f["method"])} {f["valor"]}' for f in dados["por_forma"])
     tetos = _cartao_tetos(ctx, agora)
+    busca = _cartao_busca(ctx, agora, periodo, de, ate, filtros or {})
 
     return f"""
 {cabecalho("Gastos", _periodo_por_extenso(de, ate, periodo), _seletor("/gastos", periodo))}
@@ -678,22 +810,16 @@ def gastos(ctx, registry, agora: datetime, periodo: str = "mes") -> str:
   {_cartao("Débito e crédito", anel_credito)}
 </div>
 
-<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));
             gap:16px;margin-top:16px;align-items:start">
-  <div style="display:flex;flex-direction:column;gap:16px">
   {_cartao("Categorias e tags", composicao + legenda_tags)}
   {_cartao("Por tag",
            graficos.barras(por_tag, rotulo_px=150, formatar=reais,
                            vazio='nenhuma tag ainda; no Telegram, '
                                  '"cria a tag farmácia em pessoal"'))}
-  </div>
-  <div class="card">
-    <div style="padding:15px 18px 11px"><span class="eyebrow">Lançamentos</span></div>
-    <div style="border-top:1px solid var(--line-soft)">
-      {linhas or '<p class="vazio">Nenhum gasto neste período.</p>'}
-    </div>
-  </div>
 </div>
+
+{busca}
 """
 
 

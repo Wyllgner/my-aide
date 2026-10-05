@@ -29,7 +29,7 @@ PORTA_PADRAO = 8787
 
 def criar_app(config=None, conn_factory=None):
     """Monta a aplicação. Recebe as dependências para poder ser testada."""
-    from fastapi import FastAPI
+    from fastapi import FastAPI, Query
     from fastapi.responses import HTMLResponse, Response
 
     from aide.config import load_config
@@ -110,7 +110,12 @@ def criar_app(config=None, conn_factory=None):
         def ver(periodo: str = "mes", sessao: str | None = None,
                 ator: str | None = None, nota: int | None = None,
                 busca: str | None = None, ano: int | None = None,
-                mes: int | None = None, dia: int | None = None) -> str:
+                mes: int | None = None, dia: int | None = None,
+                # filtros da busca de gastos
+                q: str = "", categoria: str = "", tag: str = "", forma: str = "",
+                tipo: str = "", de: str = "", ate: str = "", ordem: str = "",
+                valor_min: str = Query("", alias="min"),
+                valor_max: str = Query("", alias="max")) -> str:
             montar = MONTADORES.get(tela.slug)
             if montar is None:
                 return render(cabecalho(tela.rotulo) + em_breve(tela.rotulo), tela.slug)
@@ -120,7 +125,10 @@ def criar_app(config=None, conn_factory=None):
             # navegador guarda o recorte que você estava olhando
             extra = {}
             if tela.slug == "gastos":
-                extra = {"periodo": periodo}
+                extra = {"periodo": periodo, "filtros": {
+                    "q": q, "categoria": categoria, "tag": tag, "forma": forma,
+                    "tipo": tipo, "de": de, "ate": ate, "ordem": ordem,
+                    "min": valor_min, "max": valor_max}}
             elif tela.slug == "conversas":
                 extra = {"sessao": sessao}
             elif tela.slug == "auditoria":
