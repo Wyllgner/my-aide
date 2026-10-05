@@ -392,3 +392,87 @@ def gasto_fora_dos_tetos(conn, config, agora: datetime) -> list[tuple[str, int]]
         " GROUP BY lower(COALESCE(category, '')) ORDER BY total DESC", (inicio, fim)).fetchall()
     return [(r["categoria"] or "sem categoria", r["total"])
             for r in linhas if r["categoria"] not in tetos]
+
+
+# ---------- busca de gastos ----------
+
+ORDENS_GASTO = {"recentes": "spent_at DESC, id DESC", "antigos": "spent_at ASC, id ASC",
+                "maior": "cents DESC, spent_at DESC", "menor": "cents ASC, spent_at DESC"}
+
+
+def _dobrar(texto: str) -> str:
+    """Sem acento e minúsculo: "farmacia" acha "Farmácia"."""
+    import unicodedata
+
+    sem = unicodedata.normalize("NFKD", (texto or "").lower())
+    return "".join(c for c in sem if not unicodedata.combining(c))
+
+
+def opcoes_de_busca(conn, ver_privado: bool) -> tuple[list[str], list[tuple[str, str]]]:
+    """Categorias e (tag, categoria) que existem nos lançamentos, para os filtros.
+
+    Vem dos gastos e não do cadastro: tag solta, que nunca foi cadastrada,
+    também precisa ser filtrável.
+    """
+    privado = "" if ver_privado else " AND private = 0"
+    categorias = [r[0] for r in conn.execute(
+        "SELECT DISTINCT lower(category) FROM expenses WHERE deleted_at IS NULL"
+        f" AND category IS NOT NULL{privado} ORDER BY 1").fetchall()]
+    tags = [(r[0], r[1] or "") for r in conn.execute(
+        "SELECT DISTINCT tag, lower(category) FROM expenses WHERE deleted_at IS NULL"
+        f" AND tag IS NOT NULL{privado} ORDER BY 1, 2").fetchall()]
+    return categorias, tags
+
+
+def buscar_gastos(conn, *, de: str, ate: str, ver_privado: bool, texto: str = "",
+                  categoria: str = "", tag: str = "", forma: str = "", tipo: str = "",
+                  minimo: int | None = None, maximo: int | None = None,
+                  ordem: str = "recentes", limite: int = 300) -> dict:
+    """Os lançamentos que passam em todos os filtros, com a soma de todos eles.
+
+    O texto é comparado em Python, sem acento, contra descrição, tag e
+    categoria: o SQLite só sabe minúscula de ASCII, e "farmacia" não acharia
+    "farmácia". O resto filtra no SQL. A soma é de todos os que passaram, não
+    só dos `limite` que a tela mostra, senão o total mentiria numa busca grande.
+    """
+    onde = ["deleted_at IS NULL", "spent_at BETWEEN ? AND ?"]
+    params: list = [de, ate]
+    if not ver_privado:
+        onde.append("private = 0")
+    if categoria:
+        onde.append("lower(category) = ?")
+        params.append(categoria.lower())
+    if tag:
+        onde.append("tag = ?")
+        params.append(tag)
+    if forma in ("debito", "credito"):
+        onde.append("COALESCE(method, 'debito') = ?")
+        params.append(forma)
+    if tipo == "parcelado":
+        onde.append("installments IS NOT NULL")
+    elif tipo == "avista":
+        onde.append("installments IS NULL")
+    if minimo is not None:
+        onde.append("cents >= ?")
+        params.append(minimo)
+    if maximo is not None:
+        onde.append("cents <= ?")
+        params.append(maximo)
+
+    linhas = conn.execute(
+        "SELECT id, cents, description, category, tag, spent_at,"
+        " COALESCE(method, 'debito') method, installment, installments FROM expenses"
+        f" WHERE {' AND '.join(onde)} ORDER BY {ORDENS_GASTO.get(ordem, ORDENS_GASTO['recentes'])}",
+        params).fetchall()
+    if texto.strip():
+        procura = _dobrar(texto.strip())
+        linhas = [r for r in linhas if procura in _dobrar(
+            f'{r["description"]} {r["tag"] or ""} {r["category"] or ""}')]
+
+    return {
+        "linhas": [dict(r) for r in linhas[:limite]],
+        "quantos": len(linhas),
+        "total": sum(r["cents"] for r in linhas),
+        "debito": sum(r["cents"] for r in linhas if r["method"] == "debito"),
+        "credito": sum(r["cents"] for r in linhas if r["method"] == "credito"),
+    }
