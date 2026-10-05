@@ -152,7 +152,7 @@ CALMA = "#3F7A54"
 
 
 def medidores(linhas: list[dict], rotulo_px: int = 104,
-              vazio: str = "nenhum teto declarado") -> str:
+              vazio: str = "nenhum teto declarado", ritmo: float | None = None) -> str:
     """Barras contra uma **meta**, não contra o maior valor da série.
 
     `barras()` normaliza pelo maior item, o que responde "qual é o maior". Teto é
@@ -173,6 +173,12 @@ def medidores(linhas: list[dict], rotulo_px: int = 104,
         # a barra para em 100%: o excesso vira cor e número, não uma barra que
         # estoura a coluna e desalinha as outras
         largura = min(fracao, 1.0) * 100
+        # onde o gasto estaria hoje se o teto fosse gasto por igual no mês:
+        # passar do traço antes do fim do mês é o aviso que chega cedo
+        marca_ritmo = "" if ritmo is None else (
+            f'<span title="ritmo do mês: {ritmo * 100:.0f}%" style="position:absolute;'
+            f'left:calc({ritmo * 100:.1f}% - 1px);top:-2px;bottom:-2px;width:2px;'
+            f'background:{TINTA};opacity:.55"></span>')
         html += (
             f'<div style="display:flex;align-items:center;gap:10px">'
             f'<span style="width:{rotulo_px}px;flex-shrink:0;font-size:12.5px;'
@@ -183,7 +189,7 @@ def medidores(linhas: list[dict], rotulo_px: int = 104,
             f'<div style="width:{largura:.1f}%;height:100%;background:{cor};'
             f'border-radius:5px"></div>'
             f'<span style="position:absolute;right:0;top:0;bottom:0;width:2px;'
-            f'background:{TINTA};opacity:.16"></span></div>'
+            f'background:{TINTA};opacity:.16"></span>{marca_ritmo}</div>'
             f'<span class="mono" style="white-space:nowrap;text-align:right;font-size:12.5px;'
             f'color:{cor if fracao >= 0.8 else "var(--ink)"}">'
             f'{escape(linha["texto"])}</span></div>')

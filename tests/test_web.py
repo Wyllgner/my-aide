@@ -1070,3 +1070,7 @@ def test_gastos_mostra_a_tag_e_de_onde_saiu_o_teto(cliente, app, registry, com_t
 
 def test_sem_tag_o_cartao_ensina_a_criar(cliente):
     assert "cria a tag farmácia em pessoal" in cliente.get("/gastos").text
+
+
+def test_tetos_mostram_o_ritmo_do_mes(cliente, com_tetos):
+    assert "o traço escuro é o ritmo do mês" in cliente.get("/gastos").text

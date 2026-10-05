@@ -447,13 +447,20 @@ def _cartao_tetos(ctx, agora: datetime) -> str:
             '<span class="mono">config.local.yaml</span>, e o assessor passa a cobrar '
             'a categoria que passar do combinado.</p></div>')
 
+    import calendar
+
+    dias_no_mes = calendar.monthrange(agora.year, agora.month)[1]
+    ritmo = agora.day / dias_no_mes
     medidores = graficos.medidores([
         {"rotulo": linha["categoria"],
          "valor": linha["gasto"],
          "meta": linha["teto"],
          "texto": f'{formatar(linha["gasto"])} / {formatar(linha["teto"])}'}
         for linha in linhas
-    ])
+    ], ritmo=ritmo) + (
+        f'<p style="margin:8px 0 0;font-size:12px;color:var(--faint)">'
+        f'o traço escuro é o ritmo do mês: dia {agora.day} de {dias_no_mes}. '
+        f'Barra além dele é teto sendo gasto mais rápido que o mês passa.</p>')
 
     gasto_total = sum(linha["gasto"] for linha in linhas)
     teto_total = sum(linha["teto"] for linha in linhas)
