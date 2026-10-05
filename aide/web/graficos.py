@@ -171,13 +171,20 @@ def medidores(linhas: list[dict], rotulo_px: int = 104,
     o traço marca 100% e o que passa do teto aparece em cor distinta — com o
     número ao lado, porque cor sozinha não carrega dado.
 
-    Cada linha: {rotulo, valor, meta, texto}.
+    Cada linha: {rotulo, valor, meta, texto}. Linha com `meta` None não tem
+    teto: a barra sai neutra, sem traço de 100% nem de ritmo, medida contra a
+    maior das linhas sem teto — só diz o tamanho, não se é muito.
     """
     if not linhas:
         return f'<p style="margin:0;font-size:12.5px;color:{FRACO}">{escape(vazio)}</p>'
 
+    maior_solto = max((linha["valor"] for linha in linhas if linha["meta"] is None),
+                      default=0) or 1
     html = ""
     for linha in linhas:
+        if linha["meta"] is None:
+            html += _barra_sem_meta(linha, linha["valor"] / maior_solto, rotulo_px)
+            continue
         meta = linha["meta"] or 1
         fracao = linha["valor"] / meta
         cor = ALERTA if fracao > 1 else ATENCAO if fracao >= 0.8 else CALMA
@@ -205,6 +212,19 @@ def medidores(linhas: list[dict], rotulo_px: int = 104,
             f'color:{cor if fracao >= 0.8 else "var(--ink)"}">'
             f'{escape(linha["texto"])}</span></div>')
     return f'<div style="display:flex;flex-direction:column;gap:7px">{html}</div>'
+
+
+def _barra_sem_meta(linha: dict, fracao: float, rotulo_px: int) -> str:
+    return (
+        f'<div style="display:flex;align-items:center;gap:10px">'
+        f'<span style="width:{rotulo_px}px;flex-shrink:0;font-size:12.5px;'
+        f'color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap"'
+        f' title="{escape(linha["rotulo"])}">{escape(linha["rotulo"])}</span>'
+        f'<div style="flex:1;height:16px;background:{TRILHO};border-radius:5px;overflow:hidden">'
+        f'<div style="width:{min(fracao, 1.0) * 100:.1f}%;height:100%;background:{RESTO};'
+        f'border-radius:5px"></div></div>'
+        f'<span class="mono" style="white-space:nowrap;text-align:right;font-size:12.5px;'
+        f'color:var(--muted)">{escape(linha["texto"])}</span></div>')
 
 
 def anel(fracao: float, rotulo: str, tamanho: int = 92) -> str:

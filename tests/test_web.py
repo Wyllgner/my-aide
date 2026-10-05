@@ -988,6 +988,18 @@ def test_gasto_em_categoria_sem_teto_aparece_mesmo_assim(cliente, com_dados, com
     html = cliente.get("/gastos").text
     assert "sem teto:" in html
     assert "alimentação" in html
+    # linha própria no medidor, não só um nome no rodapé
+    assert "· sem teto</span>" in html
+
+
+def test_medidor_sem_teto_nao_marca_ritmo_nem_cem_por_cento():
+    from aide.web import graficos
+
+    html = graficos.medidores([{"rotulo": "casa", "valor": 81435, "meta": None,
+                                "texto": "R$ 814,35 · sem teto"}], ritmo=0.2)
+    assert "casa" in html and "R$ 814,35 · sem teto" in html
+    assert "ritmo do mês" not in html
+    assert graficos.ALERTA not in html
 
 
 def test_sem_teto_declarado_a_pagina_ensina_a_declarar(cliente, com_dados):

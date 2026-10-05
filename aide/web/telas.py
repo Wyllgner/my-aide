@@ -451,12 +451,20 @@ def _cartao_tetos(ctx, agora: datetime) -> str:
 
     dias_no_mes = calendar.monthrange(agora.year, agora.month)[1]
     ritmo = agora.day / dias_no_mes
+    # O que foi gasto fora das categorias com teto entra como linha também, logo
+    # abaixo dos tetos: é justamente o que ninguém está vigiando, e numa linha de
+    # rodapé o mês podia estourar inteiro sem a tela chamar atenção.
+    fora = consultas.gasto_fora_dos_tetos(ctx.conn, ctx.config, agora)
     medidores = graficos.medidores([
         {"rotulo": linha["categoria"],
          "valor": linha["gasto"],
          "meta": linha["teto"],
          "texto": f'{formatar(linha["gasto"])} / {formatar(linha["teto"])}'}
         for linha in linhas
+    ] + [
+        {"rotulo": categoria, "valor": valor, "meta": None,
+         "texto": f'{formatar(valor)} · sem teto'}
+        for categoria, valor in fora
     ], ritmo=ritmo) + (
         f'<p style="margin:8px 0 0;font-size:12px;color:var(--faint)">'
         f'o traço escuro é o ritmo do mês: dia {agora.day} de {dias_no_mes}. '
@@ -471,21 +479,19 @@ def _cartao_tetos(ctx, agora: datetime) -> str:
     if estourados:
         resumo += f' · {formato.plural(len(estourados), "categoria estourada")}'
 
-    # O que foi gasto fora das categorias com teto não aparece em medidor nenhum,
-    # e é justamente o que ninguém está vigiando: sem esta linha, o mês pode
-    # estourar inteiro em categorias que a tela não mostra.
-    fora = consultas.gasto_fora_dos_tetos(ctx.conn, ctx.config, agora)
     rodape = ""
     if fora:
-        itens = " · ".join(f'{escape(c)} {escape(formatar(v))}' for c, v in fora[:6])
+        total_fora = sum(v for _, v in fora)
         rodape = (f'<p style="margin:12px 0 0;font-size:12px;color:var(--faint);'
-                  f'line-height:1.5">sem teto: {itens}</p>')
+                  f'line-height:1.5">sem teto: {escape(formatar(total_fora))} no mês, '
+                  f'fora da conta dos tetos</p>')
 
     por_tag = consultas.tags_do_mes(ctx.conn, agora)
     abertos = [
-        f'{escape(linha["categoria"])}: ' + ", ".join(
-            f'{escape(t)} {escape(formatar(v))}' for t, v in por_tag[linha["categoria"]])
-        for linha in linhas if por_tag.get(linha["categoria"])]
+        f'{escape(categoria)}: ' + ", ".join(
+            f'{escape(t)} {escape(formatar(v))}' for t, v in por_tag[categoria])
+        for categoria in [linha["categoria"] for linha in linhas] + [c for c, _ in fora]
+        if por_tag.get(categoria)]
     if abertos:
         rodape += (f'<p style="margin:8px 0 0;font-size:12px;color:var(--faint);'
                    f'line-height:1.5">por tag — {" · ".join(abertos)}</p>')
