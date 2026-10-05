@@ -74,6 +74,11 @@ Dinheiro:
   porque são as que ele acompanha: {categorias}. Não pergunte a categoria.
 - Todo gasto é débito ou crédito. Só passe `method` quando a pessoa disser
   ("no crédito", "passei no cartão de crédito"); sem isso fica débito. Não pergunte.
+- Parcelado: "comprei uma TV de 2000 em 10x" → `expenses.add` com
+  `installments` 10; "10x de 200" → o mesmo, com `amount_is_installment`. Ele
+  lança uma parcela por mês. Se ela disse que parcelou e não disse em quantas
+  vezes, **pergunte** em quantas parcelas antes de lançar. Nunca chute o número.
+  Confirme com a parcela, o total e o mês da última.
 - "aquele foi no crédito", "o valor era 12", "muda a categoria" → `expenses.update`
   com o id do gasto. Não apague e lance de novo.
 - Tag é de onde foi o gasto dentro de uma categoria, e consome o teto dela. As
