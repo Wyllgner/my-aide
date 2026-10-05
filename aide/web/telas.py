@@ -571,6 +571,16 @@ def gastos(ctx, registry, agora: datetime, periodo: str = "mes") -> str:
         + (f'<p style="margin:8px 0 0;font-size:12px;color:var(--faint)">média dos meses '
            f'com gasto: {escape(formatar(round(media_mensal)))}</p>' if media_mensal else ""))
 
+    # parte no crédito: o que vira fatura depois
+    fracao_credito = cred_total / (deb_total + cred_total) if deb_total + cred_total else 0
+    anel_credito = (
+        f'<div style="display:flex;align-items:center;gap:18px">'
+        f'{graficos.anel(fracao_credito, f"{fracao_credito * 100:.0f}%")}'
+        f'<div style="flex:1;min-width:0">'
+        f'{graficos.barras(por_forma, rotulo_px=64, vazio="nada lançado ainda", formatar=reais)}'
+        f'<p style="margin:8px 0 0;font-size:12px;color:var(--faint);line-height:1.5">'
+        f'o anel é a parte no crédito, que chega depois na fatura</p></div></div>')
+
     def _linha_gasto(g: dict) -> str:
         dia = f'{g["spent_at"][8:10]}/{g["spent_at"][5:7]}'
         etiqueta = ""
@@ -620,7 +630,11 @@ def gastos(ctx, registry, agora: datetime, periodo: str = "mes") -> str:
  f'<p class="eyebrow" style="margin-bottom:8px">Por dia, débito e crédito</p>{diario}</div>'
  if diario else ''}
 
-{_cartao("Últimos 6 meses", historico, "margin-top:16px")}
+<div style="display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);
+            gap:16px;margin-top:16px;align-items:start">
+  {_cartao("Últimos 6 meses", historico)}
+  {_cartao("Débito e crédito", anel_credito)}
+</div>
 
 <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);
             gap:16px;margin-top:16px;align-items:start">
@@ -628,11 +642,6 @@ def gastos(ctx, registry, agora: datetime, periodo: str = "mes") -> str:
   {_cartao("Por categoria",
            graficos.barras(categorias, rotulo_px=104, vazio="nenhuma categoria ainda",
                            formatar=reais))}
-  {_cartao("Débito e crédito",
-           graficos.barras(por_forma, rotulo_px=104, vazio="nada lançado ainda",
-                           formatar=reais)
-           + '<p style="margin:10px 0 0;font-size:12px;color:var(--faint);line-height:1.5">'
-             'o que não foi dito é débito; no Telegram, "o #12 foi no crédito" corrige</p>')}
   {_cartao("Por tag",
            graficos.barras(por_tag, rotulo_px=150, formatar=reais,
                            vazio='nenhuma tag ainda; no Telegram, '

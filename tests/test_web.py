@@ -1081,6 +1081,7 @@ def test_por_dia_separa_debito_de_credito_no_mouse(cliente, app, registry):
                                    "method": "credito"}, ctx)
     html = cliente.get("/gastos").text
     assert "débito R$ 10,00 · crédito R$ 30,00 · total R$ 40,00" in html
+    assert "75%" in html                              # o anel: parte no crédito
 
 
 def test_historico_tem_seis_meses(cliente):
