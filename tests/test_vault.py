@@ -161,6 +161,17 @@ def banco(tmp_path):
     return conn
 
 
+class Espiao:
+    modelo = "espiao-1"
+
+    def __init__(self):
+        self.enviado = []
+
+    def embed_one(self, texto):
+        self.enviado.append(texto)
+        return [1.0, 0.0]
+
+
 def test_salvar_indexa_na_hora_pela_palavra_chave(raiz, banco):
     from aide.storage.reconciliacao import sincronizar
     from aide.storage.search import buscar_texto
@@ -212,6 +223,21 @@ def test_salvar_nao_gera_vetor_e_apaga_o_velho(raiz, banco):
     guardar_vetor(banco, "note", note_id, "x", [1.0], "m")
     sincronizar(banco, caminho)
     assert banco.execute("SELECT COUNT(*) FROM embeddings").fetchone()[0] == 0
+
+
+def test_o_daemon_gera_o_vetor_so_da_normal(raiz, banco):
+    from aide.storage.reconciliacao import reconciliar, sincronizar
+
+    vault.gravar(raiz / "Inbox" / "Normal.md", "pode ir")
+    vault.gravar(raiz / "Inbox" / "Diário.md", "---\nprivate: true\n---\n\nSEGREDO")
+    for nome in ("Normal.md", "Diário.md", "Nota.md"):
+        sincronizar(banco, raiz / "Inbox" / nome)
+    espiao = Espiao()
+    relato = reconciliar(banco, raiz, embedder=espiao)
+    assert len(relato.vetorizadas) == 2
+    assert not any("SEGREDO" in t for t in espiao.enviado)
+    # na volta seguinte não manda de novo
+    assert reconciliar(banco, raiz, embedder=Espiao()).vetorizadas == []
 
 
 def test_recriar_nota_apagada_nao_vai_para_a_lixeira(raiz, banco):

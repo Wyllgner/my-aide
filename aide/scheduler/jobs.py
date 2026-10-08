@@ -176,8 +176,10 @@ def reindex_vault(deps: JobDeps) -> int:
         log.warning("arquivo da nota %s sumiu: %s", note_id, caminho)
     for note_id, _ in relato.reindexadas:
         log.info("nota %s reindexada (arquivo mudou)", note_id)
+    for note_id, _ in relato.vetorizadas:
+        log.info("nota %s ganhou vetor para a busca semântica", note_id)
 
-    return len(relato.reindexadas) + len(relato.adotadas)
+    return len(relato.reindexadas) + len(relato.adotadas) + len(relato.vetorizadas)
 
 
 def sync_calendar(deps: JobDeps) -> int:

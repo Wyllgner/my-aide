@@ -33,10 +33,12 @@ class Relatorio:
     adotadas: list[tuple[int, str]] = field(default_factory=list)
     recolhidas: list[Path] = field(default_factory=list)
     sumidas: list[tuple[int, str, str]] = field(default_factory=list)
+    vetorizadas: list[tuple[int, str]] = field(default_factory=list)
 
     @property
     def mexeu(self) -> bool:
-        return bool(self.reindexadas or self.adotadas or self.recolhidas or self.sumidas)
+        return bool(self.reindexadas or self.adotadas or self.recolhidas or self.sumidas
+                    or self.vetorizadas)
 
 
 def reconciliar(conn, vault_dir: Path, embedder=None, forcar: bool = False) -> Relatorio:
@@ -95,6 +97,8 @@ def reconciliar(conn, vault_dir: Path, embedder=None, forcar: bool = False) -> R
         if not real.exists():
             relatorio.sumidas.append((row["id"], row["title"], row["path"]))
 
+    if embedder is not None:
+        _sem_vetor(conn, embedder, relatorio)
     return relatorio
 
 
@@ -141,6 +145,20 @@ def esquecer(conn, caminho: Path) -> int | None:
     remover_do_indice(conn, row["id"])
     remover_vetor(conn, row["id"])
     return row["id"]
+
+
+def _sem_vetor(conn, embedder, relatorio: Relatorio) -> None:
+    """Notas normais que ainda não viraram vetor: as salvas pela página, ou as
+    em que a chamada falhou da outra vez."""
+    for row in conn.execute(
+            "SELECT n.id, n.title, n.path FROM notes n WHERE n.deleted_at IS NULL"
+            " AND n.private = 0 AND NOT EXISTS (SELECT 1 FROM embeddings e"
+            " WHERE e.ref_type = 'note' AND e.ref_id = n.id)").fetchall():
+        caminho = Path(row["path"])
+        if not caminho.exists():
+            continue
+        _indexar(conn, row["id"], row["title"], vault.corpo_de(caminho), embedder)
+        relatorio.vetorizadas.append((row["id"], row["title"]))
 
 
 def _mudou(caminho: Path, indexado_em: str) -> bool:
