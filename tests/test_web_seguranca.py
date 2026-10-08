@@ -93,3 +93,27 @@ def test_origin_com_porta_trocada_e_outra_origem():
                                        "1", "same-origin")
     assert seguranca.escrita_permitida("POST", "127.0.0.1:8787", "http://127.0.0.1:8787",
                                        "1", "same-origin") is None
+
+
+# ---------- cabeçalhos ----------
+
+def test_toda_tela_sai_com_os_cabecalhos(cliente):
+    for tela in TELAS:
+        cab = cliente.get(tela.caminho).headers
+        assert cab["x-frame-options"] == "DENY", tela.caminho
+        assert cab["x-content-type-options"] == "nosniff"
+        assert cab["referrer-policy"] == "no-referrer"
+        assert cab["cache-control"] == "no-store", "privado não pode ir para cache em disco"
+        assert "frame-ancestors 'none'" in cab["content-security-policy"]
+
+
+def test_script_so_da_propria_pagina():
+    """Sem 'unsafe-inline' em script: um <script> que escape do escape não roda."""
+    diretivas = dict(d.split(" ", 1) for d in seguranca.CSP.split("; "))
+    assert diretivas["script-src"] == "'self'"
+    assert diretivas["default-src"] == "'none'"
+
+
+def test_recusa_tambem_sai_com_os_cabecalhos(app):
+    resposta = TestClient(app, base_url="http://evil.example").get("/")
+    assert resposta.headers["x-frame-options"] == "DENY"

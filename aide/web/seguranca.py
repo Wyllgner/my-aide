@@ -24,6 +24,30 @@ HOSTS = frozenset({"127.0.0.1", "localhost"})
 LEITURA = frozenset({"GET", "HEAD"})
 CABECALHO_ESCRITA = "x-aide"
 
+# 'unsafe-inline' só em estilo: as telas usam style="" em todo canto, e estilo
+# não executa nada. Script só vem de /app.js.
+CSP = "; ".join((
+    "default-src 'none'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src https://fonts.gstatic.com",
+    "img-src 'self' data:",
+    "connect-src 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+    "base-uri 'none'",
+))
+
+CABECALHOS = {
+    "content-security-policy": CSP,
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "referrer-policy": "no-referrer",
+    "cross-origin-opener-policy": "same-origin",
+    "cross-origin-resource-policy": "same-origin",
+    "permissions-policy": "camera=(), microphone=(), geolocation=()",
+}
+
 
 def nome_do_host(host: str) -> str:
     """'127.0.0.1:8787' -> '127.0.0.1'. A porta não importa: quem faz o
@@ -68,4 +92,9 @@ def instalar(app) -> None:
                 resposta = PlainTextResponse(motivo, status_code=403)
             else:
                 resposta = await call_next(request)
+        for nome, valor in CABECALHOS.items():
+            resposta.headers.setdefault(nome, valor)
+        # a página mostra privado; cópia em cache de disco é cópia fora do banco
+        if "cache-control" not in resposta.headers:
+            resposta.headers["cache-control"] = "no-store"
         return resposta
