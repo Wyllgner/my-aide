@@ -150,3 +150,12 @@ def test_linha_vazia_no_comeco_sobrevive_ao_textarea(cliente, raiz):
     bruto = re.search(r'<textarea id="editor"[^>]*>(.*?)</textarea>', pagina, re.DOTALL).group(1)
     # o que o navegador vai pôr no campo: o conteúdo menos a primeira quebra
     assert h.unescape(bruto)[1:] == "\nlinha depois do vazio"
+
+
+def test_a_busca_da_pagina_acha_a_privada(cliente, config):
+    """Quem procura aqui é o dono; a tool do modelo esconde de propósito."""
+    from aide.storage.reconciliacao import reconciliar
+
+    reconciliar(cliente.app.state.conn_factory(), config.vault_dir)
+    html = cliente.get("/notas?busca=telhas").text
+    assert "Projetos/Casa/Telhado.md" in html

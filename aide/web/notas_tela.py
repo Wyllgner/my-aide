@@ -93,12 +93,15 @@ def _escolher(ctx, raiz: Path, arquivo: str | None, nota: int | None) -> str | N
     return _mais_recente(raiz)
 
 
-def _busca(ctx, registry, raiz: Path, busca: str, aberto: str | None) -> str:
-    achados = registry.call("notes.search", {"query": busca, "limit": 20}, ctx)
+def _busca(ctx, raiz: Path, busca: str, aberto: str | None) -> str:
+    """Direto no índice, e não pela tool do modelo: `notes.search` esconde as
+    privadas de propósito, e aqui quem procura é o dono. Sem embedder, que é
+    o que a página tem — a consulta também não sai da máquina."""
+    from aide.storage.search import buscar
+
     itens = ""
-    for a in achados.data or []:
-        if a.get("tipo") != "nota" or not a.get("id"):
-            continue
+    for a in buscar(ctx.conn, busca, embedder=None, limite=20,
+                    incluir_privadas=ctx.ver_privado):
         row = ctx.conn.execute("SELECT path FROM notes WHERE id = ?", (a["id"],)).fetchone()
         try:
             relativo = vault.relativo_de(raiz, Path(row["path"]))
@@ -174,7 +177,7 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
         resumo += f' · busca: "{busca}"'
 
     if busca:
-        lateral = (_busca(ctx, registry, raiz, busca, aberto)
+        lateral = (_busca(ctx, raiz, busca, aberto)
                    + f'<a class="limpar" href="{escape(_href(aberto)) if aberto else "/notas"}">'
                      f'voltar às pastas</a>')
     else:
@@ -187,7 +190,7 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
 
     busca_form = (
         f'<form method="get" action="/notas" style="display:flex;gap:6px">'
-        f'<input name="busca" value="{escape(busca or "")}" placeholder="buscar por significado"'
+        f'<input name="busca" value="{escape(busca or "")}" placeholder="buscar nas notas"'
         f' class="campo-busca"></form>')
 
     return f"""
