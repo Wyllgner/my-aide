@@ -182,8 +182,11 @@ def _sobre_dinheiro(ctx, regra, config=None):
 
 def test_sem_teto_declarado_o_assessor_nao_opina(ctx):
     """Inventar um limite seria cobrar por algo que você nunca combinou."""
+    # sem teto nenhum de propósito: herdando o config.local.yaml do dono, o
+    # teste quebrava no dia em que ele pôs teto em alimentação
+    config = _com_teto(ctx)
     _gasto(ctx, 500_00, categoria="alimentação")
-    assert _sobre_dinheiro(ctx, "orcamento_categoria") == []
+    assert _sobre_dinheiro(ctx, "orcamento_categoria", config) == []
 
 
 def test_teto_estourado_e_cobrado_com_urgencia(ctx):
