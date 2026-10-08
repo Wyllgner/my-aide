@@ -102,22 +102,33 @@ def acrescentar(caminho: Path, texto: str, quando: datetime) -> None:
         arquivo.write(f"\n\n_{quando.strftime('%d/%m/%Y %H:%M')}_\n\n{texto.strip()}\n")
 
 
-def ler(caminho: Path) -> tuple[dict[str, str], str]:
-    """Devolve (frontmatter, corpo). Arquivo sem frontmatter também serve."""
-    texto = caminho.read_text()
-    if not texto.startswith(SEPARADOR):
-        return {}, texto.strip()
+def separar(texto: str) -> tuple[dict[str, str], str]:
+    """(frontmatter, corpo) de um texto de nota. Sem frontmatter também serve.
 
-    partes = texto.split(SEPARADOR, 2)
-    if len(partes) < 3:
+    O frontmatter é o do Obsidian: a primeira linha é `---` sozinha e ele vai
+    até a próxima linha `---` sozinha. Partir no primeiro "---" que aparecer
+    cortava a nota ao meio quando um valor ou o próprio corpo tinha um.
+    """
+    linhas = texto.split("\n")
+    if not linhas or linhas[0].rstrip("\r") != SEPARADOR:
+        return {}, texto.strip()
+    for fim in range(1, len(linhas)):
+        if linhas[fim].rstrip("\r") == SEPARADOR:
+            break
+    else:
         return {}, texto.strip()
 
     meta = {}
-    for linha in partes[1].strip().splitlines():
+    for linha in linhas[1:fim]:
         if ":" in linha:
             chave, valor = linha.split(":", 1)
             meta[chave.strip()] = valor.strip()
-    return meta, partes[2].strip()
+    return meta, "\n".join(linhas[fim + 1:]).strip()
+
+
+def ler(caminho: Path) -> tuple[dict[str, str], str]:
+    """Devolve (frontmatter, corpo) do arquivo."""
+    return separar(caminho.read_text())
 
 
 def privada(meta: dict[str, str]) -> bool:
