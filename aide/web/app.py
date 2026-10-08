@@ -110,6 +110,7 @@ def criar_app(config=None, conn_factory=None):
     # um aviso — assim a navegação inteira já é navegável e testável.
     from aide.core.context import now_in
     from aide.tools import registry as toolbelt
+    from aide.web import notas_tela
     from aide.web import telas as conteudo
     from aide.web.paginas import TELAS, cabecalho, em_breve
 
@@ -118,7 +119,7 @@ def criar_app(config=None, conn_factory=None):
     MONTADORES = {"painel": conteudo.painel, "hoje": conteudo.hoje,
                   "calendario": conteudo.calendario, "gastos": conteudo.gastos,
                   "custo": conteudo.custo, "conversas": conteudo.conversas,
-                  "ferramentas": conteudo.ferramentas, "auditoria": conteudo.auditoria, "notas": conteudo.notas,
+                  "ferramentas": conteudo.ferramentas, "auditoria": conteudo.auditoria, "notas": notas_tela.tela,
                   "memoria": conteudo.memoria, "pessoas": conteudo.pessoas,
                   "fila": conteudo.fila}
 
@@ -126,6 +127,7 @@ def criar_app(config=None, conn_factory=None):
         @app.get(tela.caminho, response_class=HTMLResponse, name=tela.slug)
         def ver(periodo: str = "mes", sessao: str | None = None,
                 ator: str | None = None, nota: int | None = None,
+                arquivo: str | None = None,
                 busca: str | None = None, ano: int | None = None,
                 mes: int | None = None, dia: int | None = None,
                 # filtros da busca de gastos
@@ -151,7 +153,7 @@ def criar_app(config=None, conn_factory=None):
             elif tela.slug == "auditoria":
                 extra = {"ator": ator}
             elif tela.slug == "notas":
-                extra = {"nota": nota, "busca": busca}
+                extra = {"nota": nota, "busca": busca, "arquivo": arquivo}
             elif tela.slug == "calendario":
                 extra = {"ano": ano, "mes": mes, "dia": dia}
             return render(montar(ctx, toolbelt, agora, **extra), tela.slug)

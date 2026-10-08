@@ -611,9 +611,14 @@ def com_nota(app, registry, tmp_path):
     return app
 
 
-def test_notas_lista_e_abre_o_conteudo(cliente, com_nota):
+def test_notas_lista_e_abre_a_ultima_mexida(cliente, com_nota):
     html = cliente.get("/notas").text
-    assert "Manutenção do carro" in html
+    assert "Manutenção do carro" in html and "Reunião de orçamento" in html
+    assert "cortar 20% da nuvem" in html
+
+
+def test_abrir_nota_pelo_caminho(cliente, com_nota):
+    html = cliente.get("/notas?arquivo=Inbox/Manuten%C3%A7%C3%A3o%20do%20carro.md").text
     assert "trocar o óleo antes da viagem" in html
 
 
