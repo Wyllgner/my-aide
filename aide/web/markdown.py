@@ -54,7 +54,7 @@ def _seguro(url: str) -> bool:
 # `[[foto.png]]`, `![[relatório.pdf]]`: os tipos de anexo que o Obsidian
 # reconhece. Lista, e não "qualquer extensão": "Plano v1.2" é nota
 ANEXO = re.compile(r"\.(png|jpe?g|gif|bmp|svg|webp|avif|mp3|wav|m4a|ogg|flac|3gp"
-                   r"|mp4|webm|ogv|mov|mkv|pdf|canvas|base)$", re.I)
+                   r"|mp4|webm|ogv|mov|mkv|pdf|canvas|base)$", re.IGNORECASE)
 
 
 def _wikilink(state, silent: bool) -> bool:
