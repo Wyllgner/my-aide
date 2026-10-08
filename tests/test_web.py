@@ -26,7 +26,8 @@ def app(config, tmp_path):
 
 @pytest.fixture
 def cliente(app):
-    return TestClient(app)
+    # o Host de verdade: o padrão do TestClient, "testserver", é recusado
+    return TestClient(app, base_url="http://127.0.0.1:8787")
 
 
 # ---------- a fronteira ----------

@@ -19,6 +19,7 @@ import logging
 
 from aide.storage import connect, migrate
 from aide.tools.registry import ToolContext
+from aide.web import seguranca
 
 log = logging.getLogger(__name__)
 
@@ -43,6 +44,7 @@ def criar_app(config=None, conn_factory=None):
             return conn
 
     app = FastAPI(title="my-aide", docs_url=None, redoc_url=None, openapi_url=None)
+    seguranca.instalar(app)
     app.state.config = config
     app.state.conn_factory = conn_factory
 
