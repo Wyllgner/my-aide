@@ -132,3 +132,10 @@ def test_hidden_vence_o_display_das_classes():
     from aide.web.estilo import CSS
 
     assert "[hidden] { display: none !important; }" in CSS
+
+
+def test_nota_privada_abre_sem_corretor(cliente):
+    """O corretor avançado do Chrome manda o texto para o Google."""
+    assert 'spellcheck="false"' in _tela(cliente, "Projetos/Casa/Telhado.md")
+    assert 'spellcheck="true"' in _tela(cliente, "Inbox/Ideia.md")
+

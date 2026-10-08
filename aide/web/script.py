@@ -135,6 +135,9 @@ JS = r"""
     return !!(m && LINHA.test(m[1]));
   }
 
+  // o corretor avançado do Chrome manda o texto para o Google
+  function corretor() { editor.spellcheck = !privada.checked; }
+
   privada.addEventListener("change", function () {
     var texto = editor.value;
     var m = texto.match(FRONT);
@@ -144,11 +147,13 @@ JS = r"""
     editor.value = resto.join("").trim()
       ? "---\n" + resto.join("\n") + "\n---\n" + depois
       : depois.replace(/^\n/, "");
+    corretor();
     salvar();
   });
 
   editor.addEventListener("input", function () {
     privada.checked = marcadaNoTexto();
+    corretor();
     agendar();
   });
 

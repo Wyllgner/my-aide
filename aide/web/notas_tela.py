@@ -114,6 +114,12 @@ def _busca(ctx, registry, raiz: Path, busca: str, aberto: str | None) -> str:
 
 
 def _editor(raiz: Path, aberto: str, agora: datetime) -> str:
+    """O editor da nota aberta.
+
+    Corretor desligado em nota privada: o "corretor avançado" do Chrome manda
+    o que você digita para o Google. A quebra de linha logo depois de
+    <textarea> é de propósito: o HTML descarta a primeira, e sem ela uma nota
+    que começa em linha vazia perderia essa linha ao ser salva."""
     arquivo = vault.resolver(raiz, aberto)
     texto = arquivo.read_text(encoding="utf-8")
     meta, corpo = vault.ler(arquivo)
@@ -144,7 +150,7 @@ def _editor(raiz: Path, aberto: str, agora: datetime) -> str:
   <button type="button" id="usar-disco" class="botao-fraco">ficar com a do disco</button>
   <button type="button" id="usar-meu" class="botao-fraco">manter o que eu escrevi</button>
 </div>
-<textarea id="editor" spellcheck="true" data-caminho="{escape(aberto)}"
+<textarea id="editor" spellcheck="{"false" if privada else "true"}" data-caminho="{escape(aberto)}"
   data-versao="{escape(str(arquivo.stat().st_mtime_ns))}">{escape(texto)}</textarea>"""
 
 
