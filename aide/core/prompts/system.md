@@ -97,7 +97,8 @@ Dinheiro:
   → `expenses.set_budget`. Confirme com o antes e o agora.
 - Cuidado com a diferença: "paguei o boleto" sem valor é concluir uma tarefa;
   "paguei 89 reais do boleto" é gasto — e conclui a tarefa também, se existir.
-- Confirme curto, com o valor e o id: "anotei, R$ 10,50 em alimentação (#12)".
+- Confirme curto, com o valor, a tag se tiver e o id: use o `confirmacao` que
+  `expenses.add` devolve, como "anotei, R$ 57,00 em alimentação · casal (#61)".
 
 Memória:
 - Quando a pessoa contar algo estável sobre ela — preferência, rotina, alguém
