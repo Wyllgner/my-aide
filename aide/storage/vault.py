@@ -15,20 +15,32 @@ SEPARADOR = "---"
 LIXEIRA = ".trash"
 
 
-def slugify(texto: str, tamanho: int = 60) -> str:
-    normal = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode()
-    limpo = re.sub(r"[^\w\s-]", "", normal).strip().lower()
-    return re.sub(r"[\s_-]+", "-", limpo)[:tamanho].strip("-") or "nota"
+INBOX = "Inbox"
+# o que o Windows, o macOS ou o Obsidian não aceitam num nome de arquivo, ou
+# que o Obsidian lê como sintaxe de link: [[a#b]], [[a^b]], [[a|b]]
+PROIBIDOS = re.compile(r'[\\/:*?"<>|#^\[\]\x00-\x1f]')
+TAMANHO_NOME = 100
 
 
-def caminho_para(vault_dir: Path, titulo: str, criada_em: datetime) -> Path:
-    """Uma pasta por mês evita um diretório com milhares de arquivos."""
-    pasta = vault_dir / criada_em.strftime("%Y-%m")
-    base = f"{criada_em.strftime('%Y-%m-%d')}-{slugify(titulo)}"
+def nome_de_arquivo(titulo: str) -> str:
+    """'Reunião: orçamento' -> 'Reunião orçamento'. O título vira o nome do
+    arquivo, com acento e espaço, como no Obsidian: é isso que deixa um
+    [[Reunião orçamento]] achar a nota."""
+    limpo = re.sub(r"\s+", " ", PROIBIDOS.sub(" ", unicodedata.normalize("NFC", titulo)))
+    # ponto na frente esconderia o arquivo; no fim, o Windows tira sozinho
+    limpo = limpo.strip(" .")[:TAMANHO_NOME].strip(" .")
+    return limpo or "Sem título"
+
+
+def caminho_para(vault_dir: Path, titulo: str) -> Path:
+    """`Inbox/Título.md`. As notas do assessor caem numa pasta só, e você as
+    leva para onde quiser pela página; repetido vira `Título 2.md`."""
+    pasta = vault_dir / INBOX
+    base = nome_de_arquivo(titulo)
     caminho = pasta / f"{base}.md"
     contador = 2
     while caminho.exists():
-        caminho = pasta / f"{base}-{contador}.md"
+        caminho = pasta / f"{base} {contador}.md"
         contador += 1
     return caminho
 

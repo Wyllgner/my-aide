@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from aide.storage import vault
 from aide.storage.search import buscar_texto, preparar_consulta
 
@@ -22,10 +24,11 @@ def test_cria_nota_e_grava_o_arquivo(ctx, registry, tmp_path):
     assert "Vault é a fonte." in texto
 
 
-def test_arquivo_vai_para_pasta_do_mes(ctx, registry, tmp_path):
+def test_arquivo_vai_para_o_inbox_com_o_titulo_no_nome(ctx, registry, tmp_path):
     _config_vault(ctx, tmp_path)
-    caminho = Path(registry.call("notes.create", {"title": "X", "body": "y"}, ctx).data["path"])
-    assert caminho.parent.name.count("-") == 1  # 2026-09
+    caminho = Path(registry.call("notes.create", {"title": "Reunião de orçamento",
+                                                  "body": "y"}, ctx).data["path"])
+    assert caminho == Path(ctx.config.vault_dir) / "Inbox" / "Reunião de orçamento.md"
 
 
 def test_titulos_iguais_nao_se_sobrescrevem(ctx, registry, tmp_path):
@@ -34,6 +37,7 @@ def test_titulos_iguais_nao_se_sobrescrevem(ctx, registry, tmp_path):
     b = registry.call("notes.create", {"title": "Igual", "body": "dois"}, ctx).data["path"]
     assert a != b
     assert Path(a).read_text() != Path(b).read_text()
+    assert Path(b).name == "Igual 2.md"
 
 
 def test_nota_vazia_e_recusada(ctx, registry, tmp_path):
@@ -157,8 +161,18 @@ def test_arquivo_sem_frontmatter_tambem_serve(tmp_path):
     assert vault.ler(caminho) == ({}, "só texto")
 
 
-def test_slug_lida_com_acento_e_simbolo():
-    assert vault.slugify("Reunião: orçamento & prazos!") == "reuniao-orcamento-prazos"
+@pytest.mark.parametrize("titulo, nome", [
+    ("Reunião: orçamento & prazos!", "Reunião orçamento & prazos!"),
+    ("a/b\\c", "a b c"),
+    ("[[link]] #tag ^bloco | x", "link tag bloco x"),
+    ("../../etc/passwd", "etc passwd"),
+    (".oculta", "oculta"),
+    ("   ", "Sem título"),
+    ("linha\nquebrada", "linha quebrada"),
+    ("x" * 300, "x" * 100),
+])
+def test_nome_de_arquivo_vem_do_titulo(titulo, nome):
+    assert vault.nome_de_arquivo(titulo) == nome
 
 
 def test_reindexar_reconstroi_do_arquivo(ctx, registry, tmp_path):

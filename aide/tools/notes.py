@@ -84,7 +84,7 @@ def create(ctx: ToolContext, title: str, body: str, tags: str | None = None,
         raise ValueError("nota vazia")
 
     agora = now_in(ctx.config.timezone)
-    caminho = vault.caminho_para(Path(ctx.config.vault_dir), title, agora)
+    caminho = vault.caminho_para(Path(ctx.config.vault_dir), title)
     vault.escrever(caminho, title, body, tags, agora, privada=private)
 
     cur = ctx.conn.execute(
