@@ -1,8 +1,11 @@
 """A aplicação web.
 
-**Só leitura.** Nenhuma rota altera dado: concluir tarefa, lançar gasto e
-conversar continuam sendo CLI, Telegram ou MCP. Isso não é preguiça — é o que
-dispensa confirmação, CSRF e o risco de um clique errado numa aba esquecida.
+**Quase só leitura.** A única escrita é a das notas (`notas_api.py`), porque o
+vault virou o caderno que se escreve aqui. O resto — concluir tarefa, lançar
+gasto, conversar — continua sendo CLI, Telegram ou MCP. Escrita tem preço:
+CSRF, DNS rebinding e o clique errado numa aba esquecida. `seguranca.py` paga
+os dois primeiros para todas as rotas, e `test_so_as_notas_escrevem` impede
+que uma rota de escrita nova apareça sem passar por essa decisão.
 
 **Só nesta máquina.** A página mostra tudo, inclusive o que está marcado como
 `private`, e não pede senha. Ela é segura exatamente enquanto escutar em
@@ -51,17 +54,22 @@ def criar_app(config=None, conn_factory=None):
     def contexto() -> ToolContext:
         """`ver_privado=True`: é o dono, na máquina dele, e a porta é local.
 
-        A mesma decisão do terminal. O que a sustenta é o bind — se um dia a
-        página escutar fora daqui, isto precisa mudar junto.
+        A mesma decisão do terminal. O que a sustenta é o bind e a checagem de
+        Host de `seguranca.py` — se um dia a página escutar fora daqui, isto
+        precisa mudar junto.
 
         `auditar=False` porque abrir uma tela não é um acontecimento: a trilha
-        registra o que mudou, e aqui nada muda. Vale enquanto não houver rota
-        de escrita, e é isso que `test_nenhuma_rota_escreve` protege.
+        registra o que mudou. As rotas de nota, que mudam, não usam este
+        contexto e auditam por conta própria.
         """
         return ToolContext(config=config, conn=conn_factory(), actor="web",
                            ver_privado=True, auditar=False)
 
     app.state.contexto = contexto
+
+    from aide.web import notas_api
+
+    notas_api.instalar(app)
 
     def saldo_atual() -> dict | None:
         """O rodapé da lateral. Falhar aqui não pode derrubar a página inteira."""

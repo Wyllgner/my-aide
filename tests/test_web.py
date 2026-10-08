@@ -84,12 +84,13 @@ def test_a_url_anunciada_e_local(config, tmp_path, monkeypatch):
 
 # ---------- só leitura ----------
 
-def test_nenhuma_rota_escreve(app):
-    """Sem POST não há confirmação a pedir nem clique errado a temer."""
-    metodos = set()
+def test_so_as_notas_escrevem(app):
+    """Escrita é decisão, não acidente: rota nova que escreve quebra aqui até
+    alguém pensar em CSRF, auditoria e caminho para ela."""
     for rota in app.routes:
-        metodos |= getattr(rota, "methods", set())
-    assert metodos <= {"GET", "HEAD"}, f"rota de escrita exposta: {metodos}"
+        metodos = getattr(rota, "methods", set()) - {"GET", "HEAD"}
+        if metodos:
+            assert rota.path.startswith("/api/notas/"), f"rota de escrita exposta: {rota.path}"
 
 
 def test_a_api_nao_publica_documentacao(cliente):
@@ -710,14 +711,13 @@ def test_quem_escreve_continua_sendo_registrado(ctx, registry):
     assert any(r["tool"] == "tasks.create" for r in linhas)
 
 
-def test_a_web_so_pode_calar_a_trilha_porque_nao_escreve(app):
-    """Se ganhar uma rota de escrita, esta suposição cai — e o teste de
-    métodos quebra antes, que é a ordem certa de descobrir."""
+def test_a_web_so_pode_calar_a_trilha_porque_as_telas_nao_escrevem(app):
+    """O contexto sem auditoria é o das telas, que só leem. A escrita das notas
+    audita por conta própria (test_notas_api), e nenhuma outra existe."""
     assert app.state.contexto().auditar is False
-    metodos = set()
-    for rota in app.routes:
-        metodos |= getattr(rota, "methods", set())
-    assert metodos <= {"GET", "HEAD"}
+    escrita = {rota.path for rota in app.routes
+               if getattr(rota, "methods", set()) - {"GET", "HEAD"}}
+    assert escrita == {"/api/notas/arquivo", "/api/notas/pasta"}
 
 
 # ---------- a janela antiga ----------
