@@ -95,30 +95,35 @@ def _render_link_open(self, tokens, idx, options, env) -> str:
         token.attrSet("target", "_blank")
         token.attrSet("rel", "noopener noreferrer")
     else:
-        destino = _nota_por_link_markdown(href, env)
+        destino, secao = _nota_por_link_markdown(href, env)
         if destino:
-            token.attrSet("href", href_da_nota(destino))
+            token.attrSet("href", href_da_nota(destino, secao))
         else:
             token.attrs.pop("href", None)
     return self.renderToken(tokens, idx, options, env)
 
 
-def _nota_por_link_markdown(href: str, env) -> str | None:
-    """[texto](Outra%20nota.md): o link markdown para outra nota do vault."""
+def _nota_por_link_markdown(href: str, env) -> tuple[str | None, str]:
+    """[texto](Outra%20nota.md#Seção) e [texto](#Seção): (nota, seção).
+
+    O link markdown para outra nota do vault, ou para um título da própria."""
     import posixpath
     from urllib.parse import unquote
 
-    alvo = unquote(href.split("#")[0])
+    caminho, _, fragmento = href.partition("#")
+    alvo, secao = unquote(caminho), unquote(fragmento)
+    if not alvo:
+        return (env["origem"], secao) if secao else (None, "")
     if not alvo.lower().endswith(".md") or urlsplit(alvo).scheme:
-        return None
+        return None, ""
     pasta = env["origem"].rpartition("/")[0] if env["origem"] else ""
     # relativo à nota, como o Obsidian grava: ../Inbox/Nota.md
     relativo = posixpath.normpath(posixpath.join(pasta, alvo))
     if not relativo.startswith(".."):
         achado = env["indice"].por_caminho.get(chave_link(relativo))
         if achado:
-            return achado
-    return env["indice"].resolver(alvo, env["origem"])
+            return achado, secao
+    return env["indice"].resolver(alvo, env["origem"]), secao
 
 
 def _render_imagem(self, tokens, idx, options, env) -> str:

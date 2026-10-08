@@ -166,3 +166,14 @@ def test_imagem_nunca_carrega(indice):
 def test_link_relativo_que_nao_e_nota_fica_sem_destino(indice):
     html = _html("[x](/api/notas/arquivo?caminho=a.md)", indice)
     assert "href" not in html
+
+
+def test_link_markdown_leva_a_secao(indice):
+    html = _html("[ir](../../Inbox/Reuni%C3%A3o%20de%20or%C3%A7amento.md#Pr%C3%B3ximos%20passos)",
+                 indice)
+    assert "Inbox/Reuni%C3%A3o%20de%20or%C3%A7amento.md#s-pr%C3%B3ximos-passos" in html
+
+
+def test_link_markdown_para_titulo_da_propria_nota(indice):
+    html = _html("[topo](#Fim)\n\n# Fim", indice)
+    assert 'href="/notas?arquivo=Projetos/Casa/Telhado.md#s-fim"' in html
