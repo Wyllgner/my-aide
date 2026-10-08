@@ -65,6 +65,8 @@ def test_wikilink_quebrado_nao_leva_a_lugar_nenhum(indice):
     assert 'class="wikilink quebrado"' in html
     assert 'data-alvo="Não existe"' in html
     assert "href" not in html
+    # ainda alcançável pelo teclado
+    assert 'role="link" tabindex="0"' in html
 
 
 def test_wikilink_prefere_a_mesma_pasta(indice):

@@ -79,8 +79,11 @@ def _render_wikilink(self, tokens, idx, options, env) -> str:
     if destino is None:
         # quebrado: sem href, para não levar a lugar nenhum; o alvo fica
         # guardado para a página poder oferecer criar a nota
-        return (f'<a class="wikilink quebrado" data-alvo="{escape(nome)}"'
-                f' title="essa nota ainda não existe">{escape(texto)}</a>')
+        # sem href o <a> some do teclado e do leitor de tela; role e
+        # tabindex o devolvem
+        return (f'<a class="wikilink quebrado" role="link" tabindex="0"'
+                f' data-alvo="{escape(nome)}" title="essa nota ainda não existe;'
+                f' clique para criar">{escape(texto)}</a>')
     return (f'<a class="wikilink" href="{escape(href_da_nota(destino, secao))}"'
             f' title="{escape(destino)}">{escape(texto)}</a>')
 
