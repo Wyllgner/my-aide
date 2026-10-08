@@ -20,6 +20,8 @@ por ataque:
 
 from __future__ import annotations
 
+import re
+
 HOSTS = frozenset({"127.0.0.1", "localhost"})
 LEITURA = frozenset({"GET", "HEAD"})
 CABECALHO_ESCRITA = "x-aide"
@@ -50,16 +52,14 @@ CABECALHOS = {
 }
 
 
-def nome_do_host(host: str) -> str:
-    """'127.0.0.1:8787' -> '127.0.0.1'. A porta não importa: quem faz o
-    rebinding controla o nome, não a porta."""
-    if host.startswith("["):
-        return host.split("]")[0] + "]"
-    return host.rsplit(":", 1)[0] if ":" in host else host
+# o nome e, se vier, só dígitos de porta: '127.0.0.1:8787@evil' não é host
+HOST = re.compile(r"(?P<nome>[^:]+)(:\d{1,5})?")
 
 
 def host_permitido(host: str | None) -> bool:
-    return bool(host) and nome_do_host(host.lower()) in HOSTS
+    """A porta não importa: quem faz o rebinding controla o nome, não a porta."""
+    casado = HOST.fullmatch((host or "").lower())
+    return bool(casado) and casado["nome"] in HOSTS
 
 
 def escrita_permitida(metodo: str, host: str, origin: str | None,

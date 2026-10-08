@@ -38,7 +38,8 @@ def cliente(app):
 # ---------- Host ----------
 
 @pytest.mark.parametrize("host", ["evil.example", "evil.example:8787", "127.0.0.1.evil.example",
-                                  "192.168.0.10:8787", ""])
+                                  "192.168.0.10:8787", "", "127.0.0.1:8787@evil.example",
+                                  "localhost:evil", "127.0.0.1:", "[::1]:8787"])
 def test_host_de_fora_e_recusado_em_toda_tela(app, host):
     """DNS rebinding: o domínio do atacante passa a apontar para cá, e o
     navegador entrega a página a ele. O nome no Host é o que o denuncia."""
