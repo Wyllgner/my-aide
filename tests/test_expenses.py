@@ -451,6 +451,32 @@ def test_o_prompt_mostra_as_tags(ctx, registry):
     assert "farmácia → pessoal" in system_prompt(ctx.config, ctx.conn).content
 
 
+def test_tag_dita_na_descricao_entra_mesmo_sem_o_modelo_passar(ctx, registry):
+    registry.call("expenses.add", {"amount": "40", "description": "jantar",
+                                   "category": "alimentação", "tag": "casal"}, ctx)
+    gasto = registry.call("expenses.add", {"amount": "57", "description": "alimentação do casal",
+                                           "category": "alimentação"}, ctx).data
+    assert gasto["tag"] == "casal"
+
+
+def test_tag_da_descricao_so_vale_na_categoria_onde_ja_foi_usada(ctx, registry):
+    registry.call("expenses.add", {"amount": "40", "description": "jantar",
+                                   "category": "alimentação", "tag": "casal"}, ctx)
+    gasto = registry.call("expenses.add", {"amount": "300", "description": "hotel do casal",
+                                           "category": "viagem"}, ctx).data
+    assert gasto["tag"] is None
+
+
+def test_descricao_com_duas_tags_fica_sem(ctx, registry):
+    for tag in ("casal", "trabalho"):
+        registry.call("expenses.add", {"amount": "1", "description": "x",
+                                       "category": "alimentação", "tag": tag}, ctx)
+    gasto = registry.call("expenses.add", {"amount": "57",
+                                           "description": "almoço do casal no trabalho",
+                                           "category": "alimentação"}, ctx).data
+    assert gasto["tag"] is None
+
+
 # ---------- parcelas ----------
 
 def _parcelado(ctx, registry, **extra):
