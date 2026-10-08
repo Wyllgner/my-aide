@@ -76,6 +76,19 @@ def escrita_permitida(metodo: str, host: str, origin: str | None,
     return None
 
 
+# a maior nota aceita (notas_api.TAMANHO_MAXIMO) mais folga para o JSON em volta
+CORPO_MAXIMO = 3 * 1024 * 1024
+
+
+def corpo_grande_demais(tamanho: str | None) -> bool:
+    """Recusado antes de ser lido: a checagem da rota só vem depois que o
+    corpo inteiro já está na memória."""
+    try:
+        return int(tamanho or 0) > CORPO_MAXIMO
+    except ValueError:
+        return True
+
+
 def instalar(app) -> None:
     from fastapi.responses import PlainTextResponse
 
@@ -91,6 +104,8 @@ def instalar(app) -> None:
                 request.headers.get("sec-fetch-site"))
             if motivo:
                 resposta = PlainTextResponse(motivo, status_code=403)
+            elif corpo_grande_demais(request.headers.get("content-length")):
+                resposta = PlainTextResponse("pedido grande demais", status_code=413)
             else:
                 resposta = await call_next(request)
         for nome, valor in CABECALHOS.items():

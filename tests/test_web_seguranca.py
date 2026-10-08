@@ -171,3 +171,13 @@ def test_a_isca_chegou_mesmo_as_telas(cliente, com_iscas):
     for caminho in ("/hoje", "/notas", "/gastos", "/pessoas", "/memoria", "/fila",
                     "/conversas", "/auditoria", "/calendario?ano=2020&mes=1"):
         assert "&lt;img src=x" in cliente.get(caminho).text, caminho
+
+
+def test_corpo_enorme_e_recusado_antes_de_ser_lido(cliente):
+    cabecalhos = {"origin": LOCAL, "x-aide": "1", "content-length": str(50 * 1024 * 1024)}
+    assert cliente.put("/api/notas/arquivo", headers=cabecalhos).status_code == 413
+
+
+def test_tamanho_que_nao_e_numero_e_recusado():
+    assert seguranca.corpo_grande_demais("abc")
+    assert not seguranca.corpo_grande_demais(None)
