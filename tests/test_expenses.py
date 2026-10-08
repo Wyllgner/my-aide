@@ -351,6 +351,20 @@ def test_tag_cadastrada_puxa_a_categoria(ctx, registry):
     assert (gasto["category"], gasto["tag"]) == ("pessoal", "farmácia")
 
 
+def test_confirmacao_cita_a_tag(ctx, registry):
+    """Sem a tag na fala, na mensagem seguinte o modelo dizia que não pôs tag."""
+    gasto = registry.call("expenses.add", {"amount": "8,54", "description": "almoço",
+                                           "category": "alimentação",
+                                           "tag": "pessoal"}, ctx).data
+    assert gasto["confirmacao"] == f"R$ 8,54 em alimentação · pessoal (#{gasto['id']})"
+
+
+def test_confirmacao_sem_tag_fica_so_com_a_categoria(ctx, registry):
+    gasto = registry.call("expenses.add", {"amount": "11,13", "description": "Uber",
+                                           "category": "uber"}, ctx).data
+    assert gasto["confirmacao"] == f"R$ 11,13 em uber (#{gasto['id']})"
+
+
 def test_tag_mandada_como_categoria_tambem_vai_para_a_mae(ctx, registry):
     """O modelo erra a dedução; o teto não pode ficar furado por isso."""
     _tag(ctx, registry)
