@@ -157,7 +157,14 @@ def _sem_vetor(conn, embedder, relatorio: Relatorio) -> None:
         caminho = Path(row["path"])
         if not caminho.exists():
             continue
-        _indexar(conn, row["id"], row["title"], vault.corpo_de(caminho), embedder)
+        meta, corpo = vault.ler(caminho)
+        if vault.privada(meta):
+            # marcada no arquivo depois da última indexação, e a varredura de
+            # cima não viu porque o mtime ficou dentro da folga: o arquivo,
+            # que é o que vai para fora, tem a última palavra
+            conn.execute("UPDATE notes SET private = 1 WHERE id = ?", (row["id"],))
+            continue
+        _indexar(conn, row["id"], row["title"], corpo, embedder)
         relatorio.vetorizadas.append((row["id"], row["title"]))
 
 

@@ -264,3 +264,16 @@ def test_esquecer_tira_da_busca(raiz, banco):
     assert esquecer(banco, caminho)
     assert buscar_texto(banco, "palavrarara") == []
     assert esquecer(banco, caminho) is None
+
+
+def test_o_daemon_relê_o_privado_antes_de_mandar(raiz, banco):
+    """O banco ainda diz normal, mas o arquivo já foi marcado: vale o arquivo."""
+    from aide.storage.reconciliacao import reconciliar, sincronizar
+
+    caminho = raiz / "Inbox" / "Nota.md"
+    sincronizar(banco, caminho)
+    caminho.write_text("---\nprivate: true\n---\n\nSEGREDO")
+    espiao = Espiao()
+    reconciliar(banco, raiz, embedder=espiao)
+    assert espiao.enviado == []
+    assert banco.execute("SELECT private FROM notes").fetchone()[0] == 1
