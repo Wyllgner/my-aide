@@ -477,6 +477,28 @@ def test_descricao_com_duas_tags_fica_sem(ctx, registry):
     assert gasto["tag"] is None
 
 
+def test_tag_privada_nao_vaza_para_a_descricao_nem_para_o_prompt(ctx, registry):
+    from aide.core.context import system_prompt
+
+    registry.call("expenses.add", {"amount": "5", "description": "x", "category": "pessoal",
+                                   "tag": "segredo", "private": True}, ctx)
+    gasto = registry.call("expenses.add", {"amount": "5", "description": "o segredo",
+                                           "category": "pessoal"}, ctx).data
+    assert gasto["tag"] is None
+    assert "segredo" not in system_prompt(ctx.config, ctx.conn).content
+
+
+def test_o_prompt_mostra_as_tags_usadas_sem_cadastro(ctx, registry):
+    from aide.core.context import system_prompt
+
+    _tag(ctx, registry)
+    registry.call("expenses.add", {"amount": "40", "description": "jantar",
+                                   "category": "alimentação", "tag": "casal"}, ctx)
+    prompt = system_prompt(ctx.config, ctx.conn).content
+    assert "farmácia → pessoal" in prompt
+    assert "alimentação: casal" in prompt
+
+
 # ---------- parcelas ----------
 
 def _parcelado(ctx, registry, **extra):
