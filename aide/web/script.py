@@ -215,6 +215,122 @@ JS = r"""
   previa.addEventListener("click", criarDoLink);
   previa.addEventListener("keydown", criarDoLink);
 
+  // ---------- autocompletar [[ ----------
+  var notas = [];
+  try { notas = JSON.parse(editor.dataset.notas || "[]"); } catch (e) { notas = []; }
+  var nomes = {};
+  notas.forEach(function (n) {
+    var nome = n.replace(/^.*\//, "").replace(/\.md$/i, "");
+    nomes[nome.toLowerCase()] = (nomes[nome.toLowerCase()] || 0) + 1;
+  });
+  var caixa = document.createElement("ul");
+  caixa.className = "sugestoes";
+  caixa.hidden = true;
+  caixa.setAttribute("role", "listbox");
+  document.body.appendChild(caixa);
+  var achados = [];
+  var escolhido = 0;
+  var ABERTO = /\[\[([^\[\]\n|#]*)$/;
+
+  function comoLink(n) {
+    var nome = n.replace(/^.*\//, "").replace(/\.md$/i, "");
+    // nome repetido em outra pasta: o caminho desfaz a dúvida
+    return nomes[nome.toLowerCase()] > 1 ? n.replace(/\.md$/i, "") : nome;
+  }
+
+  function fecharSugestoes() { caixa.hidden = true; achados = []; }
+
+  function posicionar() {
+    // um espelho do campo, com o mesmo estilo, mede onde está o cursor
+    var espelho = document.createElement("div");
+    var estilo = getComputedStyle(editor);
+    ["fontFamily", "fontSize", "lineHeight", "padding", "border", "letterSpacing",
+     "tabSize", "boxSizing", "width"].forEach(function (p) { espelho.style[p] = estilo[p]; });
+    espelho.style.position = "absolute";
+    espelho.style.visibility = "hidden";
+    espelho.style.whiteSpace = "pre-wrap";
+    espelho.style.wordWrap = "break-word";
+    espelho.textContent = editor.value.slice(0, editor.selectionStart);
+    var marca = document.createElement("span");
+    marca.textContent = "\u200b";
+    espelho.appendChild(marca);
+    document.body.appendChild(espelho);
+    var caixaCampo = editor.getBoundingClientRect();
+    var topo = caixaCampo.top + marca.offsetTop - editor.scrollTop + parseFloat(estilo.lineHeight);
+    var esquerda = caixaCampo.left + marca.offsetLeft;
+    document.body.removeChild(espelho);
+    caixa.style.top = Math.min(topo, window.innerHeight - 40) + window.scrollY + "px";
+    caixa.style.left = Math.min(esquerda, window.innerWidth - 300) + window.scrollX + "px";
+  }
+
+  function desenhar() {
+    caixa.textContent = "";
+    achados.forEach(function (n, i) {
+      var item = document.createElement("li");
+      item.setAttribute("role", "option");
+      item.setAttribute("aria-selected", String(i === escolhido));
+      var nome = document.createElement("span");
+      nome.textContent = n.replace(/^.*\//, "").replace(/\.md$/i, "");
+      var onde = document.createElement("span");
+      onde.className = "onde";
+      onde.textContent = n;
+      item.appendChild(nome);
+      item.appendChild(onde);
+      item.addEventListener("mousedown", function (e) { e.preventDefault(); inserir(n); });
+      caixa.appendChild(item);
+    });
+  }
+
+  function sugerir() {
+    var antes = editor.value.slice(0, editor.selectionStart);
+    var aberto = antes.match(ABERTO);
+    if (!aberto || editor.selectionStart !== editor.selectionEnd) { fecharSugestoes(); return; }
+    var busca = aberto[1].toLowerCase();
+    achados = notas.filter(function (n) {
+      return n !== caminho && n.toLowerCase().indexOf(busca) >= 0;
+    }).sort(function (a, b) {
+      var na = a.replace(/^.*\//, "").toLowerCase().indexOf(busca) === 0 ? 0 : 1;
+      var nb = b.replace(/^.*\//, "").toLowerCase().indexOf(busca) === 0 ? 0 : 1;
+      return na - nb || a.localeCompare(b);
+    }).slice(0, 8);
+    if (!achados.length) { fecharSugestoes(); return; }
+    escolhido = 0;
+    desenhar();
+    posicionar();
+    caixa.hidden = false;
+  }
+
+  function inserir(n) {
+    var fim = editor.selectionStart;
+    var antes = editor.value.slice(0, fim);
+    var aberto = antes.match(ABERTO);
+    if (!aberto) { return; }
+    var depois = editor.value.slice(fim);
+    var fecha = depois.indexOf("]]") === 0 ? "" : "]]";
+    var link = comoLink(n);
+    editor.value = antes.slice(0, antes.length - aberto[1].length) + link + fecha + depois;
+    var cursor = fim - aberto[1].length + link.length + 2;
+    editor.setSelectionRange(cursor, cursor);
+    fecharSugestoes();
+    agendar();
+  }
+
+  editor.addEventListener("keydown", function (e) {
+    if (caixa.hidden) { return; }
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      escolhido = (escolhido + (e.key === "ArrowDown" ? 1 : achados.length - 1)) % achados.length;
+      desenhar();
+    } else if (e.key === "Enter" || e.key === "Tab") {
+      e.preventDefault();
+      inserir(achados[escolhido]);
+    } else if (e.key === "Escape") {
+      fecharSugestoes();
+    }
+  });
+  editor.addEventListener("input", sugerir);
+  editor.addEventListener("blur", fecharSugestoes);
+  editor.addEventListener("scroll", fecharSugestoes);
 
   window.addEventListener("beforeunload", function (e) {
     if (editor.value !== salvo) { e.preventDefault(); e.returnValue = ""; }
