@@ -26,7 +26,8 @@ def app(config, tmp_path):
 
 @pytest.fixture
 def cliente(app):
-    return TestClient(app)
+    # o Host de verdade: o padrão do TestClient, "testserver", é recusado
+    return TestClient(app, base_url="http://127.0.0.1:8787")
 
 
 # ---------- a fronteira ----------
@@ -83,12 +84,13 @@ def test_a_url_anunciada_e_local(config, tmp_path, monkeypatch):
 
 # ---------- só leitura ----------
 
-def test_nenhuma_rota_escreve(app):
-    """Sem POST não há confirmação a pedir nem clique errado a temer."""
-    metodos = set()
+def test_so_as_notas_escrevem(app):
+    """Escrita é decisão, não acidente: rota nova que escreve quebra aqui até
+    alguém pensar em CSRF, auditoria e caminho para ela."""
     for rota in app.routes:
-        metodos |= getattr(rota, "methods", set())
-    assert metodos <= {"GET", "HEAD"}, f"rota de escrita exposta: {metodos}"
+        metodos = getattr(rota, "methods", set()) - {"GET", "HEAD"}
+        if metodos:
+            assert rota.path.startswith("/api/notas/"), f"rota de escrita exposta: {rota.path}"
 
 
 def test_a_api_nao_publica_documentacao(cliente):
@@ -331,7 +333,7 @@ def test_o_mes_mostra_o_que_esta_marcado(cliente, app, registry):
     ctx = app.state.contexto()
     registry.call("tasks.create", {"title": "Pagar o condomínio",
                                    "due": "2026-09-20T09:00"}, ctx)
-    html = cliente.get("/calendario").text
+    html = cliente.get("/calendario?ano=2026&mes=9").text
     assert "Pagar o condomínio" in html
     assert "Setembro" in html or "setembro" in html.lower()
 
@@ -609,9 +611,14 @@ def com_nota(app, registry, tmp_path):
     return app
 
 
-def test_notas_lista_e_abre_o_conteudo(cliente, com_nota):
+def test_notas_lista_e_abre_a_ultima_mexida(cliente, com_nota):
     html = cliente.get("/notas").text
-    assert "Manutenção do carro" in html
+    assert "Manutenção do carro" in html and "Reunião de orçamento" in html
+    assert "cortar 20% da nuvem" in html
+
+
+def test_abrir_nota_pelo_caminho(cliente, com_nota):
+    html = cliente.get("/notas?arquivo=Inbox/Manuten%C3%A7%C3%A3o%20do%20carro.md").text
     assert "trocar o óleo antes da viagem" in html
 
 
@@ -709,14 +716,13 @@ def test_quem_escreve_continua_sendo_registrado(ctx, registry):
     assert any(r["tool"] == "tasks.create" for r in linhas)
 
 
-def test_a_web_so_pode_calar_a_trilha_porque_nao_escreve(app):
-    """Se ganhar uma rota de escrita, esta suposição cai — e o teste de
-    métodos quebra antes, que é a ordem certa de descobrir."""
+def test_a_web_so_pode_calar_a_trilha_porque_as_telas_nao_escrevem(app):
+    """O contexto sem auditoria é o das telas, que só leem. A escrita das notas
+    audita por conta própria (test_notas_api), e nenhuma outra existe."""
     assert app.state.contexto().auditar is False
-    metodos = set()
-    for rota in app.routes:
-        metodos |= getattr(rota, "methods", set())
-    assert metodos <= {"GET", "HEAD"}
+    escrita = {rota.path for rota in app.routes
+               if getattr(rota, "methods", set()) - {"GET", "HEAD"}}
+    assert escrita == {"/api/notas/arquivo", "/api/notas/pasta"}
 
 
 # ---------- a janela antiga ----------
@@ -748,7 +754,7 @@ def test_tarefa_descartada_sai_do_calendario(cliente, app, registry):
                                          "due": "2026-09-21T09:00"}, ctx).data
     registry.call("tasks.drop", {"id": sai["id"]}, ctx)
 
-    html = cliente.get("/calendario").text
+    html = cliente.get("/calendario?ano=2026&mes=9").text
     assert "Condomínio" in html
     assert "Descartada" not in html
     assert fica["id"]
@@ -760,7 +766,7 @@ def test_tarefa_concluida_continua_no_calendario(cliente, app, registry):
     feita = registry.call("tasks.create", {"title": "Boleto da luz",
                                            "due": "2026-09-18T09:00"}, ctx).data
     registry.call("tasks.complete", {"id": feita["id"]}, ctx)
-    assert "Boleto da luz" in cliente.get("/calendario").text
+    assert "Boleto da luz" in cliente.get("/calendario?ano=2026&mes=9").text
 
 
 def test_a_fila_separa_o_que_espera_do_que_ja_foi(cliente, app, registry):
@@ -809,7 +815,8 @@ def test_a_virada_do_ano_anda_certo():
 
 
 def test_fora_do_mes_atual_aparece_o_atalho_para_hoje(cliente):
-    assert ">hoje</a>" in cliente.get("/calendario?ano=2026&mes=10").text
+    # um mês que nunca é o atual: com o mês fixo, o teste quebrava ao chegar nele
+    assert ">hoje</a>" in cliente.get("/calendario?ano=2020&mes=1").text
     assert ">hoje</a>" not in cliente.get("/calendario").text
 
 

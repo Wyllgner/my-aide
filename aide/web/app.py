@@ -1,8 +1,11 @@
 """A aplicação web.
 
-**Só leitura.** Nenhuma rota altera dado: concluir tarefa, lançar gasto e
-conversar continuam sendo CLI, Telegram ou MCP. Isso não é preguiça — é o que
-dispensa confirmação, CSRF e o risco de um clique errado numa aba esquecida.
+**Quase só leitura.** A única escrita é a das notas (`notas_api.py`), porque o
+vault virou o caderno que se escreve aqui. O resto — concluir tarefa, lançar
+gasto, conversar — continua sendo CLI, Telegram ou MCP. Escrita tem preço:
+CSRF, DNS rebinding e o clique errado numa aba esquecida. `seguranca.py` paga
+os dois primeiros para todas as rotas, e `test_so_as_notas_escrevem` impede
+que uma rota de escrita nova apareça sem passar por essa decisão.
 
 **Só nesta máquina.** A página mostra tudo, inclusive o que está marcado como
 `private`, e não pede senha. Ela é segura exatamente enquanto escutar em
@@ -19,6 +22,7 @@ import logging
 
 from aide.storage import connect, migrate
 from aide.tools.registry import ToolContext
+from aide.web import seguranca
 
 log = logging.getLogger(__name__)
 
@@ -43,23 +47,29 @@ def criar_app(config=None, conn_factory=None):
             return conn
 
     app = FastAPI(title="my-aide", docs_url=None, redoc_url=None, openapi_url=None)
+    seguranca.instalar(app)
     app.state.config = config
     app.state.conn_factory = conn_factory
 
     def contexto() -> ToolContext:
         """`ver_privado=True`: é o dono, na máquina dele, e a porta é local.
 
-        A mesma decisão do terminal. O que a sustenta é o bind — se um dia a
-        página escutar fora daqui, isto precisa mudar junto.
+        A mesma decisão do terminal. O que a sustenta é o bind e a checagem de
+        Host de `seguranca.py` — se um dia a página escutar fora daqui, isto
+        precisa mudar junto.
 
         `auditar=False` porque abrir uma tela não é um acontecimento: a trilha
-        registra o que mudou, e aqui nada muda. Vale enquanto não houver rota
-        de escrita, e é isso que `test_nenhuma_rota_escreve` protege.
+        registra o que mudou. As rotas de nota, que mudam, não usam este
+        contexto e auditam por conta própria.
         """
         return ToolContext(config=config, conn=conn_factory(), actor="web",
                            ver_privado=True, auditar=False)
 
     app.state.contexto = contexto
+
+    from aide.web import notas_api
+
+    notas_api.instalar(app)
 
     def saldo_atual() -> dict | None:
         """O rodapé da lateral. Falhar aqui não pode derrubar a página inteira."""
@@ -82,17 +92,25 @@ def criar_app(config=None, conn_factory=None):
     def saude() -> dict:
         return {"ok": True, "escutando": ENDERECO}
 
+    @app.get("/app.js")
+    def script() -> Response:
+        from aide.web.script import JS
+
+        return Response(JS, media_type="text/javascript",
+                        headers={"cache-control": "no-cache"})
+
     @app.get("/app.css")
     def folha_de_estilo() -> Response:
         from aide.web.estilo import CSS
 
         return Response(CSS, media_type="text/css",
-                        headers={"cache-control": "max-age=300"})
+                        headers={"cache-control": "no-cache"})
 
     # Uma rota por tela. As que ainda não têm conteúdo respondem a moldura com
     # um aviso — assim a navegação inteira já é navegável e testável.
     from aide.core.context import now_in
     from aide.tools import registry as toolbelt
+    from aide.web import notas_tela
     from aide.web import telas as conteudo
     from aide.web.paginas import TELAS, cabecalho, em_breve
 
@@ -101,7 +119,7 @@ def criar_app(config=None, conn_factory=None):
     MONTADORES = {"painel": conteudo.painel, "hoje": conteudo.hoje,
                   "calendario": conteudo.calendario, "gastos": conteudo.gastos,
                   "custo": conteudo.custo, "conversas": conteudo.conversas,
-                  "ferramentas": conteudo.ferramentas, "auditoria": conteudo.auditoria, "notas": conteudo.notas,
+                  "ferramentas": conteudo.ferramentas, "auditoria": conteudo.auditoria, "notas": notas_tela.tela,
                   "memoria": conteudo.memoria, "pessoas": conteudo.pessoas,
                   "fila": conteudo.fila}
 
@@ -109,6 +127,7 @@ def criar_app(config=None, conn_factory=None):
         @app.get(tela.caminho, response_class=HTMLResponse, name=tela.slug)
         def ver(periodo: str = "mes", sessao: str | None = None,
                 ator: str | None = None, nota: int | None = None,
+                arquivo: str | None = None,
                 busca: str | None = None, ano: int | None = None,
                 mes: int | None = None, dia: int | None = None,
                 # filtros da busca de gastos
@@ -134,7 +153,7 @@ def criar_app(config=None, conn_factory=None):
             elif tela.slug == "auditoria":
                 extra = {"ator": ator}
             elif tela.slug == "notas":
-                extra = {"nota": nota, "busca": busca}
+                extra = {"nota": nota, "busca": busca, "arquivo": arquivo}
             elif tela.slug == "calendario":
                 extra = {"ano": ano, "mes": mes, "dia": dia}
             return render(montar(ctx, toolbelt, agora, **extra), tela.slug)

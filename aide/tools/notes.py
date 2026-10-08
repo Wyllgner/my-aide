@@ -16,15 +16,20 @@ from aide.tools.registry import ToolContext, registry
 log = logging.getLogger(__name__)
 
 
-def _indexar_tudo(ctx: ToolContext, note_id: int, title: str, body: str) -> None:
+def _indexar_tudo(ctx: ToolContext, note_id: int, title: str, body: str,
+                  privada: bool = False) -> None:
     """Índice de palavra-chave sempre; o semântico só se houver embedder.
 
     A nota precisa ficar gravada mesmo sem rede ou sem chave da OpenAI — por
     isso a falha do embedding é registrada, não propagada.
+
+    Nota privada não vira vetor: gerar o vetor é mandar o texto inteiro para a
+    OpenAI, e privado é justamente o que não sai desta máquina. A busca por
+    palavra-chave, que é local, continua achando.
     """
     indexar(ctx.conn, note_id, title, body)
     embedder = getattr(ctx, "embedder", None)
-    if embedder is None:
+    if embedder is None or privada:
         return
     try:
         vetor = embedder.embed_one(f"{title}\n\n{body}")
@@ -79,14 +84,14 @@ def create(ctx: ToolContext, title: str, body: str, tags: str | None = None,
         raise ValueError("nota vazia")
 
     agora = now_in(ctx.config.timezone)
-    caminho = vault.caminho_para(Path(ctx.config.vault_dir), title, agora)
-    vault.escrever(caminho, title, body, tags, agora)
+    caminho = vault.caminho_para(Path(ctx.config.vault_dir), title)
+    vault.escrever(caminho, title, body, tags, agora, privada=private)
 
     cur = ctx.conn.execute(
         "INSERT INTO notes (title, path, tags, private) VALUES (?, ?, ?, ?)",
         (title, str(caminho), tags, int(private)),
     )
-    _indexar_tudo(ctx, cur.lastrowid, title, body)
+    _indexar_tudo(ctx, cur.lastrowid, title, body, privada=private)
     return {"id": cur.lastrowid, "title": title, "path": str(caminho)}
 
 
@@ -118,7 +123,8 @@ def append(ctx: ToolContext, body: str, id: int | None = None,
     agora = now_in(ctx.config.timezone)
     vault.acrescentar(caminho, body, agora)
     ctx.conn.execute("UPDATE notes SET updated_at = datetime('now') WHERE id = ?", (row["id"],))
-    _indexar_tudo(ctx, row["id"], row["title"], vault.corpo_de(caminho))
+    _indexar_tudo(ctx, row["id"], row["title"], vault.corpo_de(caminho),
+                  privada=bool(row["private"]))
     return {"id": row["id"], "title": row["title"]}
 
 

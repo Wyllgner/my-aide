@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from aide.storage import vault
 from aide.storage.search import buscar_texto, preparar_consulta
 
@@ -22,10 +24,11 @@ def test_cria_nota_e_grava_o_arquivo(ctx, registry, tmp_path):
     assert "Vault é a fonte." in texto
 
 
-def test_arquivo_vai_para_pasta_do_mes(ctx, registry, tmp_path):
+def test_arquivo_vai_para_o_inbox_com_o_titulo_no_nome(ctx, registry, tmp_path):
     _config_vault(ctx, tmp_path)
-    caminho = Path(registry.call("notes.create", {"title": "X", "body": "y"}, ctx).data["path"])
-    assert caminho.parent.name.count("-") == 1  # 2026-09
+    caminho = Path(registry.call("notes.create", {"title": "Reunião de orçamento",
+                                                  "body": "y"}, ctx).data["path"])
+    assert caminho == Path(ctx.config.vault_dir) / "Inbox" / "Reunião de orçamento.md"
 
 
 def test_titulos_iguais_nao_se_sobrescrevem(ctx, registry, tmp_path):
@@ -34,6 +37,7 @@ def test_titulos_iguais_nao_se_sobrescrevem(ctx, registry, tmp_path):
     b = registry.call("notes.create", {"title": "Igual", "body": "dois"}, ctx).data["path"]
     assert a != b
     assert Path(a).read_text() != Path(b).read_text()
+    assert Path(b).name == "Igual 2.md"
 
 
 def test_nota_vazia_e_recusada(ctx, registry, tmp_path):
@@ -157,8 +161,18 @@ def test_arquivo_sem_frontmatter_tambem_serve(tmp_path):
     assert vault.ler(caminho) == ({}, "só texto")
 
 
-def test_slug_lida_com_acento_e_simbolo():
-    assert vault.slugify("Reunião: orçamento & prazos!") == "reuniao-orcamento-prazos"
+@pytest.mark.parametrize("titulo, nome", [
+    ("Reunião: orçamento & prazos!", "Reunião orçamento & prazos!"),
+    ("a/b\\c", "a b c"),
+    ("[[link]] #tag ^bloco | x", "link tag bloco x"),
+    ("../../etc/passwd", "etc passwd"),
+    (".oculta", "oculta"),
+    ("   ", "Sem título"),
+    ("linha\nquebrada", "linha quebrada"),
+    ("x" * 300, "x" * 100),
+])
+def test_nome_de_arquivo_vem_do_titulo(titulo, nome):
+    assert vault.nome_de_arquivo(titulo) == nome
 
 
 def test_reindexar_reconstroi_do_arquivo(ctx, registry, tmp_path):
@@ -221,3 +235,118 @@ def test_a_listagem_traz_a_data_pronta(ctx, registry, tmp_path):
     nota = registry.call("notes.list", {}, ctx).data[0]
     assert nota["quando"] == "hoje"
     assert ":" not in nota["quando"]  # sem hora
+
+
+# ---------- privada não vira vetor ----------
+
+class EmbedderEspiao:
+    """Guarda tudo o que teria ido para a OpenAI."""
+
+    modelo = "espiao-1"
+
+    def __init__(self):
+        self.enviado = []
+
+    def embed_one(self, texto):
+        self.enviado.append(texto)
+        return [1.0, 0.0]
+
+
+def test_nota_privada_nao_vai_para_o_embedding(ctx, registry, tmp_path):
+    """Gerar o vetor é mandar o texto para fora; privado não sai desta máquina."""
+    _config_vault(ctx, tmp_path)
+    ctx.embedder = EmbedderEspiao()
+    registry.call("notes.create", {"title": "Laudo", "body": "SEGREDO", "private": True}, ctx)
+    assert ctx.embedder.enviado == []
+    # a busca local continua achando
+    assert buscar_texto(ctx.conn, "SEGREDO")
+
+
+def test_acrescentar_em_privada_nao_vai_para_o_embedding(ctx, registry, tmp_path):
+    _config_vault(ctx, tmp_path)
+    ctx.ver_privado = True
+    nota = registry.call("notes.create", {"title": "Laudo", "body": "a",
+                                          "private": True}, ctx).data
+    ctx.embedder = EmbedderEspiao()
+    registry.call("notes.append", {"id": nota["id"], "body": "SEGREDO"}, ctx)
+    assert ctx.embedder.enviado == []
+
+
+def test_reindexar_privada_nao_vai_para_o_embedding(ctx, registry, tmp_path):
+    from aide.storage.reconciliacao import reconciliar
+
+    _config_vault(ctx, tmp_path)
+    registry.call("notes.create", {"title": "Laudo", "body": "SEGREDO", "private": True}, ctx)
+    espiao = EmbedderEspiao()
+    reconciliar(ctx.conn, Path(ctx.config.vault_dir), embedder=espiao, forcar=True)
+    assert espiao.enviado == []
+
+
+def test_nota_normal_continua_virando_vetor(ctx, registry, tmp_path):
+    _config_vault(ctx, tmp_path)
+    ctx.embedder = EmbedderEspiao()
+    registry.call("notes.create", {"title": "Mercado", "body": "comprar pão"}, ctx)
+    assert len(ctx.embedder.enviado) == 1
+
+
+# ---------- privado no frontmatter ----------
+
+def test_privada_fica_marcada_no_arquivo(ctx, registry, tmp_path):
+    _config_vault(ctx, tmp_path)
+    nota = registry.call("notes.create", {"title": "Laudo", "body": "x", "private": True}, ctx).data
+    meta, _ = vault.ler(Path(nota["path"]))
+    assert vault.privada(meta)
+
+
+def test_normal_nao_ganha_a_linha(ctx, registry, tmp_path):
+    _config_vault(ctx, tmp_path)
+    nota = registry.call("notes.create", {"title": "Mercado", "body": "x"}, ctx).data
+    assert "private" not in vault.ler(Path(nota["path"]))[0]
+
+
+def test_arquivo_privado_adotado_nasce_privado(ctx, tmp_path):
+    from aide.storage.reconciliacao import reconciliar
+
+    _config_vault(ctx, tmp_path)
+    pasta = Path(ctx.config.vault_dir)
+    pasta.mkdir()
+    (pasta / "Diário.md").write_text("---\nprivate: true\n---\n\nSEGREDO\n")
+    espiao = EmbedderEspiao()
+    reconciliar(ctx.conn, pasta, embedder=espiao)
+    assert ctx.conn.execute("SELECT private FROM notes").fetchone()[0] == 1
+    assert espiao.enviado == []
+
+
+def test_marcar_privada_por_fora_sobe_e_apaga_o_vetor(ctx, registry, tmp_path):
+    import os
+
+    from aide.storage.reconciliacao import reconciliar
+
+    _config_vault(ctx, tmp_path)
+    ctx.embedder = EmbedderEspiao()
+    nota = registry.call("notes.create", {"title": "Diário", "body": "x"}, ctx).data
+    caminho = Path(nota["path"])
+    caminho.write_text(caminho.read_text().replace("---\n\n", "private: true\n---\n\n", 1))
+    os.utime(caminho, (caminho.stat().st_mtime + 60,) * 2)
+
+    reconciliar(ctx.conn, Path(ctx.config.vault_dir), embedder=EmbedderEspiao())
+    assert ctx.conn.execute("SELECT private FROM notes").fetchone()[0] == 1
+    assert ctx.conn.execute("SELECT COUNT(*) FROM embeddings").fetchone()[0] == 0
+
+
+def test_tirar_a_linha_por_fora_nao_desmarca(ctx, registry, tmp_path):
+    """Desmarcar o privado é decisão explícita, não efeito colateral."""
+    import os
+
+    from aide.storage.reconciliacao import reconciliar
+
+    _config_vault(ctx, tmp_path)
+    nota = registry.call("notes.create", {"title": "Laudo", "body": "x", "private": True}, ctx).data
+    caminho = Path(nota["path"])
+    caminho.write_text(caminho.read_text().replace("private: true\n", ""))
+    os.utime(caminho, (caminho.stat().st_mtime + 60,) * 2)
+
+    espiao = EmbedderEspiao()
+    reconciliar(ctx.conn, Path(ctx.config.vault_dir), embedder=espiao)
+    assert ctx.conn.execute("SELECT private FROM notes").fetchone()[0] == 1
+    assert espiao.enviado == []

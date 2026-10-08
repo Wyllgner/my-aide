@@ -1,0 +1,209 @@
+"""O único JavaScript da página, servido em /app.js.
+
+Arquivo, e não <script> embutido, porque a CSP só deixa rodar script vindo
+daqui (`script-src 'self'`): um <script> que um dia escapasse do escape de
+uma tela não roda. Sem framework e sem build, como o resto.
+
+Faz só o que o servidor não consegue: salvar enquanto você digita, avisar do
+conflito com quem escreveu por fora, e os botões de criar e apagar.
+"""
+
+from __future__ import annotations
+
+JS = r"""
+"use strict";
+(function () {
+  // a marca que seguranca.py exige em toda escrita
+  function pedir(metodo, url, corpo) {
+    return fetch(url, {
+      method: metodo,
+      headers: { "Content-Type": "application/json", "X-Aide": "1" },
+      body: corpo === undefined ? undefined : JSON.stringify(corpo),
+      credentials: "same-origin",
+    });
+  }
+
+  function abrir(caminho) {
+    location.href = "/notas?arquivo=" + encodeURIComponent(caminho).replace(/%2F/g, "/");
+  }
+
+  function erroDe(resposta) {
+    return resposta.json().then(
+      function (d) { return d.detail || d.erro || "erro " + resposta.status; },
+      function () { return "erro " + resposta.status; });
+  }
+
+  // ---------- criar nota e pasta ----------
+  var form = document.getElementById("criar");
+  var nome = document.getElementById("criar-nome");
+  var erro = document.getElementById("criar-erro");
+  var criando = null;
+
+  function pedirNome(tipo) {
+    criando = tipo;
+    form.hidden = false;
+    erro.textContent = "";
+    var pasta = form.dataset.pasta;
+    nome.placeholder = tipo === "nota" ? "nome da nota" : "nome da pasta";
+    nome.value = pasta ? pasta + "/" : "";
+    nome.focus();
+  }
+
+  if (form) {
+    document.getElementById("nova-nota").addEventListener("click", function () { pedirNome("nota"); });
+    document.getElementById("nova-pasta").addEventListener("click", function () { pedirNome("pasta"); });
+    nome.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") { form.hidden = true; }
+    });
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var caminho = nome.value.trim().replace(/\/+$/, "");
+      if (!caminho) { return; }
+      if (criando === "nota" && !/\.md$/i.test(caminho)) { caminho += ".md"; }
+      var url = criando === "nota" ? "/api/notas/arquivo" : "/api/notas/pasta";
+      pedir("POST", url, { caminho: caminho }).then(function (r) {
+        if (r.ok) {
+          if (criando === "nota") { abrir(caminho); } else { location.reload(); }
+        } else {
+          erroDe(r).then(function (m) { erro.textContent = m; });
+        }
+      });
+    });
+  }
+
+  // ---------- editor ----------
+  var editor = document.getElementById("editor");
+  if (!editor) { return; }
+  var caminho = editor.dataset.caminho;
+  var versao = editor.dataset.versao;
+  var estado = document.getElementById("estado");
+  var privada = document.getElementById("privada");
+  var conflito = document.getElementById("conflito");
+  var salvo = editor.value;
+  var espera = null;
+  var salvando = false;
+  var deDisco = null;
+
+  function mostrar(texto, tipo) {
+    estado.textContent = texto;
+    estado.dataset.estado = tipo;
+  }
+
+  function salvar() {
+    clearTimeout(espera);
+    if (salvando || editor.value === salvo || !conflito.hidden) { return; }
+    salvando = true;
+    var texto = editor.value;
+    mostrar("salvando…", "salvando");
+    pedir("PUT", "/api/notas/arquivo", { caminho: caminho, texto: texto, versao: versao })
+      .then(function (r) {
+        if (r.ok) {
+          return r.json().then(function (d) {
+            versao = d.versao;
+            salvo = texto;
+            mostrar(editor.value === salvo ? "salvo" : "não salvo", editor.value === salvo ? "salvo" : "pendente");
+          });
+        }
+        if (r.status === 409) {
+          return r.json().then(function (d) {
+            deDisco = d;
+            conflito.hidden = false;
+            mostrar("conflito", "erro");
+          });
+        }
+        return erroDe(r).then(function (m) { mostrar(m, "erro"); });
+      })
+      .catch(function () { mostrar("sem conexão; não salvo", "erro"); })
+      .then(function () {
+        salvando = false;
+        if (editor.value !== salvo && conflito.hidden) { agendar(); }
+      });
+  }
+
+  function agendar() {
+    clearTimeout(espera);
+    mostrar("não salvo", "pendente");
+    espera = setTimeout(salvar, 1000);
+  }
+
+  // o frontmatter é a verdade: a caixa só escreve ou tira a linha nele
+  var FRONT = /^---\n([\s\S]*?)\n---\n?/;
+  var LINHA = /^private:\s*(true|yes|sim|1)\s*$/im;
+
+  function marcadaNoTexto() {
+    var m = editor.value.match(FRONT);
+    return !!(m && LINHA.test(m[1]));
+  }
+
+  // o corretor avançado do Chrome manda o texto para o Google
+  function corretor() { editor.spellcheck = !privada.checked; }
+
+  privada.addEventListener("change", function () {
+    var texto = editor.value;
+    var m = texto.match(FRONT);
+    var resto = m ? m[1].split("\n").filter(function (l) { return !/^private:/i.test(l); }) : [];
+    var depois = m ? texto.slice(m[0].length) : "\n" + texto;
+    if (privada.checked) { resto.push("private: true"); }
+    editor.value = resto.join("").trim()
+      ? "---\n" + resto.join("\n") + "\n---\n" + depois
+      : depois.replace(/^\n/, "");
+    corretor();
+    salvar();
+  });
+
+  editor.addEventListener("input", function () {
+    privada.checked = marcadaNoTexto();
+    corretor();
+    agendar();
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+      e.preventDefault();
+      salvar();
+    }
+  });
+
+  window.addEventListener("beforeunload", function (e) {
+    if (editor.value !== salvo) { e.preventDefault(); e.returnValue = ""; }
+  });
+
+  document.getElementById("usar-disco").addEventListener("click", function () {
+    editor.value = salvo = deDisco.texto;
+    versao = deDisco.versao;
+    conflito.hidden = true;
+    privada.checked = marcadaNoTexto();
+    mostrar("salvo", "salvo");
+  });
+
+  document.getElementById("usar-meu").addEventListener("click", function () {
+    versao = deDisco.versao;
+    conflito.hidden = true;
+    salvar();
+  });
+
+  // apagar pede um segundo clique em vez de uma caixa de diálogo
+  var apagar = document.getElementById("apagar");
+  var armado = null;
+  apagar.addEventListener("click", function () {
+    if (!armado) {
+      apagar.textContent = "clique de novo para apagar";
+      apagar.dataset.armado = "1";
+      armado = setTimeout(function () {
+        armado = null;
+        apagar.textContent = "apagar";
+        delete apagar.dataset.armado;
+      }, 4000);
+      return;
+    }
+    pedir("DELETE", "/api/notas/arquivo?caminho=" + encodeURIComponent(caminho)).then(function (r) {
+      if (r.ok) {
+        salvo = editor.value;
+        location.href = "/notas";
+      } else {
+        erroDe(r).then(function (m) { mostrar(m, "erro"); });
+      }
+    });
+  });
+})();
+"""
