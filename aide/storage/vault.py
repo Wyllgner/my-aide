@@ -174,3 +174,27 @@ def resolver(vault_dir: Path, relativo: str, pasta: bool = False) -> Path:
 def relativo_de(vault_dir: Path, caminho: Path) -> str:
     """O inverso de `resolver`: o que a página mostra e manda de volta."""
     return caminho.resolve().relative_to(vault_dir.resolve()).as_posix()
+
+
+def arvore(vault_dir: Path) -> list[dict]:
+    """Pastas e notas, pastas primeiro, em ordem alfabética sem caixa.
+
+    Cada item: {nome, caminho, tipo: "pasta" | "nota", filhos}. Fica de fora o
+    que `resolver` recusaria — oculto, link simbólico, o que não é .md —, para
+    a página nunca oferecer um clique que vai dar erro.
+    """
+    def ramo(pasta: Path, prefixo: str) -> list[dict]:
+        itens = []
+        for filho in pasta.iterdir():
+            if filho.name.startswith(".") or filho.is_symlink():
+                continue
+            caminho = f"{prefixo}{filho.name}"
+            if filho.is_dir():
+                itens.append({"nome": filho.name, "caminho": caminho, "tipo": "pasta",
+                              "filhos": ramo(filho, caminho + "/")})
+            elif filho.suffix.lower() == ".md":
+                itens.append({"nome": filho.stem, "caminho": caminho, "tipo": "nota",
+                              "filhos": []})
+        return sorted(itens, key=lambda i: (i["tipo"] != "pasta", i["nome"].casefold()))
+
+    return ramo(vault_dir, "") if vault_dir.is_dir() else []

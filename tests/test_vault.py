@@ -65,3 +65,43 @@ def test_vault_atras_de_link_simbolico_continua_valendo(tmp_path, raiz):
 def test_relativo_e_o_inverso(raiz):
     caminho = vault.resolver(raiz, "Inbox/Nota.md")
     assert vault.relativo_de(raiz, caminho) == "Inbox/Nota.md"
+
+
+# ---------- árvore ----------
+
+def test_arvore_pastas_primeiro_e_sem_caixa(raiz):
+    (raiz / "zebra.md").write_text("")
+    (raiz / "Abacate.md").write_text("")
+    (raiz / "Projetos" / "Casa").mkdir(parents=True)
+    (raiz / "Projetos" / "Casa" / "Telhado.md").write_text("")
+    nomes = [i["nome"] for i in vault.arvore(raiz)]
+    assert nomes == ["Inbox", "Projetos", "Abacate", "zebra"]
+    casa = vault.arvore(raiz)[1]["filhos"][0]
+    assert casa["filhos"][0] == {"nome": "Telhado", "caminho": "Projetos/Casa/Telhado.md",
+                                 "tipo": "nota", "filhos": []}
+
+
+def test_arvore_esconde_o_que_a_pagina_nao_abriria(raiz, tmp_path):
+    (raiz / ".trash").mkdir()
+    (raiz / ".trash" / "Velha.md").write_text("")
+    (raiz / ".obsidian").mkdir()
+    (raiz / "foto.png").write_bytes(b"")
+    (raiz / "atalho.md").symlink_to(raiz / "Inbox" / "Nota.md")
+    assert [i["nome"] for i in vault.arvore(raiz)] == ["Inbox"]
+
+
+def test_arvore_de_vault_que_nao_existe(tmp_path):
+    assert vault.arvore(tmp_path / "nada") == []
+
+
+def test_todo_caminho_da_arvore_passa_no_resolver(raiz):
+    (raiz / "Projetos" / "Casa").mkdir(parents=True)
+    (raiz / "Projetos" / "Casa" / "Reunião de orçamento.md").write_text("")
+
+    def todos(itens):
+        for i in itens:
+            yield i
+            yield from todos(i["filhos"])
+
+    for item in todos(vault.arvore(raiz)):
+        vault.resolver(raiz, item["caminho"], pasta=item["tipo"] == "pasta")
