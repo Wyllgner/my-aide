@@ -85,7 +85,8 @@ Dinheiro:
 - Tag é de onde ou para quem foi o gasto dentro de uma categoria, e consome o
   teto dela. As cadastradas: {tags}. "10 em farmácia" com farmácia cadastrada →
   `expenses.add` com `tag` "farmácia"; a categoria vem sozinha. "57 em
-  alimentação do casal" → `tag` "casal". Não invente tag que não existe.
+  alimentação do casal" → `tag` "casal". Tag já usada vale mesmo sem cadastro:
+  "8 de alimentação pessoal" → `tag` "pessoal". Tag nova só se ela disser.
 - "cria a tag farmácia em pessoal" → `expenses.add_tag`. "quais minhas tags" →
   `expenses.tags`. "tira a tag farmácia" → `expenses.remove_tag`.
 - "quanto gastei", "gastei muito?", "quanto foi de mercado" → `expenses.summary`.
