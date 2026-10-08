@@ -606,14 +606,34 @@ def add_tag(ctx: ToolContext, tag: str, category: str) -> dict:
 
 @registry.register(
     name="expenses.tags",
-    description="As tags cadastradas, agrupadas pela categoria que cada uma consome.",
+    description=(
+        "Todas as tags: as cadastradas, agrupadas pela categoria que consomem, e as "
+        "usadas nos gastos sem cadastro. É a tool para 'quais minhas tags'; mostre "
+        "as duas listas."
+    ),
     parameters={"type": "object", "properties": {}, "required": []},
 )
 def list_tags(ctx: ToolContext) -> dict:
     grupos: dict[str, list[str]] = {}
-    for nome, categoria in tags_em_vigor(ctx.conn).values():
+    cadastradas = tags_em_vigor(ctx.conn)
+    for nome, categoria in cadastradas.values():
         grupos.setdefault(categoria, []).append(nome)
-    return {"por_categoria": grupos}
+
+    # Tag solta vale como etiqueta e aparece na página, mas não está no
+    # cadastro. Sem esta parte, "quais minhas tags" respondia só as cadastradas
+    # e as que a pessoa mais usa sumiam da resposta.
+    soltas: dict[str, list[str]] = {}
+    for r in ctx.conn.execute(
+            "SELECT DISTINCT COALESCE(lower(category), 'sem categoria'), tag FROM expenses"
+            " WHERE deleted_at IS NULL AND tag IS NOT NULL" + _filtro_privado(ctx)
+            + " ORDER BY 1, 2").fetchall():
+        if _chave(r[1]) not in cadastradas:
+            soltas.setdefault(r[0], []).append(r[1])
+
+    resposta = {"por_categoria": grupos}
+    if soltas:
+        resposta["usadas_sem_cadastro"] = soltas
+    return resposta
 
 
 @registry.register(
