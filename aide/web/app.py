@@ -92,6 +92,13 @@ def criar_app(config=None, conn_factory=None):
     def saude() -> dict:
         return {"ok": True, "escutando": ENDERECO}
 
+    @app.get("/app.js")
+    def script() -> Response:
+        from aide.web.script import JS
+
+        return Response(JS, media_type="text/javascript",
+                        headers={"cache-control": "max-age=300"})
+
     @app.get("/app.css")
     def folha_de_estilo() -> Response:
         from aide.web.estilo import CSS
