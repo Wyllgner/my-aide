@@ -395,6 +395,21 @@ def test_lista_as_tags_por_categoria(ctx, registry):
         "pessoal": ["farmácia"], "uber": ["uber noturno"]}
 
 
+def test_lista_tambem_as_tags_usadas_sem_cadastro(ctx, registry):
+    _tag(ctx, registry)
+    registry.call("expenses.add", {"amount": "10", "description": "x", "tag": "farmácia"}, ctx)
+    registry.call("expenses.add", {"amount": "20", "description": "y",
+                                   "category": "alimentação", "tag": "trabalho"}, ctx)
+    registry.call("expenses.add", {"amount": "5", "description": "z", "category": "pessoal",
+                                   "tag": "segredo", "private": True}, ctx)
+    dados = registry.call("expenses.tags", {}, ctx).data
+    assert dados["por_categoria"] == {"pessoal": ["farmácia"]}
+    # a cadastrada não se repete; a privada só aparece para quem pode ver
+    soltas = dados["usadas_sem_cadastro"]
+    assert soltas["alimentação"] == ["trabalho"]
+    assert ("segredo" in soltas.get("pessoal", [])) == ctx.ver_privado
+
+
 def test_recadastrar_muda_a_categoria(ctx, registry):
     _tag(ctx, registry)
     mudou = registry.call("expenses.add_tag", {"tag": "farmacia", "category": "saúde"}, ctx).data
