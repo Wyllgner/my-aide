@@ -65,12 +65,18 @@ def _categorias(config, conn=None) -> str:
 def _tags(conn) -> str:
     """"farmácia → pessoal, lanche → pessoal". Sem a lista o modelo lançaria
     "10 em farmácia" com categoria inventada e sem a tag."""
-    from aide.tools.expenses import tags_em_vigor
+    from aide.tools.expenses import _chave, tags_em_vigor, tags_usadas
 
     tags = tags_em_vigor(conn)
-    if not tags:
-        return "nenhuma cadastrada ainda"
-    return ", ".join(f"{nome} → {categoria}" for nome, categoria in tags.values())
+    cadastradas = (", ".join(f"{nome} → {categoria}" for nome, categoria in tags.values())
+                   or "nenhuma cadastrada ainda")
+    # as soltas também: sem elas "57 em alimentação do casal" saía sem a tag
+    # casal, porque o modelo não sabia que ela existia
+    soltas = "; ".join(
+        f"{categoria}: {', '.join(t for t in nomes if _chave(t) not in tags)}"
+        for categoria, nomes in tags_usadas(conn).items()
+        if any(_chave(t) not in tags for t in nomes))
+    return f"{cadastradas}. Já usadas sem cadastro: {soltas}" if soltas else cadastradas
 
 
 def state_snapshot(conn, config) -> Message | None:
