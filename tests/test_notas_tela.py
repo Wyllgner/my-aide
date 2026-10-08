@@ -125,3 +125,10 @@ def test_busca_lista_o_caminho_de_cada_achado(cliente, registry, config):
     html = cliente.get("/notas?busca=ideia").text
     assert "Inbox/Ideia.md" in html
     assert "voltar às pastas" in html
+
+
+def test_hidden_vence_o_display_das_classes():
+    """O campo de criar aparecia vazio, aberto, porque .criar tem display:flex."""
+    from aide.web.estilo import CSS
+
+    assert "[hidden] { display: none !important; }" in CSS

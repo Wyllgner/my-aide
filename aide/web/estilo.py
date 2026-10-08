@@ -129,7 +129,9 @@ nav a svg { flex-shrink: 0; }
 .conflito { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px;
             background: var(--soft); color: var(--accent); border-radius: var(--r-inner);
             font-size: 13px; }
-.conflito[hidden] { display: none; }
+/* display:flex numa classe vence o [hidden] do navegador; sem isto o campo de
+   criar e o aviso de conflito aparecem vazios na tela */
+[hidden] { display: none !important; }
 #editor { flex: 1; min-height: 58vh; width: 100%; resize: vertical; padding: 14px 16px;
           border: 1px solid var(--line); border-radius: var(--r-inner); background: var(--paper);
           font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 13.5px;
