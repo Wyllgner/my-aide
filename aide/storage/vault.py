@@ -127,3 +127,50 @@ def privada(meta: dict[str, str]) -> bool:
 
 def corpo_de(caminho: Path) -> str:
     return ler(caminho)[1]
+
+
+# ---------- caminhos vindos de fora ----------
+
+
+class ForaDoVault(ValueError):
+    """Caminho que não é de uma nota ou pasta do vault."""
+
+
+def resolver(vault_dir: Path, relativo: str, pasta: bool = False) -> Path:
+    """O caminho de `relativo` dentro do vault, ou ForaDoVault.
+
+    É a única porta por onde um caminho escrito na página chega ao disco, e
+    por isso recusa tudo que não for, sem dúvida, uma nota ou pasta comum:
+    `..`, caminho absoluto, barra invertida, nome oculto (`.trash`, `.obsidian`,
+    `.git`) e link simbólico em qualquer ponto do caminho — um link dentro do
+    vault apontando para fora transformaria "salvar nota" em escrever em
+    qualquer lugar da sua pasta pessoal.
+    """
+    if not isinstance(relativo, str) or not relativo.strip():
+        raise ForaDoVault("caminho vazio")
+    if "\\" in relativo or "\x00" in relativo or relativo.startswith("/"):
+        raise ForaDoVault("caminho inválido")
+    partes = relativo.split("/")
+    for parte in partes:
+        if parte in ("", ".", "..") or parte.startswith(".") or parte != parte.strip():
+            raise ForaDoVault(f"trecho inválido no caminho: {parte!r}")
+        if PROIBIDOS.search(parte) or len(parte.encode()) > 255:
+            raise ForaDoVault(f"nome inválido: {parte!r}")
+    if not pasta and not partes[-1].lower().endswith(".md"):
+        raise ForaDoVault("só arquivos .md")
+
+    base = vault_dir.resolve()
+    caminho = base.joinpath(*partes)
+    atual = base
+    for parte in partes:
+        atual = atual / parte
+        if atual.is_symlink():
+            raise ForaDoVault("link simbólico no caminho")
+    if not caminho.resolve().is_relative_to(base):
+        raise ForaDoVault("caminho fora do vault")
+    return caminho
+
+
+def relativo_de(vault_dir: Path, caminho: Path) -> str:
+    """O inverso de `resolver`: o que a página mostra e manda de volta."""
+    return caminho.resolve().relative_to(vault_dir.resolve()).as_posix()
