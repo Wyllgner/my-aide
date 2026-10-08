@@ -345,7 +345,8 @@ def _filtro_privado(ctx: ToolContext) -> str:
             "tag": {
                 "type": "string",
                 "description": (
-                    "Opcional: de onde foi, dentro da categoria (farmácia, lanche). Se a "
+                    "Opcional: de onde ou para quem foi, dentro da categoria (farmácia, "
+                    "lanche, casal, trabalho). Prefira uma das tags já usadas. Se a "
                     "tag estiver cadastrada, a categoria dela é posta sozinha."
                 ),
             },
@@ -436,6 +437,11 @@ def add(ctx: ToolContext, amount: str, description: str, category: str | None = 
 
     primeira = _linha(ctx.conn.execute(
         f"SELECT {CAMPOS} FROM expenses WHERE id = ?", (ids[0],)).fetchone())
+    # o histórico guarda só a fala final, não o retorno da tool: se a tag não
+    # sai na confirmação, na mensagem seguinte o modelo jura que não pôs tag
+    onde = " · ".join(parte for parte in (categoria, etiqueta) if parte)
+    primeira["confirmacao"] = (primeira["valor"] + (f" em {onde}" if onde else "")
+                               + f" (#{ids[0]})")
     if parcelas > 1:
         primeira["total"] = formatar(sum(valores))
         primeira["lancadas"] = len(valores)
