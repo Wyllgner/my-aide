@@ -151,7 +151,8 @@ def _editor(raiz: Path, aberto: str, agora: datetime) -> str:
   <button type="button" id="usar-meu" class="botao-fraco">manter o que eu escrevi</button>
 </div>
 <textarea id="editor" spellcheck="{"false" if privada else "true"}" data-caminho="{escape(aberto)}"
-  data-versao="{escape(str(arquivo.stat().st_mtime_ns))}">{escape(texto)}</textarea>"""
+  data-versao="{escape(str(arquivo.stat().st_mtime_ns))}">
+{escape(texto)}</textarea>"""
 
 
 def tela(ctx, registry, agora: datetime, nota: int | None = None,

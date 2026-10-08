@@ -139,3 +139,14 @@ def test_nota_privada_abre_sem_corretor(cliente):
     assert 'spellcheck="false"' in _tela(cliente, "Projetos/Casa/Telhado.md")
     assert 'spellcheck="true"' in _tela(cliente, "Inbox/Ideia.md")
 
+
+def test_linha_vazia_no_comeco_sobrevive_ao_textarea(cliente, raiz):
+    """O HTML descarta a primeira quebra depois de <textarea>."""
+    import html as h
+    import re
+
+    (raiz / "Inbox" / "Ideia.md").write_text("\nlinha depois do vazio")
+    pagina = _tela(cliente, "Inbox/Ideia.md")
+    bruto = re.search(r'<textarea id="editor"[^>]*>(.*?)</textarea>', pagina, re.DOTALL).group(1)
+    # o que o navegador vai pôr no campo: o conteúdo menos a primeira quebra
+    assert h.unescape(bruto)[1:] == "\nlinha depois do vazio"
