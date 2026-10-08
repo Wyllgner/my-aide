@@ -115,6 +115,12 @@ def guardar_vetor(conn, ref_type: str, ref_id: int, chunk: str, vetor: list[floa
     )
 
 
+def remover_vetor(conn, note_id: int) -> None:
+    """O vetor de uma nota que passou a ser privada. O texto já saiu quando ele
+    foi gerado; o que dá para fazer é não usá-lo mais."""
+    conn.execute("DELETE FROM embeddings WHERE ref_type = 'note' AND ref_id = ?", (note_id,))
+
+
 def vetores_de_outro_modelo(conn, modelo: str) -> dict[str, int]:
     """Quantos vetores ficaram para trás, por modelo. Vazio é o estado saudável."""
     linhas = conn.execute(

@@ -273,3 +273,66 @@ def test_nota_normal_continua_virando_vetor(ctx, registry, tmp_path):
     ctx.embedder = EmbedderEspiao()
     registry.call("notes.create", {"title": "Mercado", "body": "comprar pão"}, ctx)
     assert len(ctx.embedder.enviado) == 1
+
+
+# ---------- privado no frontmatter ----------
+
+def test_privada_fica_marcada_no_arquivo(ctx, registry, tmp_path):
+    _config_vault(ctx, tmp_path)
+    nota = registry.call("notes.create", {"title": "Laudo", "body": "x", "private": True}, ctx).data
+    meta, _ = vault.ler(Path(nota["path"]))
+    assert vault.privada(meta)
+
+
+def test_normal_nao_ganha_a_linha(ctx, registry, tmp_path):
+    _config_vault(ctx, tmp_path)
+    nota = registry.call("notes.create", {"title": "Mercado", "body": "x"}, ctx).data
+    assert "private" not in vault.ler(Path(nota["path"]))[0]
+
+
+def test_arquivo_privado_adotado_nasce_privado(ctx, tmp_path):
+    from aide.storage.reconciliacao import reconciliar
+
+    _config_vault(ctx, tmp_path)
+    pasta = Path(ctx.config.vault_dir)
+    pasta.mkdir()
+    (pasta / "Diário.md").write_text("---\nprivate: true\n---\n\nSEGREDO\n")
+    espiao = EmbedderEspiao()
+    reconciliar(ctx.conn, pasta, embedder=espiao)
+    assert ctx.conn.execute("SELECT private FROM notes").fetchone()[0] == 1
+    assert espiao.enviado == []
+
+
+def test_marcar_privada_por_fora_sobe_e_apaga_o_vetor(ctx, registry, tmp_path):
+    import os
+
+    from aide.storage.reconciliacao import reconciliar
+
+    _config_vault(ctx, tmp_path)
+    ctx.embedder = EmbedderEspiao()
+    nota = registry.call("notes.create", {"title": "Diário", "body": "x"}, ctx).data
+    caminho = Path(nota["path"])
+    caminho.write_text(caminho.read_text().replace("---\n\n", "private: true\n---\n\n", 1))
+    os.utime(caminho, (caminho.stat().st_mtime + 60,) * 2)
+
+    reconciliar(ctx.conn, Path(ctx.config.vault_dir), embedder=EmbedderEspiao())
+    assert ctx.conn.execute("SELECT private FROM notes").fetchone()[0] == 1
+    assert ctx.conn.execute("SELECT COUNT(*) FROM embeddings").fetchone()[0] == 0
+
+
+def test_tirar_a_linha_por_fora_nao_desmarca(ctx, registry, tmp_path):
+    """Desmarcar o privado é decisão explícita, não efeito colateral."""
+    import os
+
+    from aide.storage.reconciliacao import reconciliar
+
+    _config_vault(ctx, tmp_path)
+    nota = registry.call("notes.create", {"title": "Laudo", "body": "x", "private": True}, ctx).data
+    caminho = Path(nota["path"])
+    caminho.write_text(caminho.read_text().replace("private: true\n", ""))
+    os.utime(caminho, (caminho.stat().st_mtime + 60,) * 2)
+
+    espiao = EmbedderEspiao()
+    reconciliar(ctx.conn, Path(ctx.config.vault_dir), embedder=espiao)
+    assert ctx.conn.execute("SELECT private FROM notes").fetchone()[0] == 1
+    assert espiao.enviado == []

@@ -66,7 +66,7 @@ def arquivos(vault_dir: Path) -> list[Path]:
 
 
 def escrever(caminho: Path, titulo: str, corpo: str, tags: str | None,
-             criada_em: datetime) -> None:
+             criada_em: datetime, privada: bool = False) -> None:
     # nota é texto puro com a sua vida dentro; nasce só sua
     caminho.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     frontmatter = [
@@ -76,6 +76,10 @@ def escrever(caminho: Path, titulo: str, corpo: str, tags: str | None,
     ]
     if tags:
         frontmatter.append(f"tags: [{tags}]")
+    if privada:
+        # no arquivo, e não só no banco: o arquivo é a fonte da verdade, e uma
+        # reindexação a partir dele não pode desfazer o privado
+        frontmatter.append("private: true")
     frontmatter.append(SEPARADOR)
     caminho.write_text("\n".join(frontmatter) + "\n\n" + corpo.strip() + "\n")
     caminho.chmod(0o600)
@@ -102,6 +106,11 @@ def ler(caminho: Path) -> tuple[dict[str, str], str]:
             chave, valor = linha.split(":", 1)
             meta[chave.strip()] = valor.strip()
     return meta, partes[2].strip()
+
+
+def privada(meta: dict[str, str]) -> bool:
+    """`private: true` no frontmatter. Qualquer outra coisa é nota normal."""
+    return meta.get("private", "").strip().lower() in ("true", "yes", "sim", "1")
 
 
 def corpo_de(caminho: Path) -> str:

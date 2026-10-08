@@ -18,7 +18,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from aide.storage import vault
-from aide.storage.search import guardar_vetor, indexar
+from aide.storage.search import guardar_vetor, indexar, remover_vetor
 
 log = logging.getLogger(__name__)
 
@@ -60,9 +60,17 @@ def reconciliar(conn, vault_dir: Path, embedder=None, forcar: bool = False) -> R
         if real in vivas:
             row = vivas[real]
             if forcar or _mudou(caminho, row["updated_at"]):
-                corpo = vault.corpo_de(caminho)
+                meta, corpo = vault.ler(caminho)
+                privada = bool(row["private"])
+                if vault.privada(meta) and not privada:
+                    # marcada privada no arquivo, por fora do assessor. Só sobe:
+                    # tirar o privado é decisão explícita, nunca efeito de uma
+                    # linha que sumiu do frontmatter
+                    privada = True
+                    conn.execute("UPDATE notes SET private = 1 WHERE id = ?", (row["id"],))
+                    remover_vetor(conn, row["id"])
                 _indexar(conn, row["id"], row["title"], corpo,
-                         None if row["private"] else embedder)
+                         None if privada else embedder)
                 conn.execute("UPDATE notes SET updated_at = datetime('now') WHERE id = ?",
                              (row["id"],))
                 relatorio.reindexadas.append((row["id"], row["title"]))
@@ -76,9 +84,11 @@ def reconciliar(conn, vault_dir: Path, embedder=None, forcar: bool = False) -> R
 
         meta, corpo = vault.ler(caminho)
         titulo = meta.get("title") or caminho.stem
-        cur = conn.execute("INSERT INTO notes (title, path, tags) VALUES (?, ?, ?)",
-                           (titulo, str(caminho), (meta.get("tags") or "").strip("[]") or None))
-        _indexar(conn, cur.lastrowid, titulo, corpo, embedder)
+        privada = vault.privada(meta)
+        cur = conn.execute("INSERT INTO notes (title, path, tags, private) VALUES (?, ?, ?, ?)",
+                           (titulo, str(caminho), (meta.get("tags") or "").strip("[]") or None,
+                            int(privada)))
+        _indexar(conn, cur.lastrowid, titulo, corpo, None if privada else embedder)
         relatorio.adotadas.append((cur.lastrowid, titulo))
 
     for real, row in vivas.items():

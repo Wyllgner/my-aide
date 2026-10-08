@@ -85,7 +85,7 @@ def create(ctx: ToolContext, title: str, body: str, tags: str | None = None,
 
     agora = now_in(ctx.config.timezone)
     caminho = vault.caminho_para(Path(ctx.config.vault_dir), title, agora)
-    vault.escrever(caminho, title, body, tags, agora)
+    vault.escrever(caminho, title, body, tags, agora, privada=private)
 
     cur = ctx.conn.execute(
         "INSERT INTO notes (title, path, tags, private) VALUES (?, ?, ?, ?)",
