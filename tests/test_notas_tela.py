@@ -159,3 +159,10 @@ def test_a_busca_da_pagina_acha_a_privada(cliente, config):
     reconciliar(cliente.app.state.conn_factory(), config.vault_dir)
     html = cliente.get("/notas?busca=telhas").text
     assert "Projetos/Casa/Telhado.md" in html
+
+
+def test_script_e_estilo_nao_ficam_velhos_no_cache(cliente):
+    """Com max-age, depois de atualizar o navegador rodava o script antigo
+    contra rotas novas por até cinco minutos."""
+    for caminho in ("/app.js", "/app.css"):
+        assert cliente.get(caminho).headers["cache-control"] == "no-cache"

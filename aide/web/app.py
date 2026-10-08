@@ -97,14 +97,14 @@ def criar_app(config=None, conn_factory=None):
         from aide.web.script import JS
 
         return Response(JS, media_type="text/javascript",
-                        headers={"cache-control": "max-age=300"})
+                        headers={"cache-control": "no-cache"})
 
     @app.get("/app.css")
     def folha_de_estilo() -> Response:
         from aide.web.estilo import CSS
 
         return Response(CSS, media_type="text/css",
-                        headers={"cache-control": "max-age=300"})
+                        headers={"cache-control": "no-cache"})
 
     # Uma rota por tela. As que ainda não têm conteúdo respondem a moldura com
     # um aviso — assim a navegação inteira já é navegável e testável.
