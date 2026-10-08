@@ -1231,3 +1231,17 @@ def test_teto_mostra_quanto_sobra_ou_quanto_passou(cliente, app, registry, com_t
     html = cliente.get("/gastos").text
     assert "sobram R$ 30,00" in html                  # cinema: 12 de 42
     assert "passou R$ 3,00" in html                   # barbearia: 20 de 17
+
+
+def test_teto_gasto_ate_o_fim_pinta_a_linha_inteira(cliente, app, registry, com_tetos):
+    from aide.web import graficos
+
+    ctx = app.state.contexto()
+    registry.call("expenses.add", {"amount": "42", "description": "x", "category": "cinema"}, ctx)
+    html = cliente.get("/gastos").text
+    linha = html[html.index('title="cinema"') - 200:html.index("sobram R$ 0,00") + 20]
+    # rótulo, barra, números e a diferença: quatro lugares na mesma cor
+    assert linha.count(graficos.COMPLETO) == 4
+    # a que ainda tem folga continua como era
+    assert graficos.COMPLETO not in html[html.index('title="barbearia"') - 200:
+                                         html.index("sobram R$ 17,00")]
