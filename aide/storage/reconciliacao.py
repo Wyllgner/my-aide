@@ -18,7 +18,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from aide.storage import vault
-from aide.storage.search import guardar_vetor, indexar, remover_vetor
+from aide.storage.search import guardar_vetor, indexar, remover_do_indice, remover_vetor
 
 log = logging.getLogger(__name__)
 
@@ -96,6 +96,51 @@ def reconciliar(conn, vault_dir: Path, embedder=None, forcar: bool = False) -> R
             relatorio.sumidas.append((row["id"], row["title"], row["path"]))
 
     return relatorio
+
+
+def sincronizar(conn, caminho: Path) -> int:
+    """Põe no índice o arquivo que acabou de ser salvo na página; devolve o id.
+
+    Título, tags e privado vêm do frontmatter, e aqui o privado vale nos dois
+    sentidos: na página o frontmatter está na sua frente, e desmarcar é uma
+    decisão que você tomou vendo. A busca por palavra-chave é refeita na hora,
+    porque é local; o vetor velho é apagado e o novo fica para a reconciliação
+    do daemon, que não manda nota privada. Gerar o vetor a cada pausa na
+    digitação mandaria o texto para fora antes de você marcar a nota como
+    privada — e pagaria uma chamada por pausa.
+
+    Linha apagada com o mesmo caminho volta à vida: sem isso a reconciliação
+    veria "arquivo de nota apagada" e mandaria a nota nova para a lixeira.
+    """
+    meta, corpo = vault.ler(caminho)
+    titulo = meta.get("title") or caminho.stem
+    tags = (meta.get("tags") or "").strip("[]") or None
+    privada = int(vault.privada(meta))
+    row = conn.execute("SELECT id FROM notes WHERE path = ?", (str(caminho),)).fetchone()
+    if row is None:
+        note_id = conn.execute(
+            "INSERT INTO notes (title, path, tags, private) VALUES (?, ?, ?, ?)",
+            (titulo, str(caminho), tags, privada)).lastrowid
+    else:
+        note_id = row["id"]
+        conn.execute(
+            "UPDATE notes SET title = ?, tags = ?, private = ?, deleted_at = NULL,"
+            " updated_at = datetime('now') WHERE id = ?", (titulo, tags, privada, note_id))
+    indexar(conn, note_id, titulo, corpo)
+    remover_vetor(conn, note_id)
+    return note_id
+
+
+def esquecer(conn, caminho: Path) -> int | None:
+    """O lado do banco de mandar um arquivo para a lixeira pela página."""
+    row = conn.execute("SELECT id FROM notes WHERE path = ? AND deleted_at IS NULL",
+                       (str(caminho),)).fetchone()
+    if row is None:
+        return None
+    conn.execute("UPDATE notes SET deleted_at = datetime('now') WHERE id = ?", (row["id"],))
+    remover_do_indice(conn, row["id"])
+    remover_vetor(conn, row["id"])
+    return row["id"]
 
 
 def _mudou(caminho: Path, indexado_em: str) -> bool:

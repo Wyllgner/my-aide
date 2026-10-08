@@ -148,3 +148,93 @@ def test_criar_nota_em_pasta_nova(raiz):
 def test_criar_pasta_que_ja_existe_falha(raiz):
     with pytest.raises(FileExistsError):
         vault.criar_pasta(raiz / "Inbox")
+
+
+# ---------- índice do que a página salva ----------
+
+@pytest.fixture
+def banco(tmp_path):
+    from aide.storage import connect, migrate
+
+    conn = connect(tmp_path / "v.db")
+    migrate(conn)
+    return conn
+
+
+def test_salvar_indexa_na_hora_pela_palavra_chave(raiz, banco):
+    from aide.storage.reconciliacao import sincronizar
+    from aide.storage.search import buscar_texto
+
+    caminho = raiz / "Inbox" / "Nota.md"
+    vault.gravar(caminho, "---\ntitle: Telhado\ntags: [casa]\n---\n\ntrocar as telhas\n")
+    note_id = sincronizar(banco, caminho)
+    row = banco.execute("SELECT title, tags, private FROM notes WHERE id = ?", (note_id,)).fetchone()
+    assert tuple(row) == ("Telhado", "casa", 0)
+    assert buscar_texto(banco, "telhas")
+
+
+def test_sem_frontmatter_o_titulo_e_o_nome_do_arquivo(raiz, banco):
+    from aide.storage.reconciliacao import sincronizar
+
+    note_id = sincronizar(banco, raiz / "Inbox" / "Nota.md")
+    assert banco.execute("SELECT title FROM notes WHERE id = ?", (note_id,)).fetchone()[0] == "Nota"
+
+
+def test_salvar_de_novo_atualiza_a_mesma_linha(raiz, banco):
+    from aide.storage.reconciliacao import sincronizar
+
+    caminho = raiz / "Inbox" / "Nota.md"
+    primeiro = sincronizar(banco, caminho)
+    vault.gravar(caminho, "outra coisa")
+    assert sincronizar(banco, caminho) == primeiro
+    assert banco.execute("SELECT COUNT(*) FROM notes").fetchone()[0] == 1
+
+
+def test_na_pagina_o_privado_desmarca_tambem(raiz, banco):
+    """Lá o frontmatter está na sua frente: tirar a linha é decisão vista."""
+    from aide.storage.reconciliacao import sincronizar
+
+    caminho = raiz / "Inbox" / "Nota.md"
+    vault.gravar(caminho, "---\nprivate: true\n---\n\nx")
+    note_id = sincronizar(banco, caminho)
+    assert banco.execute("SELECT private FROM notes WHERE id = ?", (note_id,)).fetchone()[0] == 1
+    vault.gravar(caminho, "x")
+    sincronizar(banco, caminho)
+    assert banco.execute("SELECT private FROM notes WHERE id = ?", (note_id,)).fetchone()[0] == 0
+
+
+def test_salvar_nao_gera_vetor_e_apaga_o_velho(raiz, banco):
+    from aide.storage.reconciliacao import sincronizar
+    from aide.storage.search import guardar_vetor
+
+    caminho = raiz / "Inbox" / "Nota.md"
+    note_id = sincronizar(banco, caminho)
+    guardar_vetor(banco, "note", note_id, "x", [1.0], "m")
+    sincronizar(banco, caminho)
+    assert banco.execute("SELECT COUNT(*) FROM embeddings").fetchone()[0] == 0
+
+
+def test_recriar_nota_apagada_nao_vai_para_a_lixeira(raiz, banco):
+    """Sem reviver a linha, a reconciliação via "arquivo de nota apagada"."""
+    from aide.storage.reconciliacao import esquecer, reconciliar, sincronizar
+
+    caminho = raiz / "Inbox" / "Nota.md"
+    sincronizar(banco, caminho)
+    esquecer(banco, caminho)
+    vault.para_lixeira(raiz, caminho)
+    vault.criar_nota(caminho, "de novo")
+    sincronizar(banco, caminho)
+    reconciliar(banco, raiz)
+    assert caminho.exists()
+
+
+def test_esquecer_tira_da_busca(raiz, banco):
+    from aide.storage.reconciliacao import esquecer, sincronizar
+    from aide.storage.search import buscar_texto
+
+    caminho = raiz / "Inbox" / "Nota.md"
+    vault.gravar(caminho, "palavrarara")
+    sincronizar(banco, caminho)
+    assert esquecer(banco, caminho)
+    assert buscar_texto(banco, "palavrarara") == []
+    assert esquecer(banco, caminho) is None
