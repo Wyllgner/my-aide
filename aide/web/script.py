@@ -83,24 +83,32 @@ JS = r"""
   var espera = null;
   var salvando = false;
   var deDisco = null;
+  var previa = document.getElementById("previa");
+  var area = document.querySelector(".area");
 
   function mostrar(texto, tipo) {
     estado.textContent = texto;
     estado.dataset.estado = tipo;
   }
 
+  // o HTML vem do renderizador do servidor, que é quem decide o que é seguro
+  function mostrarPrevia(html) {
+    if (typeof html === "string") { previa.innerHTML = html; }
+  }
+
   function salvar() {
     clearTimeout(espera);
-    if (salvando || editor.value === salvo || !conflito.hidden) { return; }
+    if (salvando || editor.value === salvo || !conflito.hidden) { return Promise.resolve(); }
     salvando = true;
     var texto = editor.value;
     mostrar("salvando…", "salvando");
-    pedir("PUT", "/api/notas/arquivo", { caminho: caminho, texto: texto, versao: versao })
+    return pedir("PUT", "/api/notas/arquivo", { caminho: caminho, texto: texto, versao: versao })
       .then(function (r) {
         if (r.ok) {
           return r.json().then(function (d) {
             versao = d.versao;
             salvo = texto;
+            mostrarPrevia(d.html);
             mostrar(editor.value === salvo ? "salvo" : "não salvo", editor.value === salvo ? "salvo" : "pendente");
           });
         }
@@ -157,12 +165,56 @@ JS = r"""
     agendar();
   });
 
+  // ---------- modos: editar, lado a lado, ler ----------
+  var MODOS = ["editar", "dividido", "ler"];
+
+  function aplicarModo(modo) {
+    if (MODOS.indexOf(modo) < 0) { return; }
+    area.dataset.modo = modo;
+    document.querySelectorAll(".modo").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.dataset.modo === modo));
+    });
+    try { localStorage.setItem("aide.notas.modo", modo); } catch (e) { /* sem armazenamento: vale só agora */ }
+  }
+
+  try { aplicarModo(localStorage.getItem("aide.notas.modo")); } catch (e) { /* idem */ }
+  document.querySelectorAll(".modo").forEach(function (b) {
+    b.addEventListener("click", function () { aplicarModo(b.dataset.modo); });
+  });
+
   document.addEventListener("keydown", function (e) {
     if ((e.ctrlKey || e.metaKey) && e.key === "s") {
       e.preventDefault();
       salvar();
     }
+    // Ctrl+E alterna entre escrever e ler, como no Obsidian
+    if ((e.ctrlKey || e.metaKey) && e.key === "e") {
+      e.preventDefault();
+      aplicarModo(area.dataset.modo === "ler" ? "editar" : "ler");
+      if (area.dataset.modo !== "ler") { editor.focus(); }
+    }
   });
+
+  // ---------- link quebrado: um clique cria a nota ----------
+  function criarDoLink(e) {
+    var link = e.target.closest("a.quebrado");
+    if (!link) { return; }
+    if (e.type === "keydown" && e.key !== "Enter" && e.key !== " ") { return; }
+    e.preventDefault();
+    var alvo = link.dataset.alvo.trim();
+    if (!alvo) { return; }
+    var pasta = caminho.lastIndexOf("/") >= 0 ? caminho.slice(0, caminho.lastIndexOf("/")) : "";
+    var novo = (alvo.indexOf("/") >= 0 || !pasta ? alvo : pasta + "/" + alvo);
+    if (!/\.md$/i.test(novo)) { novo += ".md"; }
+    salvar().then(function () {
+      return pedir("POST", "/api/notas/arquivo", { caminho: novo });
+    }).then(function (r) {
+      if (r.ok || r.status === 409) { abrir(novo); } else { erroDe(r).then(function (m) { mostrar(m, "erro"); }); }
+    });
+  }
+  previa.addEventListener("click", criarDoLink);
+  previa.addEventListener("keydown", criarDoLink);
+
 
   window.addEventListener("beforeunload", function (e) {
     if (editor.value !== salvo) { e.preventDefault(); e.returnValue = ""; }
@@ -171,6 +223,7 @@ JS = r"""
   document.getElementById("usar-disco").addEventListener("click", function () {
     editor.value = salvo = deDisco.texto;
     versao = deDisco.versao;
+    mostrarPrevia(deDisco.html);
     conflito.hidden = true;
     privada.checked = marcadaNoTexto();
     mostrar("salvo", "salvo");
