@@ -198,3 +198,39 @@ def arvore(vault_dir: Path) -> list[dict]:
         return sorted(itens, key=lambda i: (i["tipo"] != "pasta", i["nome"].casefold()))
 
     return ramo(vault_dir, "") if vault_dir.is_dir() else []
+
+
+def gravar(caminho: Path, texto: str) -> None:
+    """Grava a nota inteira de uma vez: num arquivo ao lado e depois por cima.
+
+    Com salvamento automático a cada pausa na digitação, uma queda no meio de
+    um `write_text` deixaria a nota pela metade. A troca por `os.replace` é
+    atômica: ou fica a versão velha, ou a nova.
+    """
+    import os
+    import tempfile
+
+    caminho.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    fd, temporario = tempfile.mkstemp(dir=caminho.parent, prefix=".", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as arquivo:
+            arquivo.write(texto)
+            arquivo.flush()
+            os.fsync(arquivo.fileno())
+        os.chmod(temporario, 0o600)
+        os.replace(temporario, caminho)
+    except BaseException:
+        Path(temporario).unlink(missing_ok=True)
+        raise
+
+
+def criar_nota(caminho: Path, texto: str = "") -> None:
+    """Cria sem sobrescrever: se já existe, FileExistsError."""
+    caminho.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    with caminho.open("x", encoding="utf-8") as arquivo:
+        arquivo.write(texto)
+    caminho.chmod(0o600)
+
+
+def criar_pasta(caminho: Path) -> None:
+    caminho.mkdir(parents=True, exist_ok=False, mode=0o700)

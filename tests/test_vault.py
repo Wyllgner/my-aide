@@ -105,3 +105,46 @@ def test_todo_caminho_da_arvore_passa_no_resolver(raiz):
 
     for item in todos(vault.arvore(raiz)):
         vault.resolver(raiz, item["caminho"], pasta=item["tipo"] == "pasta")
+
+
+# ---------- gravação ----------
+
+def test_gravar_troca_o_conteudo_e_fecha_a_permissao(raiz):
+    caminho = raiz / "Inbox" / "Nota.md"
+    vault.gravar(caminho, "novo")
+    assert caminho.read_text() == "novo"
+    assert caminho.stat().st_mode & 0o777 == 0o600
+
+
+def test_gravar_nao_deixa_temporario_para_tras(raiz):
+    vault.gravar(raiz / "Inbox" / "Nota.md", "novo")
+    assert sorted(p.name for p in (raiz / "Inbox").iterdir()) == ["Nota.md"]
+
+
+def test_falha_no_meio_deixa_a_versao_antiga(raiz, monkeypatch):
+    import os
+
+    def quebra(*a):
+        raise OSError("disco cheio")
+
+    monkeypatch.setattr(os, "replace", quebra)
+    with pytest.raises(OSError):
+        vault.gravar(raiz / "Inbox" / "Nota.md", "novo")
+    assert (raiz / "Inbox" / "Nota.md").read_text() == "x"
+    assert sorted(p.name for p in (raiz / "Inbox").iterdir()) == ["Nota.md"]
+
+
+def test_criar_nota_nao_sobrescreve(raiz):
+    with pytest.raises(FileExistsError):
+        vault.criar_nota(raiz / "Inbox" / "Nota.md", "outra")
+    assert (raiz / "Inbox" / "Nota.md").read_text() == "x"
+
+
+def test_criar_nota_em_pasta_nova(raiz):
+    vault.criar_nota(raiz / "Projetos" / "Casa.md")
+    assert (raiz / "Projetos" / "Casa.md").stat().st_mode & 0o777 == 0o600
+
+
+def test_criar_pasta_que_ja_existe_falha(raiz):
+    with pytest.raises(FileExistsError):
+        vault.criar_pasta(raiz / "Inbox")
