@@ -17,7 +17,7 @@ from pathlib import Path
 from aide.storage import vault
 
 
-def _chave(texto: str) -> str:
+def chave(texto: str) -> str:
     """O que conta para comparar: sem caixa, sem `.md`, e com o acento numa
     forma só — "ã" pode chegar como um caractere ou como "a" mais o til."""
     texto = unicodedata.normalize("NFC", texto.strip()).casefold()
@@ -37,16 +37,16 @@ class Indice:
 
     def resolver(self, alvo: str, origem: str | None = None) -> str | None:
         """O caminho (`Pasta/Nota.md`) para onde `alvo` aponta, ou None."""
-        chave = _chave(alvo).strip("/")
-        if not chave:
+        procurada = chave(alvo).strip("/")
+        if not procurada:
             return None
-        if "/" in chave:
-            if chave in self.por_caminho:
-                return self.por_caminho[chave]
+        if "/" in procurada:
+            if procurada in self.por_caminho:
+                return self.por_caminho[procurada]
             # `[[Casa/Telhado]]` vale para `Projetos/Casa/Telhado.md`
-            sufixo = [c for k, c in self.por_caminho.items() if k.endswith("/" + chave)]
+            sufixo = [c for k, c in self.por_caminho.items() if k.endswith("/" + procurada)]
             return _melhor(sufixo, origem)
-        return _melhor(list(self.por_nome.get(chave, ())), origem)
+        return _melhor(list(self.por_nome.get(procurada, ())), origem)
 
 
 def _melhor(candidatos: list[str], origem: str | None) -> str | None:
@@ -68,8 +68,8 @@ def indice(vault_dir: Path) -> Indice:
                 visitar(item["filhos"])
                 continue
             caminho = item["caminho"]
-            por_caminho[_chave(caminho)] = caminho
-            por_nome.setdefault(_chave(item["nome"]), []).append(caminho)
+            por_caminho[chave(caminho)] = caminho
+            por_nome.setdefault(chave(item["nome"]), []).append(caminho)
 
     visitar(vault.arvore(vault_dir))
     return Indice({k: tuple(v) for k, v in por_nome.items()}, por_caminho)
