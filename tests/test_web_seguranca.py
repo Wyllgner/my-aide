@@ -12,7 +12,7 @@ fastapi = pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient
 
 from aide.storage import connect, migrate
-from aide.web import criar_app
+from aide.web import criar_app, seguranca
 from aide.web.paginas import TELAS
 
 LOCAL = "http://127.0.0.1:8787"
@@ -56,3 +56,40 @@ def test_host_local_passa(app, host):
 
 def test_saude_tambem_confere_o_host(app):
     assert TestClient(app, base_url="http://evil.example").get("/saude").status_code == 421
+
+
+# ---------- escrita ----------
+
+def test_escrita_sem_o_cabecalho_da_pagina_e_recusada(cliente):
+    """O formulário de outro site não consegue pôr X-Aide."""
+    resposta = cliente.post("/", headers={"origin": LOCAL})
+    assert resposta.status_code == 403
+
+
+def test_escrita_de_outra_origem_e_recusada(cliente):
+    resposta = cliente.post("/", headers={"origin": "http://evil.example", "x-aide": "1"})
+    assert resposta.status_code == 403
+
+
+def test_escrita_sem_origin_e_recusada(cliente):
+    assert cliente.post("/", headers={"x-aide": "1"}).status_code == 403
+
+
+def test_escrita_de_outro_site_pelo_sec_fetch_e_recusada(cliente):
+    resposta = cliente.post("/", headers={"origin": LOCAL, "x-aide": "1",
+                                          "sec-fetch-site": "cross-site"})
+    assert resposta.status_code == 403
+
+
+@pytest.mark.parametrize("metodo", ["put", "delete", "patch"])
+def test_todo_metodo_de_escrita_passa_pela_mesma_porta(cliente, metodo):
+    assert getattr(cliente, metodo)("/").status_code == 403
+
+
+def test_origin_com_porta_trocada_e_outra_origem():
+    assert seguranca.escrita_permitida("POST", "127.0.0.1:8787", "http://127.0.0.1:8788",
+                                       "1", "same-origin")
+    assert seguranca.escrita_permitida("POST", "127.0.0.1:8787", "https://127.0.0.1:8787",
+                                       "1", "same-origin")
+    assert seguranca.escrita_permitida("POST", "127.0.0.1:8787", "http://127.0.0.1:8787",
+                                       "1", "same-origin") is None

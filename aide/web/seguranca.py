@@ -21,6 +21,8 @@ por ataque:
 from __future__ import annotations
 
 HOSTS = frozenset({"127.0.0.1", "localhost"})
+LEITURA = frozenset({"GET", "HEAD"})
+CABECALHO_ESCRITA = "x-aide"
 
 
 def nome_do_host(host: str) -> str:
@@ -35,6 +37,20 @@ def host_permitido(host: str | None) -> bool:
     return bool(host) and nome_do_host(host.lower()) in HOSTS
 
 
+def escrita_permitida(metodo: str, host: str, origin: str | None,
+                      marca: str | None, sec_fetch_site: str | None) -> str | None:
+    """None se pode escrever; senão, o motivo da recusa."""
+    if metodo in LEITURA:
+        return None
+    if marca != "1":
+        return "escrita sem o cabeçalho da página"
+    if origin != f"http://{host.lower()}":
+        return "escrita vinda de outra origem"
+    if sec_fetch_site not in (None, "same-origin"):
+        return "escrita vinda de outro site"
+    return None
+
+
 def instalar(app) -> None:
     from fastapi.responses import PlainTextResponse
 
@@ -44,5 +60,12 @@ def instalar(app) -> None:
         if not host_permitido(host):
             resposta = PlainTextResponse("host não permitido", status_code=421)
         else:
-            resposta = await call_next(request)
+            motivo = escrita_permitida(
+                request.method, host, request.headers.get("origin"),
+                request.headers.get(CABECALHO_ESCRITA),
+                request.headers.get("sec-fetch-site"))
+            if motivo:
+                resposta = PlainTextResponse(motivo, status_code=403)
+            else:
+                resposta = await call_next(request)
         return resposta
