@@ -160,6 +160,8 @@ def barras(pares: list[tuple[str, float]], rotulo_px: int = 96,
 ALERTA = "#C4432B"
 ATENCAO = "#B8860B"
 CALMA = "#3F7A54"
+# teto gasto até o último centavo: nem folga, nem estouro
+COMPLETO = "#2B5FA8"
 
 
 def medidores(linhas: list[dict], rotulo_px: int = 104,
@@ -172,7 +174,8 @@ def medidores(linhas: list[dict], rotulo_px: int = 104,
     número ao lado, porque cor sozinha não carrega dado.
 
     Cada linha: {rotulo, valor, meta, texto}, e `diferenca` opcional:
-    (texto, passou) numa coluna à direita, ou None para deixá-la vazia. Linha com `meta` None não tem
+    (texto, passou) numa coluna à direita, ou None para deixá-la vazia. Teto
+    gasto até o último centavo pinta a linha inteira de COMPLETO. Linha com `meta` None não tem
     teto: a barra sai neutra, sem traço de 100% nem de ritmo, medida contra a
     maior das linhas sem teto — só diz o tamanho, não se é muito.
     """
@@ -188,7 +191,9 @@ def medidores(linhas: list[dict], rotulo_px: int = 104,
             continue
         meta = linha["meta"] or 1
         fracao = linha["valor"] / meta
-        cor = ALERTA if fracao > 1 else ATENCAO if fracao >= 0.8 else CALMA
+        completo = linha["meta"] > 0 and linha["valor"] == linha["meta"]
+        cor = (COMPLETO if completo else ALERTA if fracao > 1
+               else ATENCAO if fracao >= 0.8 else CALMA)
         # a barra para em 100%: o excesso vira cor e número, não uma barra que
         # estoura a coluna e desalinha as outras
         largura = min(fracao, 1.0) * 100
@@ -201,7 +206,8 @@ def medidores(linhas: list[dict], rotulo_px: int = 104,
         html += (
             f'<div style="display:flex;align-items:center;gap:10px">'
             f'<span style="width:{rotulo_px}px;flex-shrink:0;font-size:12.5px;'
-            f'color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap"'
+            f'color:{cor if completo else "var(--muted)"};overflow:hidden;'
+            f'text-overflow:ellipsis;white-space:nowrap"'
             f' title="{escape(linha["rotulo"])}">{escape(linha["rotulo"])}</span>'
             f'<div style="flex:1;height:16px;background:{TRILHO};border-radius:5px;'
             f'position:relative;overflow:hidden">'
@@ -211,7 +217,7 @@ def medidores(linhas: list[dict], rotulo_px: int = 104,
             f'background:{TINTA};opacity:.16"></span>{marca_ritmo}</div>'
             f'<span class="mono" style="white-space:nowrap;text-align:right;font-size:12.5px;'
             f'color:{cor if fracao >= 0.8 else "var(--ink)"}">'
-            f'{escape(linha["texto"])}</span>{_diferenca(linha)}</div>')
+            f'{escape(linha["texto"])}</span>{_diferenca(linha, cor if completo else None)}</div>')
     return f'<div style="display:flex;flex-direction:column;gap:7px">{html}</div>'
 
 
@@ -228,15 +234,16 @@ def _barra_sem_meta(linha: dict, fracao: float, rotulo_px: int) -> str:
         f'color:var(--muted)">{escape(linha["texto"])}</span>{_diferenca(linha)}</div>')
 
 
-def _diferenca(linha: dict) -> str:
+def _diferenca(linha: dict, cor_da_linha: str | None = None) -> str:
     """A coluna de quanto sobra ou passou do teto. Largura fixa, e vazia na linha
     sem teto, para as barras de cima e de baixo terminarem no mesmo lugar."""
     if "diferenca" not in linha:
         return ""
     texto, passou = linha["diferenca"] or ("", False)
+    cor = cor_da_linha or (ALERTA if passou else "var(--muted)")
     return (f'<span class="mono" style="width:132px;flex-shrink:0;white-space:nowrap;'
             f'text-align:right;font-size:12.5px;'
-            f'color:{ALERTA if passou else "var(--muted)"}">{escape(texto)}</span>')
+            f'color:{cor}">{escape(texto)}</span>')
 
 
 def anel(fracao: float, rotulo: str, tamanho: int = 92) -> str:
