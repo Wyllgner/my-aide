@@ -233,6 +233,42 @@ def resolver_categoria(conn, category: str | None, tag: str | None) -> tuple[str
     return categoria, None
 
 
+def tags_usadas(conn) -> dict[str, list[str]]:
+    """categoria -> tags que já aparecem nos gastos dela, cadastradas ou não.
+
+    Só gastos que não são privados: a lista vai para o prompt e para a busca
+    na descrição de lançamentos que podem não ser privados.
+    """
+    if conn is None:
+        return {}
+    grupos: dict[str, list[str]] = {}
+    for r in conn.execute(
+            "SELECT DISTINCT lower(category), tag FROM expenses WHERE deleted_at IS NULL"
+            " AND private = 0 AND tag IS NOT NULL AND category IS NOT NULL"
+            " ORDER BY 1, 2").fetchall():
+        grupos.setdefault(r[0], []).append(r[1])
+    for nome, mae in tags_em_vigor(conn).values():
+        if nome not in grupos.setdefault(mae, []):
+            grupos[mae].append(nome)
+    return grupos
+
+
+def tag_na_descricao(conn, categoria: str | None, descricao: str) -> str | None:
+    """A tag que a pessoa disse na descrição sem o modelo passar como tag.
+
+    "57 em alimentação do casal" chegava com a descrição "alimentação do
+    casal" e sem tag, e o gasto ficava fora da tag casal. Só vale tag já usada
+    na mesma categoria, para "compra" ou "geral" não grudarem em tudo; se a
+    descrição citar duas, fica sem: melhor sem tag que com a errada.
+    """
+    if not categoria:
+        return None
+    palavras = set(re.findall(r"\w+", _chave(descricao)))
+    achadas = [t for t in tags_usadas(conn).get(categoria, [])
+               if set(re.findall(r"\w+", _chave(t))) <= palavras]
+    return achadas[0] if len(achadas) == 1 else None
+
+
 # ---------- períodos ----------
 
 PERIODOS = ("hoje", "ontem", "semana", "mes", "ano", "sempre")
@@ -371,6 +407,8 @@ def add(ctx: ToolContext, amount: str, description: str, category: str | None = 
     primeira_n = int(first_installment)
 
     categoria, etiqueta = resolver_categoria(ctx.conn, category, tag)
+    if etiqueta is None:
+        etiqueta = tag_na_descricao(ctx.conn, categoria, description)
     # parcelado sem forma dita é crédito: débito não parcela
     forma = normalizar_forma(method if method or parcelas == 1 else "credito")
     valores = [cents] * parcelas if amount_is_installment else dividir(cents, parcelas)
