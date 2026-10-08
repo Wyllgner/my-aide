@@ -26,7 +26,7 @@ CABECALHO_ESCRITA = "x-aide"
 
 # 'unsafe-inline' só em estilo: as telas usam style="" em todo canto, e estilo
 # não executa nada. Script só vem de /app.js.
-CSP = "; ".join((
+DIRETIVAS = (
     "default-src 'none'",
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
@@ -36,7 +36,8 @@ CSP = "; ".join((
     "form-action 'self'",
     "frame-ancestors 'none'",
     "base-uri 'none'",
-))
+)
+CSP = "; ".join(DIRETIVAS)
 
 CABECALHOS = {
     "content-security-policy": CSP,
