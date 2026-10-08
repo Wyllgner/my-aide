@@ -51,15 +51,23 @@ def _seguro(url: str) -> bool:
 # ---------- regras ----------
 
 
+# `[[foto.png]]`, `![[relatório.pdf]]`: os tipos de anexo que o Obsidian
+# reconhece. Lista, e não "qualquer extensão": "Plano v1.2" é nota
+ANEXO = re.compile(r"\.(png|jpe?g|gif|bmp|svg|webp|avif|mp3|wav|m4a|ogg|flac|3gp"
+                   r"|mp4|webm|ogv|mov|mkv|pdf|canvas|base)$", re.I)
+
+
 def _wikilink(state, silent: bool) -> bool:
-    """[[alvo#seção|apelido]], numa linha só e sem colchete dentro."""
+    """[[alvo#seção|apelido]] e ![[...]], numa linha só e sem colchete dentro."""
     inicio = state.pos
-    if not state.src.startswith("[[", inicio):
+    embutido = state.src.startswith("![[", inicio)
+    abre = inicio + (3 if embutido else 2)
+    if not embutido and not state.src.startswith("[[", inicio):
         return False
-    fim = state.src.find("]]", inicio + 2)
+    fim = state.src.find("]]", abre)
     if fim < 0:
         return False
-    dentro = state.src[inicio + 2:fim]
+    dentro = state.src[abre:fim]
     if not dentro.strip() or any(c in dentro for c in "[]\n"):
         return False
     if not silent:
@@ -75,6 +83,11 @@ def _render_wikilink(self, tokens, idx, options, env) -> str:
     meta = tokens[idx].meta
     nome, secao, apelido = meta["nome"], meta["secao"], meta["apelido"]
     texto = apelido or (f"{nome} › {secao}" if nome and secao else nome or secao)
+    if ANEXO.search(nome):
+        # a página ainda não serve anexos; como link quebrado, um clique
+        # criaria "foto.png.md"
+        return (f'<span class="anexo" title="anexos ainda não aparecem aqui">'
+                f'{escape(apelido or nome)}</span>')
     destino = env["indice"].resolver(nome, env["origem"]) if nome else env["origem"]
     if destino is None:
         # quebrado: sem href, para não levar a lugar nenhum; o alvo fica

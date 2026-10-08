@@ -177,3 +177,23 @@ def test_link_markdown_leva_a_secao(indice):
 def test_link_markdown_para_titulo_da_propria_nota(indice):
     html = _html("[topo](#Fim)\n\n# Fim", indice)
     assert 'href="/notas?arquivo=Projetos/Casa/Telhado.md#s-fim"' in html
+
+
+@pytest.mark.parametrize("texto", ["![[foto.png]]", "[[relatório.pdf]]", "![[Plano.PDF|o plano]]"])
+def test_anexo_nao_vira_nota_para_criar(indice, texto):
+    """Como link quebrado, um clique criaria "foto.png.md"."""
+    html = _html(texto, indice)
+    assert 'class="anexo"' in html
+    assert "quebrado" not in html
+    assert not html.startswith("<p>!")
+
+
+def test_embutir_nota_vira_link(indice):
+    html = _html("![[Reunião de orçamento]]", indice)
+    assert 'class="wikilink" href="/notas?arquivo=Inbox/' in html
+    assert "<p>!" not in html
+
+
+def test_nome_com_ponto_continua_nota(indice):
+    """"v1.2" não é extensão de anexo que importe: "Plano v1.2" é nota."""
+    assert "quebrado" in _html("[[Plano v1.2]]", indice)
