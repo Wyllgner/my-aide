@@ -138,6 +138,60 @@ nav a svg { flex-shrink: 0; }
           line-height: 1.7; color: var(--ink); tab-size: 2; }
 #editor:focus { outline: none; border-color: var(--faint); background: var(--surface); }
 
+/* editar, lado a lado, ler */
+.modos { display: flex; border: 1px solid var(--line); border-radius: var(--r-pill); overflow: hidden; }
+.modo { font: inherit; font-size: 12px; padding: 5px 11px; border: 0; cursor: pointer;
+        background: var(--surface); color: var(--muted); }
+.modo + .modo { border-left: 1px solid var(--line); }
+.modo[aria-pressed="true"] { background: var(--soft); color: var(--accent); font-weight: 600; }
+.area { flex: 1; display: grid; gap: 16px; min-height: 58vh; }
+.area[data-modo="dividido"] { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.area[data-modo="editar"] .previa, .area[data-modo="ler"] #editor { display: none; }
+.area[data-modo="ler"] .previa { border-color: transparent; background: transparent; padding: 4px 2px; }
+
+/* a prévia: leitura confortável, mesma família da página */
+.previa { min-width: 0; overflow: auto; max-height: 70vh; padding: 14px 18px;
+          border: 1px solid var(--line-soft); border-radius: var(--r-inner);
+          font-size: 14.5px; line-height: 1.7; color: var(--ink); overflow-wrap: anywhere; }
+.area[data-modo="ler"] .previa { max-height: none; max-width: 760px; }
+.previa > :first-child { margin-top: 0; }
+.previa h1, .previa h2, .previa h3 { font-weight: 600; line-height: 1.3; margin: 1.3em 0 .5em; }
+.previa h1 { font-size: 22px; } .previa h2 { font-size: 18px; } .previa h3 { font-size: 15.5px; }
+.previa p, .previa ul, .previa ol, .previa pre, .previa table, .previa blockquote { margin: 0 0 .9em; }
+.previa ul, .previa ol { padding-left: 1.4em; }
+.previa li.tarefa { list-style: none; margin-left: -1.3em; }
+.previa li.tarefa input { margin: 0 6px 0 0; vertical-align: -1px; }
+.previa code { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 12.5px;
+               background: var(--line-soft); padding: 1px 5px; border-radius: 5px; }
+.previa pre { background: var(--line-soft); padding: 12px 14px; border-radius: var(--r-inner);
+              overflow: auto; }
+.previa pre code { background: none; padding: 0; }
+.previa blockquote { border-left: 3px solid var(--line); padding-left: 12px; color: var(--muted); }
+.previa table { border-collapse: collapse; font-size: 13px; }
+.previa th, .previa td { border: 1px solid var(--line); padding: 5px 10px; text-align: left; }
+.previa hr { border: 0; border-top: 1px solid var(--line); margin: 1.4em 0; }
+.previa .wikilink { border-bottom: 1px solid var(--soft); }
+.previa .wikilink.quebrado { color: var(--faint); border-bottom: 1px dashed var(--faint);
+                             cursor: pointer; }
+.previa .wikilink.quebrado:hover { color: var(--accent); border-color: var(--accent); }
+.previa .imagem-externa::before { content: "▧ "; color: var(--faint); }
+.propriedades { display: grid; grid-template-columns: max-content 1fr; gap: 3px 14px;
+                margin: 0 0 16px; padding: 10px 12px; border-radius: var(--r-inner);
+                background: var(--paper); border: 1px solid var(--line-soft);
+                font-size: 12.5px; }
+.propriedades dt { color: var(--faint); font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+.propriedades dd { margin: 0; color: var(--muted); overflow-wrap: anywhere; }
+
+/* autocompletar [[ */
+.sugestoes { position: absolute; z-index: 10; margin: 0; padding: 4px; list-style: none;
+             min-width: 240px; max-width: 360px; background: var(--surface);
+             border: 1px solid var(--line); border-radius: var(--r-inner);
+             box-shadow: 0 6px 20px rgba(21,23,28,.10); font-size: 13px; }
+.sugestoes li { padding: 6px 9px; border-radius: 7px; cursor: pointer;
+                display: flex; flex-direction: column; }
+.sugestoes li[aria-selected="true"] { background: var(--soft); color: var(--accent); }
+.sugestoes .onde { font-size: 11px; color: var(--faint); }
+
 /* uma tela de PC, mas não quebrada num monitor estreito */
 @media (max-width: 1100px) {
   .lateral { width: 68px; padding: 22px 10px; }
@@ -145,6 +199,7 @@ nav a svg { flex-shrink: 0; }
   nav a { justify-content: center; padding: 11px 0; }
   main { padding: 28px 24px; }
   .notas { grid-template-columns: 220px minmax(0, 1fr); }
+  .area[data-modo="dividido"] { grid-template-columns: 1fr; }
 }
 @media (max-width: 760px) {
   .notas { grid-template-columns: 1fr; }

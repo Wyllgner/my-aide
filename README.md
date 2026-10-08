@@ -181,13 +181,17 @@ myaide perfil                                # o que ele sabe sobre você
 myaide reindexar                             # reconstrói o índice a partir do vault
 ```
 
-As notas vivem em `vault/AAAA-MM/*.md` com frontmatter, legíveis sem o projeto.
-O SQLite é só índice, e o vault manda nos dois sentidos:
+As notas vivem em `vault/` como markdown puro, no formato do Obsidian: dá para
+abrir a mesma pasta nele. As que o assessor cria caem em `vault/Inbox/`, com o
+título como nome do arquivo (`Inbox/Reunião de orçamento.md`). O SQLite é só
+índice, e o vault manda nos dois sentidos:
 
 * Um `.md` que você escreveu no editor e salvou em `vault/` é **adotado** na
   próxima reindexação, com o título lido do frontmatter.
 * Apagar uma nota move o arquivo para `vault/.trash/`, então o vault contém só
   nota viva. O texto continua legível ali, e voltar é um `mv`.
+* `private: true` no frontmatter marca a nota como privada: ela nunca vai para
+  o modelo nem vira vetor de busca semântica (que mandaria o texto à OpenAI).
 * Linha sem arquivo é acusada por nome, em vez de falhar calada na busca.
 
 ### Pessoas e agenda
@@ -229,13 +233,21 @@ depois do reboot, use `deploy/my-aide.service`.
 
 ## Interface web
 
-Sobe junto com o daemon em **http://127.0.0.1:8787**, com doze telas de leitura:
-painel com gráficos, hoje, calendário do mês, conversas, notas, gastos, custo e
-saldo, memória, pessoas, fila, ferramentas e auditoria.
+Sobe junto com o daemon em **http://127.0.0.1:8787**, com doze telas: painel com
+gráficos, hoje, calendário do mês, conversas, notas, gastos, custo e saldo,
+memória, pessoas, fila, ferramentas e auditoria.
 
-> **Só leitura, e só nesta máquina.** A página mostra tudo, inclusive o que está
-> marcado como privado, e não pede senha. O que a torna segura é escutar em
-> 127.0.0.1, e por isso o endereço é constante no código, não configuração.
+**Notas** é um editor no jeito do Obsidian: árvore de pastas, o arquivo inteiro
+editável, salvamento automático, prévia ao lado (Ctrl+E alterna entre escrever
+e ler), `[[links]]` com autocompletar ao digitar `[[`, e link para nota que não
+existe que cria a nota com um clique. Se o assessor ou o Obsidian mexerem na
+nota aberta, a página pergunta qual versão fica em vez de sobrescrever.
+
+> **Só nesta máquina.** A página mostra tudo, inclusive o que está marcado como
+> privado, e não pede senha. Ela escuta só em 127.0.0.1 (constante no código,
+> não configuração) e recusa pedido com outro nome de servidor, o que fecha o
+> DNS rebinding. As notas são a única escrita: só aceita pedido feito pela
+> própria página, só dentro do `vault/`, e cada escrita entra na auditoria.
 > Concluir tarefa, lançar gasto e conversar continuam sendo CLI, Telegram ou MCP.
 
 ## Telegram

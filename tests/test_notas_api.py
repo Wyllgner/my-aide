@@ -87,6 +87,22 @@ def test_salvar_por_cima_de_mudanca_de_fora_e_conflito(cliente, vault_dir):
     assert "escrito pelo assessor" in arquivo.read_text()
 
 
+def test_salvar_devolve_a_previa(cliente):
+    resposta = _salvar(cliente, "# Novo\n\n**forte**", _abrir(cliente)["versao"])
+    assert '<h1 id="s-novo">Novo</h1>' in resposta.json()["html"]
+    assert "<strong>forte</strong>" in resposta.json()["html"]
+
+
+def test_conflito_devolve_a_previa_do_disco(cliente, vault_dir):
+    import os
+
+    nota = _abrir(cliente)
+    arquivo = vault_dir / "Inbox" / "Nota.md"
+    arquivo.write_text("# Do disco")
+    os.utime(arquivo, ns=(arquivo.stat().st_mtime_ns + 10**9,) * 2)
+    assert "Do disco</h1>" in _salvar(cliente, "meu", nota["versao"]).json()["html"]
+
+
 def test_salvar_entra_na_busca(cliente, app):
     from aide.storage.search import buscar_texto
 

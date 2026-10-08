@@ -61,6 +61,12 @@ def instalar(app) -> None:
             raise HTTPException(413, "nota grande demais")
         return texto
 
+    def previa(texto: str, caminho: str) -> str:
+        from aide.storage import links
+        from aide.web import markdown
+
+        return markdown.renderizar(texto, caminho, links.indice(raiz()))
+
     @app.get("/api/notas/arquivo")
     def abrir(caminho: str = Query(...)) -> dict:
         arquivo = local(caminho)
@@ -80,13 +86,16 @@ def instalar(app) -> None:
         if atual != versao_lida:
             # devolve o que está no disco para a página mostrar, sem decidir
             # sozinha qual das duas versões vale
+            no_disco = arquivo.read_text(encoding="utf-8")
             return JSONResponse(status_code=409, content={
                 "erro": "a nota mudou fora daqui desde que você abriu",
-                "texto": arquivo.read_text(encoding="utf-8"), "versao": atual})
+                "texto": no_disco, "versao": atual, "html": previa(no_disco, caminho)})
         vault.gravar(arquivo, texto)
         sincronizar(app.state.conn_factory(), raiz() / caminho)
         auditar("notas.salvar", caminho)
-        return {"caminho": caminho, "versao": versao(arquivo)}
+        # a prévia volta junto: é o mesmo texto, e assim a página não precisa
+        # de um segundo pedido nem de um renderizador próprio
+        return {"caminho": caminho, "versao": versao(arquivo), "html": previa(texto, caminho)}
 
     @app.post("/api/notas/arquivo", status_code=201)
     def criar(caminho: str = Body(..., embed=True)) -> dict:

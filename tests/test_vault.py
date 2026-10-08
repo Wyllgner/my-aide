@@ -277,3 +277,20 @@ def test_o_daemon_relê_o_privado_antes_de_mandar(raiz, banco):
     reconciliar(banco, raiz, embedder=espiao)
     assert espiao.enviado == []
     assert banco.execute("SELECT private FROM notes").fetchone()[0] == 1
+
+
+# ---------- frontmatter ----------
+
+def test_frontmatter_vai_ate_a_linha_que_fecha():
+    meta, corpo = vault.separar("---\ntitle: a --- b\n---\n\ncorpo\n\n---\n\nresto")
+    assert meta == {"title": "a --- b"}
+    assert corpo == "corpo\n\n---\n\nresto"
+
+
+def test_tracos_no_comeco_que_nao_sao_frontmatter():
+    assert vault.separar("----\nlinha") == ({}, "----\nlinha")
+    assert vault.separar("---\nnunca fecha") == ({}, "---\nnunca fecha")
+
+
+def test_frontmatter_vazio():
+    assert vault.separar("---\n---\ncorpo") == ({}, "corpo")
