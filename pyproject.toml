@@ -11,6 +11,9 @@ dependencies = [
     "rich>=13.7",
     "apscheduler>=3.10",
     "mcp>=1.0",
+    # a prévia das notas; já vinha pelo rich, mas a página não pode depender
+    # de uma escolha interna dele
+    "markdown-it-py>=3.0",
 ]
 
 [project.optional-dependencies]
