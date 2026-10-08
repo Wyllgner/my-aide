@@ -117,3 +117,56 @@ def test_script_so_da_propria_pagina():
 def test_recusa_tambem_sai_com_os_cabecalhos(app):
     resposta = TestClient(app, base_url="http://evil.example").get("/")
     assert resposta.headers["x-frame-options"] == "DENY"
+
+
+# ---------- injeção pelo que você escreveu ----------
+
+ISCA = '"><img src=x onerror=alert(1)>'
+
+
+@pytest.fixture
+def com_iscas(app, registry):
+    """A isca em todo campo que alguma tela mostra."""
+    ctx = app.state.contexto()
+    registry.call("tasks.create", {"title": ISCA, "project": ISCA, "tags": ISCA,
+                                   "notes": ISCA, "due": "2020-01-01T09:00"}, ctx)
+    registry.call("tasks.create", {"title": ISCA, "project": ISCA}, ctx)
+    registry.call("notes.create", {"title": ISCA, "body": ISCA, "tags": ISCA}, ctx)
+    registry.call("expenses.add", {"amount": "10", "description": ISCA,
+                                   "category": ISCA, "tag": ISCA}, ctx)
+    registry.call("people.add", {"name": ISCA, "relation": ISCA, "cadence_days": 1,
+                                 "last_contact": "2020-01-01"}, ctx)
+    registry.call("memory.save", {"kind": "profile", "key": ISCA, "value": ISCA}, ctx)
+    registry.call("work_orders.create", {"goal": ISCA, "context": ISCA}, ctx)
+    ctx.conn.execute("INSERT INTO messages (session_id, role, content) VALUES (?, 'user', ?)",
+                     (ISCA, ISCA))
+    ctx.conn.execute("INSERT INTO audit (actor, tool, args_json, result_summary)"
+                     " VALUES (?, ?, ?, ?)", (ISCA, ISCA, ISCA, ISCA))
+    ctx.conn.commit()
+    return app
+
+
+def test_nenhuma_tela_devolve_a_isca_crua(cliente, com_iscas):
+    for tela in TELAS:
+        html = cliente.get(tela.caminho).text
+        assert "<img src=x" not in html, tela.caminho
+
+
+@pytest.mark.parametrize("consulta", [
+    "/gastos?q={i}&categoria={i}&tag={i}&forma={i}&tipo={i}&de={i}&ate={i}&min={i}&max={i}&ordem={i}&periodo={i}",
+    "/notas?busca={i}",
+    "/conversas?sessao={i}",
+    "/auditoria?ator={i}",
+])
+def test_parametro_da_url_nao_volta_cru(cliente, com_iscas, consulta):
+    from urllib.parse import quote
+
+    html = cliente.get(consulta.format(i=quote(ISCA))).text
+    assert "<img src=x" not in html
+
+
+def test_a_isca_chegou_mesmo_as_telas(cliente, com_iscas):
+    """Sem isto o teste acima passaria com o banco vazio."""
+    for caminho in ("/hoje", "/notas", "/gastos", "/pessoas", "/memoria", "/fila",
+                    "/conversas", "/auditoria", "/calendario?ano=2020&mes=1"):
+        assert "&lt;img src=x" in cliente.get(caminho).text, caminho
