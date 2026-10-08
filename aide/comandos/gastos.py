@@ -174,11 +174,16 @@ def tag(nome: str = typer.Argument(None, help="farmácia"),
     """Tags de gasto: myaide tag farmácia pessoal. Sem nada, lista."""
     _, _, ctx = _ctx()
     if nome is None:
-        grupos = registry.call("expenses.tags", {}, ctx).data["por_categoria"]
-        if not grupos:
+        dados = registry.call("expenses.tags", {}, ctx).data
+        grupos, soltas = dados["por_categoria"], dados.get("usadas_sem_cadastro", {})
+        if not grupos and not soltas:
             console.print('[dim]Nenhuma tag. Crie com: myaide tag farmácia pessoal[/]')
         for mae, nomes in grupos.items():
             console.print(f"[bold]{mae}[/] [dim]{', '.join(nomes)}[/]")
+        if soltas:
+            console.print("\n[dim]usadas nos gastos, sem cadastro:[/]")
+            for mae, nomes in soltas.items():
+                console.print(f"[bold]{mae}[/] [dim]{', '.join(nomes)}[/]")
         return
 
     if remover:
