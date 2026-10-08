@@ -166,3 +166,30 @@ def test_script_e_estilo_nao_ficam_velhos_no_cache(cliente):
     contra rotas novas por até cinco minutos."""
     for caminho in ("/app.js", "/app.css"):
         assert cliente.get(caminho).headers["cache-control"] == "no-cache"
+
+
+# ---------- prévia ----------
+
+def test_a_previa_sai_pronta_com_os_links(cliente, raiz):
+    (raiz / "Inbox" / "Ideia.md").write_text("# Ideia\n\nver [[Telhado]] e [[Nada]]")
+    html = _tela(cliente, "Inbox/Ideia.md")
+    previa = html[html.index('<article id="previa"'):]
+    assert '<h1 id="s-ideia">Ideia</h1>' in previa
+    assert 'href="/notas?arquivo=Projetos/Casa/Telhado.md"' in previa
+    assert 'class="wikilink quebrado"' in previa
+
+
+def test_o_editor_leva_a_lista_de_notas_para_o_autocompletar(cliente):
+    import html as h
+    import json
+    import re
+
+    pagina = _tela(cliente, "Inbox/Ideia.md")
+    bruto = re.search(r'data-notas="([^"]*)"', pagina).group(1)
+    assert json.loads(h.unescape(bruto)) == ["Inbox/Ideia.md", "Projetos/Casa/Telhado.md"]
+
+
+def test_os_tres_modos(cliente):
+    html = _tela(cliente, "Inbox/Ideia.md")
+    for modo in ("editar", "dividido", "ler"):
+        assert f'data-modo="{modo}"' in html
