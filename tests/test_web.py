@@ -331,7 +331,7 @@ def test_o_mes_mostra_o_que_esta_marcado(cliente, app, registry):
     ctx = app.state.contexto()
     registry.call("tasks.create", {"title": "Pagar o condomínio",
                                    "due": "2026-09-20T09:00"}, ctx)
-    html = cliente.get("/calendario").text
+    html = cliente.get("/calendario?ano=2026&mes=9").text
     assert "Pagar o condomínio" in html
     assert "Setembro" in html or "setembro" in html.lower()
 
@@ -748,7 +748,7 @@ def test_tarefa_descartada_sai_do_calendario(cliente, app, registry):
                                          "due": "2026-09-21T09:00"}, ctx).data
     registry.call("tasks.drop", {"id": sai["id"]}, ctx)
 
-    html = cliente.get("/calendario").text
+    html = cliente.get("/calendario?ano=2026&mes=9").text
     assert "Condomínio" in html
     assert "Descartada" not in html
     assert fica["id"]
@@ -760,7 +760,7 @@ def test_tarefa_concluida_continua_no_calendario(cliente, app, registry):
     feita = registry.call("tasks.create", {"title": "Boleto da luz",
                                            "due": "2026-09-18T09:00"}, ctx).data
     registry.call("tasks.complete", {"id": feita["id"]}, ctx)
-    assert "Boleto da luz" in cliente.get("/calendario").text
+    assert "Boleto da luz" in cliente.get("/calendario?ano=2026&mes=9").text
 
 
 def test_a_fila_separa_o_que_espera_do_que_ja_foi(cliente, app, registry):
@@ -809,7 +809,8 @@ def test_a_virada_do_ano_anda_certo():
 
 
 def test_fora_do_mes_atual_aparece_o_atalho_para_hoje(cliente):
-    assert ">hoje</a>" in cliente.get("/calendario?ano=2026&mes=10").text
+    # um mês que nunca é o atual: com o mês fixo, o teste quebrava ao chegar nele
+    assert ">hoje</a>" in cliente.get("/calendario?ano=2020&mes=1").text
     assert ">hoje</a>" not in cliente.get("/calendario").text
 
 
