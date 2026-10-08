@@ -50,7 +50,7 @@ def reconciliar(conn, vault_dir: Path, embedder=None, forcar: bool = False) -> R
     """
     relatorio = Relatorio()
     vivas = {Path(r["path"]).resolve(): r for r in conn.execute(
-        "SELECT id, title, path, updated_at FROM notes WHERE deleted_at IS NULL")}
+        "SELECT id, title, path, updated_at, private FROM notes WHERE deleted_at IS NULL")}
     apagadas = {Path(r["path"]).resolve() for r in conn.execute(
         "SELECT path FROM notes WHERE deleted_at IS NOT NULL")}
 
@@ -61,7 +61,8 @@ def reconciliar(conn, vault_dir: Path, embedder=None, forcar: bool = False) -> R
             row = vivas[real]
             if forcar or _mudou(caminho, row["updated_at"]):
                 corpo = vault.corpo_de(caminho)
-                _indexar(conn, row["id"], row["title"], corpo, embedder)
+                _indexar(conn, row["id"], row["title"], corpo,
+                         None if row["private"] else embedder)
                 conn.execute("UPDATE notes SET updated_at = datetime('now') WHERE id = ?",
                              (row["id"],))
                 relatorio.reindexadas.append((row["id"], row["title"]))
@@ -97,7 +98,8 @@ def _mudou(caminho: Path, indexado_em: str) -> bool:
 
 def _indexar(conn, note_id: int, titulo: str, corpo: str, embedder) -> None:
     """Palavra-chave sempre; semântico só com embedder, e sem propagar falha:
-    a nota precisa ficar indexada mesmo sem rede ou sem chave."""
+    a nota precisa ficar indexada mesmo sem rede ou sem chave. Para nota
+    privada quem chama passa embedder None: o vetor sairia daqui com o texto."""
     indexar(conn, note_id, titulo, corpo)
     if embedder is None:
         return

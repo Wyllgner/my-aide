@@ -221,3 +221,55 @@ def test_a_listagem_traz_a_data_pronta(ctx, registry, tmp_path):
     nota = registry.call("notes.list", {}, ctx).data[0]
     assert nota["quando"] == "hoje"
     assert ":" not in nota["quando"]  # sem hora
+
+
+# ---------- privada não vira vetor ----------
+
+class EmbedderEspiao:
+    """Guarda tudo o que teria ido para a OpenAI."""
+
+    modelo = "espiao-1"
+
+    def __init__(self):
+        self.enviado = []
+
+    def embed_one(self, texto):
+        self.enviado.append(texto)
+        return [1.0, 0.0]
+
+
+def test_nota_privada_nao_vai_para_o_embedding(ctx, registry, tmp_path):
+    """Gerar o vetor é mandar o texto para fora; privado não sai desta máquina."""
+    _config_vault(ctx, tmp_path)
+    ctx.embedder = EmbedderEspiao()
+    registry.call("notes.create", {"title": "Laudo", "body": "SEGREDO", "private": True}, ctx)
+    assert ctx.embedder.enviado == []
+    # a busca local continua achando
+    assert buscar_texto(ctx.conn, "SEGREDO")
+
+
+def test_acrescentar_em_privada_nao_vai_para_o_embedding(ctx, registry, tmp_path):
+    _config_vault(ctx, tmp_path)
+    ctx.ver_privado = True
+    nota = registry.call("notes.create", {"title": "Laudo", "body": "a",
+                                          "private": True}, ctx).data
+    ctx.embedder = EmbedderEspiao()
+    registry.call("notes.append", {"id": nota["id"], "body": "SEGREDO"}, ctx)
+    assert ctx.embedder.enviado == []
+
+
+def test_reindexar_privada_nao_vai_para_o_embedding(ctx, registry, tmp_path):
+    from aide.storage.reconciliacao import reconciliar
+
+    _config_vault(ctx, tmp_path)
+    registry.call("notes.create", {"title": "Laudo", "body": "SEGREDO", "private": True}, ctx)
+    espiao = EmbedderEspiao()
+    reconciliar(ctx.conn, Path(ctx.config.vault_dir), embedder=espiao, forcar=True)
+    assert espiao.enviado == []
+
+
+def test_nota_normal_continua_virando_vetor(ctx, registry, tmp_path):
+    _config_vault(ctx, tmp_path)
+    ctx.embedder = EmbedderEspiao()
+    registry.call("notes.create", {"title": "Mercado", "body": "comprar pão"}, ctx)
+    assert len(ctx.embedder.enviado) == 1
