@@ -416,3 +416,16 @@ def test_salvar_e_mover_registram_a_atividade(cliente, app):
     linhas = list(app.state.conn_factory().execute(
         "SELECT caminho, vezes, origem FROM note_activity"))
     assert [tuple(r) for r in linhas] == [("Nova.md", 2, "pagina")]
+
+
+def test_privada_so_no_banco_nao_vira_normal_ao_salvar(app, cliente, vault_dir):
+    """A aba foi aberta sem a marca no arquivo: salvar vira conflito, e a
+    versão do disco volta com `private: true`, em vez de desmarcar calado."""
+    arquivo = vault_dir / "Inbox" / "Nota.md"
+    app.state.conn_factory().execute(
+        "INSERT INTO notes (title, path, private) VALUES ('Nota', ?, 1)", (str(arquivo),))
+    lida = _abrir(cliente)
+    resposta = _salvar(cliente, "---\ntitle: Nota\n---\n\noutro", lida["versao"])
+    assert resposta.status_code == 409
+    assert "private: true" in resposta.json()["texto"]
+    assert app.state.conn_factory().execute("SELECT private FROM notes").fetchone()[0] == 1

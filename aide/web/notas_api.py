@@ -18,7 +18,12 @@ import json
 from pathlib import Path
 
 from aide.storage import atividade, vault
-from aide.storage.reconciliacao import esquecer, mover_no_indice, sincronizar
+from aide.storage.reconciliacao import (
+    esquecer,
+    mover_no_indice,
+    privado_para_o_arquivo,
+    sincronizar,
+)
 
 # uma nota de 2 MB já é um livro; acima disso é engano, não anotação
 TAMANHO_MAXIMO = 2 * 1024 * 1024
@@ -116,6 +121,9 @@ def instalar(app) -> None:
         texto = texto_valido(texto)
         if not arquivo.is_file():
             raise HTTPException(404, "nota não encontrada; ela foi apagada ou movida")
+        # aba aberta antes de o privado ir para o arquivo: a marca entra no
+        # disco, a versão muda, e o conflito mostra a nota com ela
+        privado_para_o_arquivo(app.state.conn_factory(), raiz() / caminho)
         atual = versao(arquivo)
         if atual != versao_lida:
             # devolve o que está no disco para a página mostrar, sem decidir

@@ -164,6 +164,18 @@ def privada(meta: dict[str, str]) -> bool:
     return meta.get("private", "").strip().lower() in ("true", "yes", "sim", "1")
 
 
+def com_privado(texto: str) -> str:
+    """O texto com `private: true` no frontmatter: troca a linha `private:` que
+    houver, acrescenta antes do `---` que fecha, ou cria o frontmatter."""
+    inicio = inicio_do_corpo(texto)
+    if not inicio:
+        return f"{SEPARADOR}\nprivate: true\n{SEPARADOR}\n" + texto
+    linhas = texto.split("\n")
+    meta = [linha for linha in linhas[1:inicio - 1]
+            if not re.match(r"private\s*:", linha, re.IGNORECASE)]
+    return "\n".join([linhas[0], *meta, "private: true", *linhas[inicio - 1:]])
+
+
 def corpo_de(caminho: Path) -> str:
     return ler(caminho)[1]
 
