@@ -245,12 +245,53 @@ class Citacao:
     linha: int  # linha no arquivo, contando o frontmatter
     trecho: str = ""  # o texto dessa linha, para mostrar o link no contexto
 
+    def caminho_pedido(self, origem: str) -> str:
+        """O caminho da nota que o link pede, para mostrar e para criar:
+        `[[Fornecedores]]` na pasta de quem cita; `[x](../Nova%20nota.md)`
+        decodificado e relativo à nota, como o Obsidian grava."""
+        import posixpath
+        from urllib.parse import unquote
+
+        pasta = origem.rpartition("/")[0]
+        if self.tipo == "md":
+            relativo = unquote(self.alvo.partition("#")[0])
+            caminho = posixpath.normpath(posixpath.join(pasta, relativo))
+        elif "/" in self.alvo or not pasta:
+            caminho = self.alvo
+        else:
+            caminho = f"{pasta}/{self.alvo}"
+        return caminho.removesuffix(".md") + ".md"
+
     def destino(self, origem: str, indice: Indice) -> str | None:
         """Para onde aponta hoje — muda quando notas são criadas ou apagadas."""
         env = {"origem": origem, "indice": indice}
         if self.tipo == "wiki":
             return indice.resolver(self.alvo, origem) if self.alvo else origem
         return _nota_por_link_markdown(self.alvo, env)[0]
+
+
+def _linha_do_link(linhas: list[str], de: int, ate: int, *marcas: str) -> int:
+    """A linha do arquivo, dentro do bloco, onde o link está escrito. Num
+    parágrafo de várias linhas o bloco começa antes; o contexto mostrado no
+    backlink tem de ser a linha do link, não a primeira do parágrafo."""
+    for marca in marcas:
+        for n in range(de, min(ate, len(linhas))):
+            if marca in linhas[n]:
+                return n
+    return de
+
+
+def _link_para_nota(href: str) -> bool:
+    """Só link markdown que aponta para nota conta no mapa: `.md` ou só
+    `#seção`. `foto.png` ou `Projetos/` como link quebrado fariam o "criar"
+    gerar `foto.png.md`."""
+    from urllib.parse import unquote
+
+    caminho, _, fragmento = href.partition("#")
+    caminho = unquote(caminho)
+    if not caminho:
+        return bool(fragmento)
+    return caminho.lower().endswith(".md") and not urlsplit(caminho).scheme
 
 
 def citacoes(texto: str) -> list[Citacao]:
@@ -263,14 +304,20 @@ def citacoes(texto: str) -> list[Citacao]:
     for bloco in MOTOR.parse(corpo, {"deslocamento": inicio}):
         if bloco.type != "inline" or not bloco.children:
             continue
-        linha = inicio + (bloco.map[0] if bloco.map else 0)
-        trecho = linhas[linha].strip() if linha < len(linhas) else ""
+        de = inicio + (bloco.map[0] if bloco.map else 0)
+        ate = inicio + (bloco.map[1] if bloco.map else 1)
         for token in bloco.children:
             if token.type == "wikilink" and not ANEXO.search(token.meta["nome"]):
-                achadas.append(Citacao("wiki", token.meta["nome"], token.meta["secao"],
-                                       linha, trecho))
-            elif token.type == "link_open":
+                marcas = (token.meta["nome"] or "[[",)
+                tipo, alvo, secao = "wiki", token.meta["nome"], token.meta["secao"]
+            elif token.type == "link_open" and _link_para_nota(token.attrGet("href") or ""):
                 href = token.attrGet("href") or ""
-                if not _seguro(href):
-                    achadas.append(Citacao("md", href, "", linha, trecho))
+                # o href como foi escrito, se der; senão o primeiro "](" do bloco
+                marcas = (f"]({href}", "](")
+                tipo, alvo, secao = "md", href, ""
+            else:
+                continue
+            linha = _linha_do_link(linhas, de, ate, *marcas)
+            de = linha  # o próximo link do bloco está nesta linha ou depois
+            achadas.append(Citacao(tipo, alvo, secao, linha, linhas[linha].strip()))
     return achadas
