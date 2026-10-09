@@ -175,3 +175,13 @@ def test_sem_ouvinte_nada_muda(ctx, registry):
             return LLMResponse(text="oi", model="dublê", tool_calls=[])
 
     assert Orchestrator(ctx.config, ctx.conn, LLMSimples(), registry=registry).ask("oi") == "oi"
+
+
+def test_prompt_ensina_a_seguir_e_a_criar_links(ctx):
+    """Sem isto as tools existem e o assessor nunca as usa."""
+    from aide.core.context import system_prompt
+
+    texto = system_prompt(ctx.config, ctx.conn).content
+    assert "`notes.links`" in texto
+    assert "`relacionadas`" in texto
+    assert "nao_encontradas" in texto
