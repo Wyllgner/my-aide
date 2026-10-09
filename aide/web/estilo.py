@@ -210,7 +210,9 @@ nav a svg { flex-shrink: 0; }
 .modo[aria-pressed="true"] svg { color: var(--accent); }
 /* tela estreita: os modos ficam só no ícone, com o nome no title */
 @media (max-width: 1280px) { .modo span { display: none; } .modo { padding: 0 10px; } }
-.area { flex: 1; display: grid; gap: 16px; min-height: 58vh; }
+.area { flex: 1; display: grid; gap: 16px; min-height: 58vh; border-radius: var(--r-inner); }
+/* arrastando um arquivo por cima: a área inteira aceita */
+.area.soltando { outline: 2px dashed var(--accent); outline-offset: 4px; background: var(--soft); }
 .area[data-modo="dividido"] { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .area[data-modo="editar"] .previa, .area[data-modo="ler"] .campo { display: none; }
 
