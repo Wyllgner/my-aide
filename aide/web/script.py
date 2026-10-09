@@ -176,10 +176,10 @@ JS = r"""
     document.querySelectorAll(".modo").forEach(function (b) {
       b.setAttribute("aria-pressed", String(b.dataset.modo === modo));
     });
-    try { localStorage.setItem("aide.notas.modo", modo); } catch (e) { /* sem armazenamento: vale só agora */ }
+    // cookie, e não localStorage: o servidor lê e a página já nasce no modo
+    document.cookie = "notas_modo=" + modo + "; path=/notas; max-age=31536000; SameSite=Strict";
   }
 
-  try { aplicarModo(localStorage.getItem("aide.notas.modo")); } catch (e) { /* idem */ }
   document.querySelectorAll(".modo").forEach(function (b) {
     b.addEventListener("click", function () { aplicarModo(b.dataset.modo); });
   });
