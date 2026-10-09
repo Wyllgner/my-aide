@@ -33,7 +33,9 @@ build-backend = "setuptools.build_meta"
 include = ["aide*"]
 
 [tool.setuptools.package-data]
-"aide.web" = ["fontes/*.woff2", "fontes/OFL-*.txt"]
+"aide.web" = ["fontes/*.woff2", "fontes/OFL-*.txt", "vendor/excalidraw/*.js",
+              "vendor/excalidraw/*.css", "vendor/excalidraw/LICENCAS.txt",
+              "vendor/excalidraw/partes/*.js", "vendor/excalidraw/fonts/*/*.woff2"]
 
 [tool.ruff]
 line-length = 100

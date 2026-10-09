@@ -114,6 +114,25 @@ def criar_app(config=None, conn_factory=None):
         return Response(arquivo.read_bytes(), media_type="font/woff2",
                         headers={"cache-control": "max-age=31536000, immutable"})
 
+    # O Excalidraw compilado (deploy/excalidraw/build.sh). Mesma ideia das
+    # fontes: só o que estava na pasta ao subir, e só estes tipos.
+    pasta_vendor = Path(__file__).parent / "vendor"
+    tipos_vendor = {".js": "text/javascript", ".css": "text/css", ".woff2": "font/woff2"}
+    vendor = {p.relative_to(pasta_vendor).as_posix(): p for p in pasta_vendor.rglob("*")
+              if p.suffix in tipos_vendor and p.is_file() and not p.is_symlink()}
+
+    @app.get("/vendor/{caminho:path}")
+    def arquivo_vendor(caminho: str) -> Response:
+        arquivo = vendor.get(caminho)
+        if arquivo is None:
+            return Response("arquivo não encontrado", status_code=404, media_type="text/plain")
+        # partes/ e quase todas as fontes levam o hash no nome; a entrada e o
+        # CSS mantêm o nome a cada versão e precisam ser conferidos sempre
+        fixo = "/partes/" in caminho or "/fonts/" in caminho
+        return Response(arquivo.read_bytes(), media_type=tipos_vendor[arquivo.suffix],
+                        headers={"cache-control": "max-age=31536000, immutable" if fixo
+                                 else "no-cache"})
+
     @app.get("/app.css")
     def folha_de_estilo() -> Response:
         from aide.web.estilo import CSS
