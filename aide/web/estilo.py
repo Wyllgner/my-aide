@@ -150,6 +150,9 @@ nav a svg { flex-shrink: 0; }
 .arvore .arquivo[aria-current="page"] { background: var(--soft); color: var(--accent);
                                          font-weight: 600; }
 .arvore .achado { white-space: normal; }
+/* a palavra buscada, no trecho do resultado e na nota aberta por ele */
+.arvore .trecho mark, .previa mark.achado-busca { color: inherit; border-radius: 2px;
+  padding: 0 1px; background: color-mix(in srgb, #E8B931 40%, transparent); }
 .arvore .onde, .arvore .trecho { display: block; font-size: 11.5px; color: var(--faint);
                                  font-weight: 400; margin-top: 2px; }
 .arvore .pasta-vazia { font-size: 12px; color: var(--faint); padding: 4px 8px; }
