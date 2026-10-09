@@ -272,6 +272,19 @@ def test_acrescentar_em_privada_nao_vai_para_o_embedding(ctx, registry, tmp_path
     assert ctx.embedder.enviado == []
 
 
+def test_acrescentar_em_privada_so_no_arquivo_nao_vai_para_o_embedding(ctx, registry, tmp_path):
+    """Pelo terminal (ver_privado): marcada no Obsidian, ainda não reindexada."""
+    _config_vault(ctx, tmp_path)
+    ctx.ver_privado = True
+    nota = registry.call("notes.create", {"title": "Laudo", "body": "a"}, ctx).data
+    Path(nota["path"]).write_text("---\nprivate: true\n---\n\na")
+    ctx.embedder = EmbedderEspiao()
+    registry.call("notes.append", {"id": nota["id"], "body": "SEGREDO"}, ctx)
+    assert ctx.embedder.enviado == []
+    assert ctx.conn.execute("SELECT private FROM notes").fetchone()[0] == 1
+    assert ctx.conn.execute("SELECT COUNT(*) FROM embeddings").fetchone()[0] == 0
+
+
 def test_reindexar_privada_nao_vai_para_o_embedding(ctx, registry, tmp_path):
     from aide.storage.reconciliacao import reconciliar
 
