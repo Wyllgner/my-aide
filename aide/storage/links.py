@@ -57,8 +57,9 @@ def _melhor(candidatos: list[str], origem: str | None) -> str | None:
                                           c.count("/"), c.casefold()))
 
 
-def indice(vault_dir: Path) -> Indice:
-    """Varre a árvore do vault (a mesma que a página mostra)."""
+def indice(vault_dir: Path, arvore: list[dict] | None = None) -> Indice:
+    """A partir da árvore do vault (a mesma que a página mostra). Quem já a
+    tem em mãos passa, para a pasta não ser varrida duas vezes."""
     por_nome: dict[str, list[str]] = {}
     por_caminho: dict[str, str] = {}
 
@@ -71,5 +72,5 @@ def indice(vault_dir: Path) -> Indice:
             por_caminho[chave(caminho)] = caminho
             por_nome.setdefault(chave(item["nome"]), []).append(caminho)
 
-    visitar(vault.arvore(vault_dir))
+    visitar(vault.arvore(vault_dir) if arvore is None else arvore)
     return Indice({k: tuple(v) for k, v in por_nome.items()}, por_caminho)

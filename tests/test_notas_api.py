@@ -255,3 +255,9 @@ def test_toda_escrita_fica_na_trilha_sem_o_texto(cliente, app):
 def test_abrir_nao_entra_na_trilha(cliente, app):
     _abrir(cliente)
     assert _trilha(app) == []
+
+
+def test_abrir_nota_enorme_e_recusado(cliente, vault_dir):
+    (vault_dir / "Inbox" / "Export.md").write_text("x" * (2 * 1024 * 1024 + 1))
+    resposta = cliente.get("/api/notas/arquivo", params={"caminho": "Inbox/Export.md"})
+    assert resposta.status_code == 413

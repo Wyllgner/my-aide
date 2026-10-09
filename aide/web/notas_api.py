@@ -72,6 +72,8 @@ def instalar(app) -> None:
         arquivo = local(caminho)
         if not arquivo.is_file():
             raise HTTPException(404, "nota não encontrada")
+        if arquivo.stat().st_size > TAMANHO_MAXIMO:
+            raise HTTPException(413, "nota grande demais para abrir aqui")
         return {"caminho": caminho, "texto": arquivo.read_text(encoding="utf-8"),
                 "versao": versao(arquivo)}
 

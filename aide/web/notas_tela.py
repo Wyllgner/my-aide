@@ -19,6 +19,7 @@ from urllib.parse import quote
 from aide.channels import formato
 from aide.storage import links, vault
 from aide.web import consultas, grafo, markdown
+from aide.web.notas_api import TAMANHO_MAXIMO
 from aide.web.paginas import cabecalho
 
 
@@ -61,20 +62,19 @@ def _vazia() -> str:
     return '<span class="pasta-vazia">vazia</span>'
 
 
-def _mais_recente(raiz: Path) -> str | None:
-    arquivos = vault.arquivos(raiz)
-    validos = []
-    for caminho in arquivos:
-        relativo = vault.relativo_de(raiz, caminho)
+def _mais_recente(raiz: Path, indice: links.Indice) -> str | None:
+    """A última nota que você mexeu, entre as que a árvore mostra."""
+    datas = []
+    for caminho in indice.caminhos:
         try:
-            vault.resolver(raiz, relativo)
-        except vault.ForaDoVault:
+            datas.append((vault.resolver(raiz, caminho).stat().st_mtime, caminho))
+        except (vault.ForaDoVault, OSError):
             continue
-        validos.append((caminho.stat().st_mtime, relativo))
-    return max(validos)[1] if validos else None
+    return max(datas)[1] if datas else None
 
 
-def _escolher(ctx, raiz: Path, arquivo: str | None, nota: int | None) -> str | None:
+def _escolher(ctx, raiz: Path, arquivo: str | None, nota: int | None,
+              indice: links.Indice) -> str | None:
     """A nota aberta: a da URL; senão a do id antigo (`?nota=3`, que é o que o
     assessor e os links velhos usam); senão a última que você mexeu."""
     if arquivo:
@@ -91,7 +91,7 @@ def _escolher(ctx, raiz: Path, arquivo: str | None, nota: int | None) -> str | N
                 return vault.relativo_de(raiz, Path(row["path"]))
             except ValueError:
                 pass
-    return _mais_recente(raiz)
+    return _mais_recente(raiz, indice)
 
 
 def _busca(ctx, raiz: Path, busca: str, aberto: str | None) -> str:
@@ -202,6 +202,13 @@ def _editor(raiz: Path, aberto: str, agora: datetime, indice: links.Indice,
     <textarea> é de propósito: o HTML descarta a primeira, e sem ela uma nota
     que começa em linha vazia perderia essa linha ao ser salva."""
     arquivo = vault.resolver(raiz, aberto)
+    if arquivo.stat().st_size > TAMANHO_MAXIMO:
+        # posta no vault por fora (um export, um log): ler e renderizar a cada
+        # abertura travaria a página, e salvar seria recusado de todo jeito
+        return (f'<h2 style="margin:0;font-size:20px;font-weight:600">{escape(arquivo.stem)}</h2>'
+                f'<p class="vazio">Esta nota tem '
+                f'{arquivo.stat().st_size / 1024 / 1024:.1f} MB, grande demais para abrir'
+                f' aqui. Abra no Obsidian ou num editor de texto.</p>')
     texto = arquivo.read_text(encoding="utf-8")
     meta, corpo = vault.ler(arquivo)
     privada = vault.privada(meta)
@@ -247,7 +254,8 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
          modo: str | None = None, quebrados: bool = False) -> str:
     raiz = Path(ctx.config.vault_dir)
     itens = vault.arvore(raiz)
-    aberto = _escolher(ctx, raiz, arquivo, nota)
+    indice = links.indice(raiz, itens)
+    aberto = _escolher(ctx, raiz, arquivo, nota, indice)
     notas, pastas = _contar(itens)
     # apagar nota move o arquivo para vault/.trash; sem dizer isso em algum lugar,
     # a lixeira é uma pasta que só cresce e ninguém sabe que existe
@@ -261,7 +269,6 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
     if busca:
         resumo += f' · busca: "{busca}"'
 
-    indice = links.indice(raiz)
     mapa = grafo.mapa(raiz, indice)
     entradas = mapa.entradas(aberto) if aberto else []
     quebrados_todos = mapa.quebrados()

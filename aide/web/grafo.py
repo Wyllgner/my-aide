@@ -18,6 +18,7 @@ from pathlib import Path
 
 from aide.storage import links, vault
 from aide.web.markdown import Citacao, citacoes
+from aide.web.notas_api import TAMANHO_MAXIMO
 
 # caminho absoluto -> (mtime_ns, tamanho, citações). O tamanho entra porque
 # duas gravações no mesmo instante podem ter o mesmo mtime em alguns discos
@@ -50,6 +51,9 @@ class Mapa:
 
 def _citacoes_de(arquivo: Path) -> list[Citacao]:
     estado = arquivo.stat()
+    if estado.st_size > TAMANHO_MAXIMO:
+        # um export ou log de centenas de MB no vault não pode travar a tela
+        return []
     marca = (estado.st_mtime_ns, estado.st_size)
     with _TRAVA:
         guardado = _CACHE.get(arquivo)
