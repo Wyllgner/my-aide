@@ -110,9 +110,21 @@ def privado(dados: dict) -> bool:
     return dados.get("aide", {}).get("privada", False) is True
 
 
-def gravar(caminho: Path, texto: str) -> dict:
-    """Confere e grava por cima, de uma vez (`vault.gravar`). Devolve o desenho."""
+def gravar(caminho: Path, texto: str, privada: bool | None = None) -> dict:
+    """Confere e grava por cima, de uma vez (`vault.gravar`). Devolve o desenho.
+
+    O Excalidraw descarta a chave "aide" ao serializar a cena, então o texto
+    que o editor manda chega sem ela. Sem pedido explícito (`privada=None`),
+    vale a marcação do arquivo que já está no disco: salvar um desenho nunca
+    o torna público por esquecimento. Só quando a marcação muda o texto é
+    reescrito, com a mesma formatação do excalidraw.com.
+    """
     dados = validar(texto)
+    if privada is None:
+        privada = caminho.is_file() and privado(ler(caminho)[1])
+    if privado(dados) != privada:
+        dados["aide"] = {**dados.get("aide", {}), "privada": privada}
+        texto = json.dumps(dados, ensure_ascii=False, indent=2) + "\n"
     vault.gravar(caminho, texto)
     return dados
 

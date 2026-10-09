@@ -182,3 +182,44 @@ def test_surrogate_solto_e_desenho_invalido_e_nao_erro_500():
     with pytest.raises(DesenhoInvalido):
         desenhos.validar('{"type": "excalidraw", "elements": [], "x": "\ud800"}')
 
+
+# ---------- salvar não desfaz o privado ----------
+
+def _do_editor() -> str:
+    """O que o Excalidraw manda ao salvar: sem a chave "aide", que ele descarta."""
+    return json.dumps({"type": "excalidraw", "version": 2, "source": "x",
+                       "elements": [{"id": "a", "type": "text", "text": "senha do banco"}],
+                       "appState": {}, "files": {}})
+
+
+def test_salvar_do_editor_mantem_o_privado_do_arquivo(raiz):
+    caminho = desenhos.resolver(raiz, "Segredo.excalidraw")
+    desenhos.criar(caminho, _desenho(aide={"privada": True}))
+    desenhos.gravar(caminho, _do_editor())
+    texto, dados = desenhos.ler(caminho)
+    assert desenhos.privado(dados)
+    assert dados["elements"][0]["text"] == "senha do banco"
+    assert texto.endswith("}\n") and '\n  "aide"' in texto
+
+
+def test_salvar_do_editor_em_desenho_normal_continua_normal_e_intacto(raiz):
+    caminho = desenhos.resolver(raiz, "Casa.excalidraw")
+    desenhos.criar(caminho)
+    desenhos.gravar(caminho, _do_editor())
+    assert caminho.read_text() == _do_editor()
+
+
+def test_desmarcar_privado_so_com_pedido(raiz):
+    caminho = desenhos.resolver(raiz, "Segredo.excalidraw")
+    desenhos.criar(caminho, _desenho(aide={"privada": True}))
+    desenhos.gravar(caminho, _do_editor(), privada=False)
+    assert not desenhos.privado(desenhos.ler(caminho)[1])
+    desenhos.gravar(caminho, _do_editor(), privada=True)
+    assert desenhos.privado(desenhos.ler(caminho)[1])
+
+
+def test_arquivo_novo_sem_marcacao_nasce_normal(raiz):
+    """Como as notas: ele decide desenho a desenho, normal por padrão."""
+    caminho = desenhos.resolver(raiz, "Novo.excalidraw")
+    desenhos.gravar(caminho, _do_editor())
+    assert not desenhos.privado(desenhos.ler(caminho)[1])
