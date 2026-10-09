@@ -59,6 +59,7 @@ JS = r"""
     erro.textContent = "";
     var pasta = form.dataset.pasta;
     nome.placeholder = tipo === "nota" ? "nome da nota" : "nome da pasta";
+    nome.setAttribute("aria-label", nome.placeholder);
     nome.value = pasta ? pasta + "/" : "";
     nome.focus();
   }
@@ -67,7 +68,7 @@ JS = r"""
     document.getElementById("nova-nota").addEventListener("click", function () { pedirNome("nota"); });
     document.getElementById("nova-pasta").addEventListener("click", function () { pedirNome("pasta"); });
     nome.addEventListener("keydown", function (e) {
-      if (e.key === "Escape") { form.hidden = true; }
+      if (e.key === "Escape") { form.hidden = true; erro.textContent = ""; }
     });
     form.addEventListener("submit", function (e) {
       e.preventDefault();
@@ -225,11 +226,11 @@ JS = r"""
       e.stopPropagation();
       if (!armado) {
         botao.dataset.armado = "1";
-        botao.textContent = "apagar?";
+        botao.querySelector(".rotulo").textContent = "apagar?";
         armado = setTimeout(function () {
           armado = null;
           delete botao.dataset.armado;
-          botao.textContent = "×";
+          botao.querySelector(".rotulo").textContent = "";
         }, 4000);
         return;
       }
