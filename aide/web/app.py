@@ -127,7 +127,7 @@ def criar_app(config=None, conn_factory=None):
         @app.get(tela.caminho, response_class=HTMLResponse, name=tela.slug)
         def ver(periodo: str = "mes", sessao: str | None = None,
                 ator: str | None = None, nota: int | None = None,
-                arquivo: str | None = None, quebrados: bool = False,
+                arquivo: str | None = None, quebrados: bool = False, geral: bool = False,
                 busca: str | None = None, ano: int | None = None,
                 mes: int | None = None, dia: int | None = None,
                 # filtros da busca de gastos
@@ -156,7 +156,7 @@ def criar_app(config=None, conn_factory=None):
                 extra = {"ator": ator}
             elif tela.slug == "notas":
                 extra = {"nota": nota, "busca": busca, "arquivo": arquivo, "modo": notas_modo,
-                         "quebrados": quebrados}
+                         "quebrados": quebrados, "geral": geral}
             elif tela.slug == "calendario":
                 extra = {"ano": ano, "mes": mes, "dia": dia}
             return render(montar(ctx, toolbelt, agora, **extra), tela.slug)
