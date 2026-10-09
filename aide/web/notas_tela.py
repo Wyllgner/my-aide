@@ -19,6 +19,7 @@ from urllib.parse import quote
 from aide.channels import formato
 from aide.storage import anexos, links, vault
 from aide.web import consultas, grafo, markdown, visao
+from aide.web.icones import icone
 from aide.web.notas_api import TAMANHO_MAXIMO
 from aide.web.paginas import cabecalho
 
@@ -139,7 +140,8 @@ def _modos(atual: str) -> str:
     for modo, rotulo in MODOS:
         apertado = "true" if modo == atual else "false"
         botoes += (f'<button type="button" class="modo" data-modo="{modo}"'
-                   f' aria-pressed="{apertado}">{rotulo}</button>')
+                   f' aria-pressed="{apertado}" title="{rotulo} · Ctrl+E alterna editar e ler">'
+                   f'{icone(modo, 15)}<span>{rotulo}</span></button>')
     return f'<div class="modos" role="group" aria-label="modo de visualização">{botoes}</div>'
 
 
@@ -301,12 +303,17 @@ def _editor(raiz: Path, aberto: str, agora: datetime, indice: links.Indice,
       <span id="renomear-erro" class="erro"></span>
     </form>
   </div>
-  <div class="editor-acoes">
-    <label class="privada"><input type="checkbox" id="privada"{" checked" if privada else ""}>
-      privada</label>
+  <div class="editor-acoes" role="toolbar" aria-label="ações da nota">
+    <label class="privada" title="privada: não vai para o modelo nem para a OpenAI">
+      <input type="checkbox" id="privada"{" checked" if privada else ""}>
+      {icone("privada", 15)}<span>privada</span></label>
     {_modos(modo)}
-    <button type="button" id="botao-renomear" class="botao-fraco">renomear</button>
-    <button type="button" id="apagar" class="botao-fraco">apagar</button>
+    <span class="separador" aria-hidden="true"></span>
+    <button type="button" id="botao-renomear" class="botao" title="renomear ou mover · F2">
+      {icone("renomear", 15)}<span>renomear</span></button>
+    <button type="button" id="apagar" class="botao botao-perigo"
+      title="mandar para a lixeira do vault (pede um segundo clique)">
+      {icone("lixeira", 15)}<span class="rotulo">apagar</span></button>
   </div>
 </div>
 <p class="mono editor-meta"><span id="estado" data-estado="salvo">salvo</span>

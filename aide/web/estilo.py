@@ -39,7 +39,7 @@ FONTES = """
 CSS = FONTES + """
 :root {
   --paper:#FBFBFC; --surface:#FFFFFF; --ink:#15171C; --muted:#6C727E;
-  --faint:#9CA2AD; --line:#EDEFF2; --line-soft:#F4F5F7;
+  --faint:#9CA2AD; --line:#EDEFF2; --line-soft:#F4F5F7; --borda:#DDE0E6;
   --accent:#C4432B; --accent-forte:#A63722; --soft:#FCF1EE;
   --r-card:16px; --r-inner:10px; --r-pill:999px;
   --sombra:0 1px 2px rgba(21,23,28,.04);
@@ -119,7 +119,6 @@ nav a svg { flex-shrink: 0; }
                border: 1px solid var(--line); border-radius: var(--r-pill);
                background: var(--surface); color: var(--muted); }
 .botao-fraco:hover { color: var(--ink); border-color: var(--faint); }
-#apagar[data-armado] { color: var(--accent); border-color: var(--accent); }
 .campo-busca { font: inherit; font-size: 13px; padding: 7px 13px; width: 230px;
                border: 1px solid var(--line); border-radius: var(--r-pill);
                background: var(--surface); }
@@ -149,10 +148,35 @@ nav a svg { flex-shrink: 0; }
                                  font-weight: 400; margin-top: 2px; }
 .arvore .pasta-vazia { font-size: 12px; color: var(--faint); padding: 4px 8px; }
 .limpar { font-size: 12.5px; padding: 8px; }
-.editor-topo { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
-.editor-acoes { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-.privada { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted);
-           cursor: pointer; }
+.editor-topo { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;
+               flex-wrap: wrap; }
+.editor-acoes { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+                justify-content: flex-end; }
+.separador { width: 1px; height: 20px; background: var(--borda); margin: 0 2px; }
+
+/* os botões da nota: 32px de altura, ícone e texto, borda que se vê */
+.botao, .privada { font: inherit; font-size: 13px; height: 32px; padding: 0 12px;
+                   display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+                   border: 1px solid var(--borda); border-radius: var(--r-pill);
+                   background: var(--surface); color: var(--ink); cursor: pointer;
+                   transition: background .12s, border-color .12s, color .12s; }
+.botao svg, .privada svg, .modo svg { flex-shrink: 0; color: var(--muted); }
+.botao:hover, .privada:hover { background: var(--line-soft); border-color: var(--faint); }
+.botao:focus-visible, .modo:focus-visible, .privada:has(input:focus-visible) {
+  outline: 2px solid var(--accent); outline-offset: 2px; }
+.botao-perigo:hover, .botao-perigo:hover svg { color: var(--accent); }
+.botao-perigo:hover { border-color: var(--accent); background: var(--soft); }
+/* armado: o segundo clique apaga. Cheio, para não passar por engano */
+.botao-perigo[data-armado], .botao-perigo[data-armado] svg { color: #fff; }
+.botao-perigo[data-armado] { background: var(--accent); border-color: var(--accent); }
+.botao-perigo .rotulo { min-width: 46px; }
+
+/* privada: a caixa vira uma chave; marcada, fica na cor de alerta */
+.privada { color: var(--muted); user-select: none; }
+.privada input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+.privada:has(input:checked) { background: var(--soft); border-color: var(--accent);
+                              color: var(--accent); font-weight: 600; }
+.privada:has(input:checked) svg { color: var(--accent); }
 .editor-meta { margin: 0; font-size: 11.5px; color: var(--faint); }
 #estado[data-estado="pendente"], #estado[data-estado="salvando"] { color: var(--muted); }
 #estado[data-estado="erro"] { color: var(--accent); }
@@ -169,11 +193,17 @@ nav a svg { flex-shrink: 0; }
 #editor:focus { outline: none; border-color: var(--faint); background: var(--surface); }
 
 /* editar, lado a lado, ler */
-.modos { display: flex; border: 1px solid var(--line); border-radius: var(--r-pill); overflow: hidden; }
-.modo { font: inherit; font-size: 12px; padding: 5px 11px; border: 0; cursor: pointer;
-        background: var(--surface); color: var(--muted); }
-.modo + .modo { border-left: 1px solid var(--line); }
+.modos { display: flex; border: 1px solid var(--borda); border-radius: var(--r-pill);
+         overflow: hidden; height: 32px; }
+.modo { font: inherit; font-size: 13px; padding: 0 12px; border: 0; cursor: pointer;
+        display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+        background: var(--surface); color: var(--muted); transition: background .12s; }
+.modo:hover { background: var(--line-soft); color: var(--ink); }
+.modo + .modo { border-left: 1px solid var(--borda); }
 .modo[aria-pressed="true"] { background: var(--soft); color: var(--accent); font-weight: 600; }
+.modo[aria-pressed="true"] svg { color: var(--accent); }
+/* tela estreita: os modos ficam só no ícone, com o nome no title */
+@media (max-width: 1280px) { .modo span { display: none; } .modo { padding: 0 10px; } }
 .area { flex: 1; display: grid; gap: 16px; min-height: 58vh; }
 .area[data-modo="dividido"] { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .area[data-modo="editar"] .previa, .area[data-modo="ler"] .campo { display: none; }
