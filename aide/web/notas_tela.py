@@ -19,6 +19,7 @@ from urllib.parse import quote
 from aide.channels import formato
 from aide.storage import links, vault
 from aide.web import consultas, grafo, markdown
+from aide.web.notas_api import TAMANHO_MAXIMO
 from aide.web.paginas import cabecalho
 
 
@@ -201,6 +202,13 @@ def _editor(raiz: Path, aberto: str, agora: datetime, indice: links.Indice,
     <textarea> é de propósito: o HTML descarta a primeira, e sem ela uma nota
     que começa em linha vazia perderia essa linha ao ser salva."""
     arquivo = vault.resolver(raiz, aberto)
+    if arquivo.stat().st_size > TAMANHO_MAXIMO:
+        # posta no vault por fora (um export, um log): ler e renderizar a cada
+        # abertura travaria a página, e salvar seria recusado de todo jeito
+        return (f'<h2 style="margin:0;font-size:20px;font-weight:600">{escape(arquivo.stem)}</h2>'
+                f'<p class="vazio">Esta nota tem '
+                f'{arquivo.stat().st_size / 1024 / 1024:.1f} MB, grande demais para abrir'
+                f' aqui. Abra no Obsidian ou num editor de texto.</p>')
     texto = arquivo.read_text(encoding="utf-8")
     meta, corpo = vault.ler(arquivo)
     privada = vault.privada(meta)

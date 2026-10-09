@@ -274,3 +274,13 @@ def test_quebrado_por_link_markdown_mostra_o_nome_de_verdade(cliente, raiz):
     assert 'data-caminho="Raiz.md"' in html
     lista = html[html.index('<div class="arvore"'):html.index("voltar às pastas")]
     assert "foto" not in lista
+
+
+def test_nota_enorme_nao_abre_no_editor(cliente, raiz):
+    """Um export de 3 MB jogado no vault não pode travar a página."""
+    (raiz / "Inbox" / "Export.md").write_text("[[Telhado]] " + "x" * (3 * 1024 * 1024))
+    html = _tela(cliente, "Inbox/Export.md")
+    assert "grande demais para abrir" in html
+    assert 'id="editor"' not in html
+    # e o link dela não entra no mapa
+    assert "Nenhuma nota aponta" in _tela(cliente, "Projetos/Casa/Telhado.md")
