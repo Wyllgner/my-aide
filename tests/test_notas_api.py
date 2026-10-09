@@ -89,7 +89,7 @@ def test_salvar_por_cima_de_mudanca_de_fora_e_conflito(cliente, vault_dir):
 
 def test_salvar_devolve_a_previa(cliente):
     resposta = _salvar(cliente, "# Novo\n\n**forte**", _abrir(cliente)["versao"])
-    assert '<h1 id="s-novo">Novo</h1>' in resposta.json()["html"]
+    assert '<h1 id="s-novo" data-fonte="0">Novo</h1>' in resposta.json()["html"]
     assert "<strong>forte</strong>" in resposta.json()["html"]
 
 

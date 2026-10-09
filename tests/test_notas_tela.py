@@ -182,7 +182,7 @@ def test_a_previa_sai_pronta_com_os_links(cliente, raiz):
     (raiz / "Inbox" / "Ideia.md").write_text("# Ideia\n\nver [[Telhado]] e [[Nada]]")
     html = _tela(cliente, "Inbox/Ideia.md")
     previa = html[html.index('<article id="previa"'):]
-    assert '<h1 id="s-ideia">Ideia</h1>' in previa
+    assert '<h1 id="s-ideia" data-fonte="0">Ideia</h1>' in previa
     assert 'href="/notas?arquivo=Projetos/Casa/Telhado.md"' in previa
     assert 'class="wikilink quebrado"' in previa
 
