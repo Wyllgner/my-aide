@@ -128,3 +128,27 @@ def test_script_e_javascript_valido(tmp_path):
     arquivo.write_text(JS)
     subprocess.run([shutil.which("node"), "--check", str(arquivo)], check=True,
                    capture_output=True)
+
+
+def test_todo_elemento_que_o_script_procura_existe_na_tela(cliente):
+    """Um id trocado de um lado só deixa a página quebrada sem erro no Python."""
+    from aide.web.desenho_script import JS
+
+    html = _tela(cliente).text
+    ids = set(re.findall(r'getElementById\("([^"]+)"\)', JS))
+    assert {"desenho", "desenho-estado", "conflito", "usar-meu", "usar-disco"} <= ids
+    for id_ in ids:
+        assert f'id="{id_}"' in html, id_
+
+
+def test_conflito_comeca_escondido(cliente):
+    assert re.search(r'<div id="conflito"[^>]*\bhidden\b', _tela(cliente).text)
+
+
+def test_script_salva_com_a_marca_da_pagina_e_sem_mexer_no_privado():
+    """Sem X-Aide a fronteira recusa; e o privado só muda pela caixa (que
+    ainda não existe): o salvamento comum não manda `privada`."""
+    from aide.web.desenho_script import JS
+
+    assert '"X-Aide": "1"' in JS
+    assert "privada" not in JS

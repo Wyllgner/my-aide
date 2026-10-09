@@ -50,6 +50,11 @@ def pagina(caminho: str, voltar: str) -> str:
   </div>
   <span id="desenho-estado" class="desenho-estado" role="status" aria-live="polite">abrindo…</span>
 </header>
+<div id="conflito" class="conflito desenho-conflito" hidden>
+  <span>Este desenho mudou fora daqui desde que você abriu.</span>
+  <button type="button" id="usar-disco" class="botao-fraco">ficar com o do disco</button>
+  <button type="button" id="usar-meu" class="botao-fraco">manter o que eu desenhei</button>
+</div>
 <div id="desenho" class="desenho-editor" data-caminho="{escape(caminho)}"></div>
 </body>
 </html>
