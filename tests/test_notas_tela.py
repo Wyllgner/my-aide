@@ -335,3 +335,14 @@ def test_tela_do_grafo(cliente, raiz):
     assert '<svg class="grafo"' in html
     assert "2 notas · 1 ligação" in html
     assert 'id="editor"' not in html
+
+
+def test_grafo_local_ao_lado_dos_backlinks(cliente, raiz):
+    (raiz / "Inbox" / "Ideia.md").write_text("[[Telhado]]")
+    html = _tela(cliente, "Projetos/Casa/Telhado.md")
+    assert "Grafo local · 1 vizinha" in html
+    assert '<svg class="grafo local"' in html
+
+
+def test_nota_sem_ligacao_nao_tem_grafo_local(cliente):
+    assert "Grafo local" not in _tela(cliente, "Inbox/Ideia.md")
