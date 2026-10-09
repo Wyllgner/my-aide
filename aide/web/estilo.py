@@ -185,6 +185,15 @@ nav a svg { flex-shrink: 0; }
 .propriedades dt { color: var(--faint); font-family: 'IBM Plex Mono', ui-monospace, monospace; }
 .propriedades dd { margin: 0; color: var(--muted); overflow-wrap: anywhere; }
 
+/* links quebrados */
+.aviso-quebrados { display: block; font-size: 12px; padding: 6px 8px; margin: 0 0 4px;
+                   border-radius: var(--r-inner); background: var(--soft); color: var(--accent); }
+.quebrado-item { display: flex; align-items: flex-start; justify-content: space-between;
+                 gap: 8px; padding: 8px; border-radius: var(--r-inner); font-size: 13px; }
+.quebrado-item:hover { background: var(--line-soft); }
+.quebrado-item .onde { display: block; font-size: 11.5px; color: var(--faint); margin-top: 2px; }
+.quebrado-item .onde a { font-weight: 400; }
+
 /* backlinks */
 .backlinks { border-top: 1px solid var(--line-soft); padding-top: 14px; margin-top: 6px; }
 .backlinks > ul { list-style: none; margin: 10px 0 0; padding: 0; display: grid;
