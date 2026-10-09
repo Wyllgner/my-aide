@@ -6,7 +6,8 @@ e não <script> embutido, pela mesma CSP (`script-src 'self'`).
 
 Salva sozinho um segundo depois da última mudança, e na hora com Ctrl+S. Se o
 arquivo mudou por fora desde que abriu, para e pergunta qual versão fica, como
-as notas.
+as notas. A caixa de privado é o único caminho que manda `privada`: o
+salvamento comum deixa o servidor manter o que está no disco.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ import {
 const raiz = document.getElementById("desenho");
 const estado = document.getElementById("desenho-estado");
 const faixaConflito = document.getElementById("conflito");
+const caixaPrivada = document.getElementById("privada");
 const caminho = raiz.dataset.caminho;
 const ESPERA = 1000;
 
@@ -31,6 +33,9 @@ let timer = null;
 let salvando = false;
 let deNovo = false;
 let conflito = null;
+// a caixa mudou e o servidor ainda não confirmou: vai explícito no próximo
+// salvamento. Sem ele, o servidor mantém o que está no disco
+let privadaPedida = null;
 
 function avisar(texto, erro) {
   estado.textContent = texto;
@@ -51,7 +56,7 @@ function atual() {
 }
 
 function pendente() {
-  return api !== null && conflito === null && atual() !== salvo;
+  return api !== null && conflito === null && (atual() !== salvo || privadaPedida !== null);
 }
 
 function pedir(metodo, url, corpo) {
@@ -76,14 +81,19 @@ async function salvar() {
   const arquivos = api.getFiles();
   const enviada = assinatura(elementos, arquivos);
   const texto = serializeAsJSON(elementos, api.getAppState(), arquivos, "local");
+  const corpo = { caminho: caminho, texto: texto, versao: versao };
+  const pedida = privadaPedida;
+  if (pedida !== null) corpo.privada = pedida;
   avisar("salvando…");
   try {
-    const resposta = await pedir("PUT", "/api/desenhos/arquivo",
-                                 { caminho: caminho, texto: texto, versao: versao });
+    const resposta = await pedir("PUT", "/api/desenhos/arquivo", corpo);
     const dados = await resposta.json().catch(() => ({}));
     if (resposta.ok) {
       versao = dados.versao;
       salvo = enviada;
+      // a caixa pode ter mudado de novo enquanto este pedido ia
+      if (privadaPedida === pedida) privadaPedida = null;
+      if (privadaPedida === null) caixaPrivada.checked = dados.privada;
       avisar(atual() === salvo ? "salvo" : "alterado");
     } else if (resposta.status === 409) {
       mostrarConflito(dados);
@@ -120,9 +130,16 @@ document.getElementById("usar-disco").addEventListener("click", () => {
   api.updateScene({ elements: cena.elements || [] });
   versao = conflito.versao;
   salvo = atual();
+  privadaPedida = null;
+  caixaPrivada.checked = conflito.privada;
   conflito = null;
   faixaConflito.hidden = true;
   avisar("salvo");
+});
+
+caixaPrivada.addEventListener("change", () => {
+  privadaPedida = caixaPrivada.checked;
+  salvar();
 });
 
 // em captura, antes do Excalidraw: o Ctrl+S dele abriria "salvar como"
@@ -156,6 +173,8 @@ async function abrir() {
   }
   const cena = JSON.parse(dados.texto);
   versao = dados.versao;
+  caixaPrivada.checked = dados.privada;
+  caixaPrivada.disabled = false;
   createRoot(raiz).render(createElement(Excalidraw, {
     langCode: "pt-BR",
     initialData: {
