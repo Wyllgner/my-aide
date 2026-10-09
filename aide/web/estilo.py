@@ -270,7 +270,7 @@ nav a svg { flex-shrink: 0; }
 .area[data-modo="vivo"] .previa:empty::after { margin-top: 0; font-size: 14.5px;
   content: "Nota vazia. Clique aqui para começar a escrever."; }
 .area[data-modo="vivo"] .previa:has(.bloco-vivo)::after {
-  content: "Esc sai · Shift+Enter bloco novo embaixo · ↑ ↓ nas pontas muda de bloco · Ctrl+B negrito · Ctrl+I itálico · Ctrl+K link · [[ liga a outra nota"; }
+  content: "/ comandos · Esc sai · Shift+Enter bloco novo embaixo · ↑ ↓ nas pontas muda de bloco · Ctrl+B negrito · Ctrl+I itálico · Ctrl+K link · [[ liga a outra nota"; }
 .previa > :first-child { margin-top: 0; }
 .previa h1, .previa h2, .previa h3 { font-weight: 600; line-height: 1.3; margin: 1.3em 0 .5em; }
 .previa h1 { font-size: 22px; } .previa h2 { font-size: 18px; } .previa h3 { font-size: 15.5px; }
@@ -449,9 +449,10 @@ nav a svg { flex-shrink: 0; }
 .backlinks .trechos li + li { margin-top: 4px; }
 .vazio-curto { margin: 6px 0 0; font-size: 13px; color: var(--faint); }
 
-/* autocompletar [[ */
+/* autocompletar [[ e os comandos do / (a lista longa rola) */
 .sugestoes { position: absolute; z-index: 10; margin: 0; padding: 4px; list-style: none;
-             min-width: 240px; max-width: 360px; background: var(--surface);
+             min-width: 240px; max-width: 360px; max-height: 320px; overflow-y: auto;
+             background: var(--surface);
              border: 1px solid var(--line); border-radius: var(--r-inner);
              box-shadow: 0 6px 20px rgba(21,23,28,.10); font-size: 13px; }
 .sugestoes li { padding: 6px 9px; border-radius: 7px; cursor: pointer;
