@@ -571,4 +571,12 @@ button.atalho-visao { width: 100%; border: 0; background: none; font: inherit; f
 .desenho-estado { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
 .desenho-estado.erro { color: var(--accent); }
 .desenho-editor { flex: 1; min-height: 0; position: relative; }
+/* "Web Embed" e "Mermaid to Excalidraw" não funcionam aqui (a CSP barra
+   iframe de fora; o mermaid ficou fora do pacote). O Excalidraw dá o mesmo
+   data-testid aos dois. Quatro seletores: o excalidraw.css vem depois com
+   três (.excalidraw .dropdown-menu .dropdown-menu-item-base). A div antes do
+   mermaid é o título "Generate", que ficaria sozinho */
+.desenho-editor .excalidraw .dropdown-menu [data-testid="toolbar-embeddable"],
+.desenho-editor .excalidraw .dropdown-menu div:has(+ [data-testid="toolbar-embeddable"]) {
+  display: none; }
 """
