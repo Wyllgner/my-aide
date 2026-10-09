@@ -31,8 +31,8 @@ CABECALHO_ESCRITA = "x-aide"
 DIRETIVAS = (
     "default-src 'none'",
     "script-src 'self'",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src https://fonts.gstatic.com",
+    "style-src 'self' 'unsafe-inline'",
+    "font-src 'self'",
     "img-src 'self' data:",
     "connect-src 'self'",
     "form-action 'self'",
