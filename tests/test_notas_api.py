@@ -301,7 +301,8 @@ def test_mover_fica_na_trilha(cliente, app):
     trilha = _trilha(app)
     assert trilha[-1]["tool"] == "notas.mover"
     assert json.loads(trilha[-1]["args_json"]) == {"caminho": "Inbox/Nota.md → Nova.md",
-                                                  "links_atualizados": []}
+                                                  "links_atualizados": [],
+                                                  "links_nao_atualizados": []}
 
 
 def test_a_trilha_diz_quais_notas_o_mover_reescreveu(cliente, app, vault_dir):
@@ -435,3 +436,17 @@ def test_abrir_nota_fora_de_utf8(cliente, vault_dir):
     (vault_dir / "Inbox" / "Velha.md").write_bytes("acentua\xe7\xe3o".encode("latin-1"))
     resposta = cliente.get("/api/notas/arquivo", params={"caminho": "Inbox/Velha.md"})
     assert resposta.status_code == 415
+
+
+def test_nota_ilegivel_que_cita_nao_deixa_o_indice_no_caminho_velho(cliente, app, vault_dir):
+    """O arquivo já mudou de lugar quando os links são reescritos: falhar ali
+    deixava o banco apontando para o caminho velho, e sem trilha."""
+    arquivo = vault_dir / "Inbox" / "Nota.md"
+    _salvar(cliente, "oi", _abrir(cliente)["versao"])
+    (vault_dir / "Cita.md").write_bytes("[[Nota]] cita\xe7\xe3o".encode("latin-1"))
+    resposta = _mover(cliente, "Inbox/Nota.md", "Inbox/Nova.md")
+    assert resposta.status_code == 200
+    assert resposta.json()["links_nao_atualizados"] == ["Cita.md"]
+    caminhos = [r[0] for r in app.state.conn_factory().execute("SELECT path FROM notes")]
+    assert caminhos == [str(arquivo.with_name("Nova.md"))]
+    assert json.loads(_trilha(app)[-1]["args_json"])["links_nao_atualizados"] == ["Cita.md"]
