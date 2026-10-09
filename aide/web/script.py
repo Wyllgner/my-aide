@@ -556,8 +556,9 @@ JS = r"""
     campo.style.height = campo.scrollHeight + "px";
   }
 
-  // el: o bloco clicado; sem ele, um bloco novo no fim da nota
-  function abrirBloco(el, e) {
+  // el: o bloco clicado; sem ele, um bloco novo no fim da nota. `onde`
+  // ("inicio" ou "fim") põe o cursor numa ponta, para quem chega pelas setas
+  function abrirBloco(el, e, onde) {
     if (bloco) { return; }
     var faixa = el ? faixaDe(el) : null;
     if (editor.value !== previaVale || (el && !faixa)) {
@@ -593,7 +594,7 @@ JS = r"""
     if (el) { el.replaceWith(campo); } else { previa.appendChild(campo); }
     ajustarAltura(campo);
 
-    var cursor = fonte.length;
+    var cursor = onde === "inicio" ? 0 : fonte.length;
     var antes = el && e ? textoAteOClique(el, e) : null;
     if (antes !== null && antes !== undefined) {
       var trecho = antes.slice(-16);
@@ -615,13 +616,52 @@ JS = r"""
       agendar();
     });
     campo.addEventListener("keydown", function (ev) {
-      if (ev.key === "Escape") { ev.preventDefault(); campo.blur(); }
+      if (ev.key === "Escape") { ev.preventDefault(); campo.blur(); return; }
+      // seta para cima na primeira linha, ou para baixo na última: segue para
+      // o bloco vizinho, como se a nota fosse um texto só
+      var semMod = !ev.shiftKey && !ev.ctrlKey && !ev.metaKey && !ev.altKey &&
+        campo.selectionStart === campo.selectionEnd;
+      var antes = campo.value.slice(0, campo.selectionStart);
+      if (semMod && ev.key === "ArrowUp" && antes.indexOf("\n") < 0) {
+        ev.preventDefault();
+        irAoVizinho(-1);
+      } else if (semMod && ev.key === "ArrowDown" && campo.value.indexOf("\n", campo.selectionStart) < 0) {
+        ev.preventDefault();
+        irAoVizinho(1);
+      }
     });
     campo.addEventListener("blur", function () {
       // trocou de janela: o bloco continua aberto e o foco volta para ele
-      if (!document.hasFocus()) { return; }
+      // e o blur de um bloco que já saiu (o Chrome dispara ao remover) não
+      // fecha o que as setas acabaram de abrir
+      if (!document.hasFocus() || bloco !== b) { return; }
       fecharBloco();
     });
+  }
+
+  // fecha o bloco aberto e abre o de cima (-1) ou o de baixo (1). O vizinho
+  // é achado pelas linhas depois de fechar: se a prévia nova entrar nesse
+  // meio-tempo, os elementos de antes já não estão na página. Embaixo do
+  // último bloco, a seta para baixo começa um bloco novo no fim
+  function irAoVizinho(direcao) {
+    var b = bloco;
+    // o bloco novo já é o fim da nota: para baixo não há nada
+    if (direcao > 0 && !b.el) { return; }
+    var ini = b.ini;
+    var fim = b.ini + b.campo.value.split("\n").length;
+    fecharBloco();
+    var escolhido = null;
+    previa.querySelectorAll("[data-bloco]").forEach(function (el) {
+      var f = faixaDe(el);
+      if (!f) { return; }
+      if (direcao < 0 && f[1] <= ini) { escolhido = el; }
+      if (direcao > 0 && !escolhido && f[0] >= fim) { escolhido = el; }
+    });
+    if (escolhido) {
+      abrirBloco(escolhido, null, direcao < 0 ? "fim" : "inicio");
+    } else if (direcao > 0) {
+      abrirBloco(null);
+    }
   }
 
   function fecharBloco() {
