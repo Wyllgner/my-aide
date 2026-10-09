@@ -586,6 +586,108 @@ JS = r"""
   previa.addEventListener("click", criarDoLink);
   previa.addEventListener("keydown", criarDoLink);
 
+  // ---------- anexos: colar, arrastar ou escolher ----------
+  // o arquivo vai para o vault (POST /api/notas/anexo) e o ![[...]] entra
+  // onde o cursor está, como no Obsidian
+  function inserirNoCursor(texto) {
+    if (area.dataset.modo === "ler") {
+      // o campo está escondido e o cursor dele pode estar no começo, antes
+      // do frontmatter: no modo ler o anexo vai para o fim da nota
+      editor.setSelectionRange(editor.value.length, editor.value.length);
+      texto = (/\n$/.test(editor.value) || !editor.value ? "" : "\n") + texto + "\n";
+    }
+    editor.focus({ preventScroll: true });
+    // execCommand mantém o Ctrl+Z; onde não houver, troca direto
+    if (!document.execCommand || !document.execCommand("insertText", false, texto)) {
+      editor.setRangeText(texto, editor.selectionStart, editor.selectionEnd, "end");
+      editor.dispatchEvent(new Event("input"));
+    }
+  }
+
+  function enviarAnexo(arquivo, nome) {
+    var url = "/api/notas/anexo?nota=" + encodeURIComponent(caminho) +
+      "&nome=" + encodeURIComponent(nome);
+    return fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": arquivo.type || "application/octet-stream", "X-Aide": "1" },
+      body: arquivo,
+      credentials: "same-origin",
+    }).then(function (r) {
+      if (!r.ok) {
+        return erroDe(r).then(function (m) { throw new Error(arquivo.name + ": " + m); });
+      }
+      return r.json();
+    });
+  }
+
+  // a captura de tela chega da área de transferência como "image.png":
+  // sem nome de verdade, o servidor dá "Captura <data hora>"
+  var CAPTURA = /^image\.(png|jpe?g|gif|webp|bmp)$/i;
+
+  function anexar(arquivos, colado) {
+    if (!arquivos.length) { return; }
+    var links = [];
+    mostrar(arquivos.length > 1 ? "enviando " + arquivos.length + " anexos…" : "enviando anexo…", "salvando");
+    // um de cada vez, na ordem: os links saem na ordem em que foram escolhidos
+    return arquivos.reduce(function (antes, arquivo) {
+      return antes.then(function () {
+        return enviarAnexo(arquivo, colado && CAPTURA.test(arquivo.name) ? "" : arquivo.name)
+          .then(function (d) { links.push(d.link); });
+      });
+    }, Promise.resolve()).then(function () {
+      inserirNoCursor(links.join("\n"));
+    }).catch(function (e) {
+      if (links.length) { inserirNoCursor(links.join("\n")); }
+      mostrar(e.message, "erro");
+    });
+  }
+
+  editor.addEventListener("paste", function (e) {
+    var arquivos = Array.prototype.slice.call((e.clipboardData && e.clipboardData.files) || []);
+    if (!arquivos.length) { return; }  // texto: cola normal
+    e.preventDefault();
+    anexar(arquivos, true);
+  });
+
+  var soltando = 0;
+  function temArquivo(e) {
+    return e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], "Files") >= 0;
+  }
+  area.addEventListener("dragenter", function (e) {
+    if (!temArquivo(e)) { return; }
+    soltando++;
+    area.classList.add("soltando");
+  });
+  area.addEventListener("dragover", function (e) {
+    if (!temArquivo(e)) { return; }
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  });
+  area.addEventListener("dragleave", function (e) {
+    if (!temArquivo(e)) { return; }
+    soltando = Math.max(0, soltando - 1);
+    if (!soltando) { area.classList.remove("soltando"); }
+  });
+  area.addEventListener("drop", function (e) {
+    if (!temArquivo(e)) { return; }
+    e.preventDefault();
+    soltando = 0;
+    area.classList.remove("soltando");
+    // solto no texto: o link entra onde o arquivo caiu
+    if (e.target === editor && document.caretPositionFromPoint) {
+      var ponto = document.caretPositionFromPoint(e.clientX, e.clientY);
+      if (ponto && ponto.offsetNode === editor) { editor.setSelectionRange(ponto.offset, ponto.offset); }
+    }
+    anexar(Array.prototype.slice.call(e.dataTransfer.files), false);
+  });
+
+  var escolher = document.getElementById("escolher-anexo");
+  document.getElementById("botao-anexar").addEventListener("click", function () { escolher.click(); });
+  escolher.addEventListener("change", function () {
+    anexar(Array.prototype.slice.call(escolher.files), false);
+    escolher.value = "";
+  });
+
   // ---------- chegar no link citado ----------
   // a lista de links quebrados abre a nota com ?linha=&alvo=: a prévia rola
   // até o link e pisca, e o campo seleciona o link no texto
