@@ -450,3 +450,31 @@ def test_nota_ilegivel_que_cita_nao_deixa_o_indice_no_caminho_velho(cliente, app
     caminhos = [r[0] for r in app.state.conn_factory().execute("SELECT path FROM notes")]
     assert caminhos == [str(arquivo.with_name("Nova.md"))]
     assert json.loads(_trilha(app)[-1]["args_json"])["links_nao_atualizados"] == ["Cita.md"]
+
+
+# ---------- ligar um link quebrado a uma nota que existe ----------
+
+def test_ligar_troca_o_link_quebrado_em_quem_cita(cliente, vault_dir, app):
+    (vault_dir / "Inbox" / "Fornecedores.md").write_text("# Fornecedores\n")
+    (vault_dir / "Inbox" / "A.md").write_text("ver [[Fornecedor]] e [[Fornecedor#Preços|preço]]\n")
+    (vault_dir / "B.md").write_text("`[[Fornecedor]]` no código fica\n[[fornecedor]]\n")
+    resposta = cliente.post("/api/notas/ligar", json={"alvo": "Fornecedor",
+                                                      "para": "Inbox/Fornecedores.md"})
+    assert resposta.status_code == 200
+    assert sorted(resposta.json()["links_atualizados"]) == ["B.md", "Inbox/A.md"]
+    assert (vault_dir / "Inbox" / "A.md").read_text() == (
+        "ver [[Fornecedores]] e [[Fornecedores#Preços|preço]]\n")
+    assert (vault_dir / "B.md").read_text() == "`[[Fornecedor]]` no código fica\n[[Fornecedores]]\n"
+    assert "notas.ligar" in [t["tool"] for t in _trilha(app)]
+
+
+def test_ligar_a_nota_que_nao_existe_e_404(cliente, vault_dir):
+    (vault_dir / "Inbox" / "A.md").write_text("[[Fornecedor]]\n")
+    resposta = cliente.post("/api/notas/ligar", json={"alvo": "Fornecedor", "para": "Inbox/Nada.md"})
+    assert resposta.status_code == 404
+    assert (vault_dir / "Inbox" / "A.md").read_text() == "[[Fornecedor]]\n"
+
+
+def test_ligar_para_fora_do_vault_e_recusado(cliente):
+    resposta = cliente.post("/api/notas/ligar", json={"alvo": "x", "para": "../fora.md"})
+    assert resposta.status_code in (400, 404)

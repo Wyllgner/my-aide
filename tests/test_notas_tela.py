@@ -495,3 +495,10 @@ def test_a_lista_de_notas_vem_mesmo_sem_nota_aberta(cliente):
     html = cliente.get("/notas?geral=1").text
     assert '<div class="notas" data-notas="[' in html
     assert 'id="abrir-rapido"' in html and "Ctrl+O" in html
+
+
+def test_quebrado_com_nome_parecido_sugere_ligar(cliente, raiz):
+    (raiz / "Inbox" / "Fornecedores.md").write_text("# Fornecedores\n")
+    (raiz / "Inbox" / "Ideia.md").write_text("falar com [[Fornecedor]]\n")
+    html = cliente.get("/notas?quebrados=1").text
+    assert 'class="ligar-quebrado" data-alvo="Fornecedor" data-para="Inbox/Fornecedores.md"' in html

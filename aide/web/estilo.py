@@ -497,6 +497,14 @@ button.atalho-visao { width: 100%; border: 0; background: none; font: inherit; f
                   padding: 4px 10px; color: var(--accent); border-color: var(--soft);
                   background: var(--soft); font-weight: 600; }
 .criar-quebrado:hover { color: #fff; background: var(--accent); border-color: var(--accent); }
+/* "ligar a X": a nota parecida que já existe, para um nome digitado errado */
+.quebrado-sugestao { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.quebrado-sugestao .onde { font-size: 11px; color: var(--faint); }
+.ligar-quebrado { display: inline-flex; align-items: center; gap: 5px; font: inherit;
+  font-size: 12px; padding: 3px 9px; border: 1px solid var(--line); border-radius: var(--r-pill);
+  background: var(--surface); color: var(--muted); cursor: pointer; }
+.ligar-quebrado:hover { color: var(--ink); border-color: var(--faint); }
+.ligar-quebrado strong { color: var(--ink); }
 .quebrado-citacoes { list-style: none; margin: 0; padding: 6px 0 0; display: flex;
                      flex-direction: column; gap: 6px; border-top: 1px dashed var(--line); }
 .quebrado-citacoes a { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px;

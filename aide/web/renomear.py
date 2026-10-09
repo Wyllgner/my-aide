@@ -157,3 +157,33 @@ def mover_pasta(raiz: Path, de: str, para: str,
     ligacoes = grafo.mapa(raiz, indice).ligacoes
     vault.mover_pasta(origem, destino)
     return mudancas, _reescrever(raiz, mudancas, ligacoes, puladas)
+
+
+def ligar(raiz: Path, alvo: str, para: str, puladas: list[str] | None = None) -> list[str]:
+    """Faz os links quebrados para `alvo` (o nome como foi escrito) levarem à
+    nota `para`, que existe — o conserto de um nome digitado errado. Seção e
+    apelido ([[alvo#seção|apelido]]) ficam como estavam.
+
+    Devolve as notas cujo texto mudou; as que não deu para gravar vão para
+    `puladas`, como no mover."""
+    from aide.web.markdown import chave_link
+
+    chave = chave_link(alvo.rpartition("/")[2])
+    trocas: dict[str, list[tuple[Citacao, str]]] = {}
+    for lig in grafo.mapa(raiz).quebrados():
+        nome = lig.citacao.caminho_pedido(lig.origem).rpartition("/")[2]
+        if chave_link(nome) == chave:
+            trocas.setdefault(lig.origem, []).append((lig.citacao, para))
+    depois = links.indice(raiz)
+    mudadas = []
+    for nota, lista in trocas.items():
+        try:
+            mudou = _reescrever_nota(raiz, nota, lista, depois)
+        except (OSError, UnicodeDecodeError, vault.ForaDoVault):
+            log.warning("não consegui religar os links de %s", nota, exc_info=True)
+            if puladas is not None:
+                puladas.append(nota)
+            continue
+        if mudou:
+            mudadas.append(nota)
+    return mudadas

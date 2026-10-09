@@ -264,7 +264,19 @@ def _por_tag(raiz: Path, indice, tag: str, aberto: str | None) -> str:
     return topo + itens
 
 
-def _quebrados(raiz: Path, quebrados: list[grafo.Ligacao]) -> str:
+def _parecidas(alvo: str, caminhos: list[str]) -> list[str]:
+    """Notas que existem com nome parecido: quase sempre o link quebrado é
+    um nome digitado errado ("Fornecedor" por "Fornecedores")."""
+    import difflib
+
+    por_nome: dict[str, str] = {}
+    for caminho in caminhos:
+        por_nome.setdefault(caminho.rpartition("/")[2].removesuffix(".md").casefold(), caminho)
+    achadas = difflib.get_close_matches(alvo.casefold(), list(por_nome), n=2, cutoff=0.75)
+    return [por_nome[a] for a in achadas]
+
+
+def _quebrados(raiz: Path, quebrados: list[grafo.Ligacao], caminhos: list[str] | None = None) -> str:
     """Os links para notas que não existem, um cartão por nota que falta, com
     quem cita e o botão de criar. Criar vai para a pasta de quem citou
     primeiro — o mesmo que o clique no link quebrado faz na prévia."""
@@ -280,7 +292,7 @@ def _quebrados(raiz: Path, quebrados: list[grafo.Ligacao]) -> str:
             f'<p class="quebrados-resumo">{formato.plural(len(por_alvo), "nota faltando", "notas faltando")}'
             f' · {formato.plural(citacoes, "citação", "citações")}</p>'
             '<p class="quebrados-explica">Links para notas que ainda não existem. Crie a nota,'
-            ' ou abra quem cita para corrigir o nome.</p></div>')
+            ' ligue a uma parecida que já existe, ou abra quem cita para corrigir.</p></div>')
     itens = ""
     for chave in sorted(por_alvo, key=lambda k: (-len(por_alvo[k]), k)):
         ligs = por_alvo[chave]
@@ -296,10 +308,18 @@ def _quebrados(raiz: Path, quebrados: list[grafo.Ligacao]) -> str:
         onde = (f'<span class="onde">nasce em {escape(pasta + "/" if pasta else "raiz do vault")}</span>'
                 if novo else '<span class="onde">nome que não pode virar arquivo</span>')
         vezes = formato.plural(len(origens), "nota cita", "notas citam")
+        sugestoes = "".join(
+            f'<button type="button" class="ligar-quebrado" data-alvo="{escape(ligs[0].citacao.alvo)}"'
+            f' data-para="{escape(c)}" title="trocar o link por [[{escape(c.removesuffix(".md"))}]]'
+            f' nas notas que citam">{icone("quebrado", 13)}<span>ligar a'
+            f' <strong>{escape(c.rpartition("/")[2].removesuffix(".md"))}</strong></span></button>'
+            for c in _parecidas(alvo, caminhos or []))
+        sugestao = (f'<div class="quebrado-sugestao"><span class="onde">parecida com:</span>'
+                    f'{sugestoes}</div>' if sugestoes else "")
         itens += (f'<div class="quebrado-item"><div class="quebrado-alvo">'
                   f'<div class="quebrado-nome"><strong>{escape(alvo)}</strong>'
                   f'<span class="onde">{vezes} · </span>{onde}</div>{botao}</div>'
-                  f'<ul class="quebrado-citacoes">{citam}</ul></div>')
+                  f'{sugestao}<ul class="quebrado-citacoes">{citam}</ul></div>')
     return topo + itens
 
 
@@ -485,7 +505,7 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
     elif tag:
         lateral = _por_tag(raiz, indice, tag, aberto) + voltar
     elif quebrados:
-        lateral = _quebrados(raiz, quebrados_todos) + voltar
+        lateral = _quebrados(raiz, quebrados_todos, indice.caminhos) + voltar
     else:
         # o título separa a árvore dos atalhos de cima; as ferramentas dela
         # (filtrar, recolher) entram ao lado

@@ -445,6 +445,29 @@ JS = r"""
     });
   });
 
+  // ---------- ligar um link quebrado a uma nota que existe ----------
+  // o nome digitado errado: troca o link nas notas que citam e recarrega a
+  // lista. A nota aberta é salva antes — ela pode ser uma das que mudam
+  document.querySelectorAll(".ligar-quebrado").forEach(function (botao) {
+    botao.addEventListener("click", function () {
+      botao.disabled = true;
+      var guardar = window.aideSalvar ? window.aideSalvar() : Promise.resolve();
+      guardar.then(function () {
+        return pedir("POST", "/api/notas/ligar", { alvo: botao.dataset.alvo, para: botao.dataset.para });
+      }).then(function (r) {
+        if (!r.ok) { return erroDe(r).then(function (m) { throw new Error(m); }); }
+        return r.json().then(function (d) {
+          guardarAviso(d);
+          location.reload();
+        });
+      }).catch(function (e) {
+        botao.disabled = false;
+        botao.title = e.message;
+        botao.classList.add("erro");
+      });
+    });
+  });
+
   // ---------- renomear e mover pasta ----------
   document.querySelectorAll(".renomear-pasta").forEach(function (botao) {
     botao.addEventListener("click", function (e) {
