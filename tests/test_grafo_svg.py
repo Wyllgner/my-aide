@@ -53,3 +53,16 @@ def test_ligacoes_do_mapa_sem_direcao_nem_repeticao(tmp_path):
         (tmp_path / nome).write_text(texto)
     mapa = grafo.mapa(tmp_path)
     assert grafo_svg.do_mapa(mapa, ["A.md", "B.md"]) == {("A.md", "B.md")}
+
+
+def test_classe_do_desenho_nao_e_trocada_pela_de_cada_no():
+    svg = grafo_svg.desenhar(["A.md", "B.md"], {("A.md", "B.md")}, classe="grafo local")
+    assert svg.startswith('<svg class="grafo local"')
+
+
+def test_vizinhanca_traz_os_links_entre_as_vizinhas():
+    arestas = {("A", "B"), ("A", "C"), ("B", "C"), ("C", "D"), ("E", "F")}
+    nos, lig = grafo_svg.vizinhanca(arestas, "A")
+    assert nos == ["A", "B", "C"]
+    assert lig == {("A", "B"), ("A", "C"), ("B", "C")}
+    assert grafo_svg.vizinhanca(arestas, "A", saltos=2)[0] == ["A", "B", "C", "D"]

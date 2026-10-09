@@ -27,7 +27,11 @@ def _nome(caminho: str) -> str:
     return caminho.rpartition("/")[2].removesuffix(".md")
 
 
-def desenhar(nos: list[str], arestas: set[tuple[str, str]], aberto: str | None = None) -> str:
+def desenhar(nos: list[str], arestas: set[tuple[str, str]], aberto: str | None = None,
+             classe: str = "grafo", largura: int = LARGURA, altura: int = ALTURA) -> str:
+    """`largura` e `altura` são as do desenho, não as da tela: o grafo local,
+    que ocupa um terço da largura, desenha num espaço menor para que o texto
+    e os círculos não encolham até sumir."""
     if not nos:
         return '<p class="vazio">Nenhuma nota para desenhar ainda.</p>'
     posicoes = layout.posicionar(nos, arestas)
@@ -42,7 +46,7 @@ def desenhar(nos: list[str], arestas: set[tuple[str, str]], aberto: str | None =
 
     def xy(no: str) -> tuple[float, float]:
         x, y = posicoes[no]
-        return (MARGEM + x * (LARGURA - 2 * MARGEM), MARGEM + y * (ALTURA - 2 * MARGEM))
+        return (MARGEM + x * (largura - 2 * MARGEM), MARGEM + y * (altura - 2 * MARGEM))
 
     def raio(no: str) -> float:
         return 4 + 2.2 * math.sqrt(grau[no])
@@ -73,18 +77,18 @@ def desenhar(nos: list[str], arestas: set[tuple[str, str]], aberto: str | None =
         x, y = xy(no)
         r = raio(no)
         cor = ACENTO if grau[no] else FRACO
-        classe = "no atual" if no == aberto else "no"
+        classe_no = "no atual" if no == aberto else "no"
         # todas têm o nome; as que não couberam só o mostram quando são
         # vizinhas da nota sob o mouse
         extra = "" if no in com_nome else ' class="so-perto"'
         rotulo = f'<text x="{x:.1f}" y="{y + r + 12:.1f}"{extra}>{escape(_nome(no))}</text>'
         circulos += (
-            f'<a href="{escape(href_da_nota(no))}" class="{classe}" data-id="{ids[no]}"'
+            f'<a href="{escape(href_da_nota(no))}" class="{classe_no}" data-id="{ids[no]}"'
             f' data-vizinhos="{" ".join(ids[v] for v in sorted(vizinhos[no]))}">'
             f'<title>{escape(_nome(no))} · {escape(no)}'
             f'{f" · {grau[no]} ligações" if grau[no] != 1 else " · 1 ligação"}</title>'
             f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r:.1f}" fill="{cor}"/>{rotulo}</a>')
-    return (f'<svg class="grafo" viewBox="0 0 {LARGURA} {ALTURA}" role="img"'
+    return (f'<svg class="{escape(classe)}" viewBox="0 0 {largura} {altura}" role="img"'
             f' aria-label="grafo de {len(nos)} notas e {len(arestas)} ligações">'
             f'<g class="arestas">{linhas}</g><g class="nos">{circulos}</g></svg>')
 
@@ -95,3 +99,13 @@ def do_mapa(mapa, nos: list[str]) -> set[tuple[str, str]]:
     return {tuple(sorted((lig.origem, lig.destino))) for lig in mapa.ligacoes
             if lig.destino is not None and lig.destino != lig.origem
             and lig.origem in validos and lig.destino in validos}
+
+
+def vizinhanca(arestas: set[tuple[str, str]], centro: str,
+               saltos: int = 1) -> tuple[list[str], set[tuple[str, str]]]:
+    """A nota e as que estão a até `saltos` ligações dela, com os links entre
+    elas — inclusive entre duas vizinhas, que é o que mostra o assunto."""
+    perto = {centro}
+    for _ in range(saltos):
+        perto |= {b for a, b in arestas if a in perto} | {a for a, b in arestas if b in perto}
+    return sorted(perto), {(a, b) for a, b in arestas if a in perto and b in perto}

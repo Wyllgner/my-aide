@@ -238,8 +238,21 @@ def _caminho_novo(raiz: Path, caminho: str) -> str | None:
     return caminho
 
 
+def _grafo_local(mapa: grafo.Mapa, indice: links.Indice, aberto: str) -> str:
+    """A nota aberta e as vizinhas, no mesmo desenho do grafo do vault."""
+    from aide.web import grafo_svg
+
+    nos, arestas = grafo_svg.vizinhanca(grafo_svg.do_mapa(mapa, indice.caminhos), aberto)
+    if len(nos) < 2:
+        return ""
+    return (f'<section class="local"><p class="eyebrow">Grafo local · '
+            f'{formato.plural(len(nos) - 1, "vizinha")}</p>'
+            f'{grafo_svg.desenhar(nos, arestas, aberto, classe="grafo local", largura=420, altura=300)}'
+            f'</section>')
+
+
 def _editor(raiz: Path, aberto: str, agora: datetime, indice: links.Indice,
-            modo: str = "dividido", entradas: list | None = None) -> str:
+            modo: str = "dividido", entradas: list | None = None, local: str = "") -> str:
     """O editor da nota aberta.
 
     Corretor desligado em nota privada: o "corretor avançado" do Chrome manda
@@ -298,7 +311,7 @@ def _editor(raiz: Path, aberto: str, agora: datetime, indice: links.Indice,
 {escape(texto)}</textarea>
 <article id="previa" class="previa">{markdown.renderizar(texto, aberto, indice)}</article>
 </div>
-{_backlinks(entradas or [])}"""
+<div class="ao-redor">{_backlinks(entradas or [])}{local}</div>"""
 
 
 def tela(ctx, registry, agora: datetime, nota: int | None = None,
@@ -363,7 +376,8 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
     elif geral:
         corpo = _visao_geral(raiz, agora, indice)
     elif aberto:
-        corpo = _editor(raiz, aberto, agora, indice, _modo(modo), entradas)
+        corpo = _editor(raiz, aberto, agora, indice, _modo(modo), entradas,
+                        _grafo_local(mapa, indice, aberto))
     else:
         corpo = '<p class="vazio">Escolha uma nota à esquerda ou crie uma nova.</p>'
 
