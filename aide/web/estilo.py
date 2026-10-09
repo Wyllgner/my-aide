@@ -580,4 +580,8 @@ button.atalho-visao { width: 100%; border: 0; background: none; font: inherit; f
 .desenho-editor .excalidraw .dropdown-menu [data-testid="toolbar-embeddable"],
 .desenho-editor .excalidraw .dropdown-menu div:has(+ [data-testid="toolbar-embeddable"]) {
   display: none; }
+/* "Procurar bibliotecas" abre o site do Excalidraw com o endereço daqui, e a
+   volta (baixar a biblioteca escolhida) a CSP barra: o caminho não leva a nada */
+.desenho-editor .excalidraw .library-menu-control-buttons .library-menu-browse-button {
+  display: none; }
 """

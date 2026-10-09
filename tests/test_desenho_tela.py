@@ -179,3 +179,8 @@ def test_desenho_grande_demais_avisa_o_limite():
 
     assert "resposta.status === 413" in JS and "20 MB" in JS
 
+
+def test_procurar_bibliotecas_escondido():
+    from aide.web.estilo import CSS
+
+    assert ".library-menu-browse-button {\n  display: none; }" in CSS
