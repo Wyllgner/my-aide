@@ -362,3 +362,48 @@ def test_mover_pasta_por_cima_de_outra_e_conflito(cliente, vault_dir):
 def test_mover_pasta_fica_na_trilha(cliente, app):
     _mover_pasta(cliente, "Inbox", "Entrada")
     assert _trilha(app)[-1]["tool"] == "notas.mover_pasta"
+
+
+# ---------- apagar pasta ----------
+
+def test_apagar_pasta_leva_tudo_para_a_lixeira(cliente, app, vault_dir):
+    from aide.storage.search import buscar_texto
+
+    _salvar(cliente, "palavrarara", _abrir(cliente)["versao"])
+    (vault_dir / "Inbox" / "Sub").mkdir()
+    (vault_dir / "Inbox" / "Sub" / "Outra.md").write_text("x")
+    resposta = cliente.delete("/api/notas/pasta", params={"caminho": "Inbox"})
+    assert resposta.status_code == 200
+    assert resposta.json()["notas"] == 2
+    assert not (vault_dir / "Inbox").exists()
+    assert (vault_dir / ".trash" / "Inbox" / "Sub" / "Outra.md").exists()
+    assert buscar_texto(app.state.conn_factory(), "palavrarara") == []
+
+
+def test_apagar_pasta_com_o_mesmo_nome_de_uma_na_lixeira(cliente, vault_dir):
+    (vault_dir / ".trash" / "Inbox").mkdir(parents=True)
+    assert cliente.delete("/api/notas/pasta", params={"caminho": "Inbox"}).status_code == 200
+    assert (vault_dir / ".trash" / "Inbox-2" / "Nota.md").exists()
+
+
+@pytest.mark.parametrize("caminho, codigo", [
+    (".trash", 400), ("../", 400), ("Nada", 404), ("Inbox/Nota.md", 404),
+])
+def test_apagar_pasta_recusa(cliente, vault_dir, caminho, codigo):
+    assert cliente.delete("/api/notas/pasta", params={"caminho": caminho}).status_code == codigo
+    assert (vault_dir / "Inbox" / "Nota.md").exists()
+
+
+def test_apagar_pasta_fica_na_trilha(cliente, app):
+    cliente.delete("/api/notas/pasta", params={"caminho": "Inbox"})
+    trilha = _trilha(app)[-1]
+    assert trilha["tool"] == "notas.apagar_pasta"
+    assert json.loads(trilha["args_json"]) == {"caminho": "Inbox", "notas": 1}
+
+
+def test_apagar_pasta_de_outra_origem_e_recusado(app, vault_dir):
+    resposta = TestClient(app, base_url=LOCAL).delete(
+        "/api/notas/pasta", params={"caminho": "Inbox"},
+        headers={"origin": "http://evil.example", "x-aide": "1"})
+    assert resposta.status_code == 403
+    assert (vault_dir / "Inbox").exists()
