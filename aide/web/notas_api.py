@@ -228,6 +228,24 @@ def instalar(app) -> None:
         return {"caminho": para, "versao": versao(destino), "links_atualizados": mudadas,
                 "links_nao_atualizados": puladas}
 
+    @app.post("/api/notas/ligar")
+    def ligar(alvo: str = Body(...), para: str = Body(...)) -> dict:
+        """Conserta um link quebrado apontando-o para uma nota que existe."""
+        from aide.web import renomear
+
+        if not local(para).is_file():
+            raise HTTPException(404, "nota não encontrada")
+        if not alvo.strip():
+            raise HTTPException(400, "diga qual link consertar")
+        puladas: list[str] = []
+        mudadas = renomear.ligar(raiz(), alvo, para, puladas)
+        conn = app.state.conn_factory()
+        for nota in mudadas:
+            sincronizar(conn, raiz() / nota)
+        auditar("notas.ligar", f"{alvo} → {para}", links_atualizados=mudadas,
+                links_nao_atualizados=puladas)
+        return {"caminho": para, "links_atualizados": mudadas, "links_nao_atualizados": puladas}
+
     @app.post("/api/notas/mover-pasta")
     def mover_pasta(de: str = Body(...), para: str = Body(...)) -> dict:
         from aide.web import renomear
