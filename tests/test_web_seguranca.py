@@ -207,3 +207,53 @@ def test_fontes_servidas_pelo_proprio_site(cliente):
 @pytest.mark.parametrize("nome", ["../app.py", "..%2Fapp.py", "OFL-publicsans.txt", "x.woff2"])
 def test_rota_de_fontes_so_entrega_as_fontes(cliente, nome):
     assert cliente.get(f"/fontes/{nome}").status_code == 404
+
+
+# ---------- o Excalidraw compilado ----------
+
+def test_excalidraw_servido_pelo_proprio_site(cliente):
+    """A entrada importa as partes por caminho relativo; todas têm de existir
+    aqui, ou o navegador iria procurá-las num CDN que a CSP barra."""
+    import re
+
+    entrada = cliente.get("/vendor/excalidraw/excalidraw.js")
+    assert entrada.status_code == 200
+    assert entrada.headers["content-type"].startswith("text/javascript")
+    assert entrada.headers["cache-control"] == "no-cache"
+    partes = set(re.findall(r'"\./(partes/[^"]+\.js)"', entrada.text))
+    assert partes
+    for parte in partes:
+        resposta = cliente.get(f"/vendor/excalidraw/{parte}")
+        assert resposta.status_code == 200, parte
+        assert "immutable" in resposta.headers["cache-control"]
+    css = cliente.get("/vendor/excalidraw/excalidraw.css")
+    assert css.headers["content-type"].startswith("text/css")
+
+
+def test_excalidraw_traz_as_proprias_fontes(cliente):
+    resposta = cliente.get("/vendor/excalidraw/fonts/Cascadia/CascadiaCode-Regular.woff2")
+    assert resposta.status_code == 200
+    assert resposta.headers["content-type"] == "font/woff2"
+    assert resposta.content[:4] == b"wOF2"
+
+
+def test_excalidraw_sem_cdn_nas_partes():
+    """O pacote vem com o esm.sh de reserva para as fontes; o build troca pela
+    nossa pasta. Barrado pela CSP ou não, o navegador nem tenta sair daqui."""
+    from pathlib import Path
+
+    import aide.web
+
+    pasta = Path(aide.web.__file__).parent / "vendor" / "excalidraw"
+    for arquivo in [pasta / "excalidraw.js", *(pasta / "partes").glob("*.js")]:
+        texto = arquivo.read_text(encoding="utf-8")
+        for cdn in ("esm.sh", "unpkg.com", "jsdelivr"):
+            assert cdn not in texto, (arquivo.name, cdn)
+
+
+@pytest.mark.parametrize("caminho", [
+    "excalidraw/LICENCAS.txt", "excalidraw/../../app.py", "excalidraw/..%2F..%2Fapp.py",
+    "excalidraw/nada.js", "../fontes/OFL-publicsans.txt", "excalidraw",
+])
+def test_rota_do_vendor_so_entrega_o_vendor(cliente, caminho):
+    assert cliente.get(f"/vendor/{caminho}").status_code == 404
