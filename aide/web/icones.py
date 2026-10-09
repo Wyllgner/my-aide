@@ -25,6 +25,14 @@ TRACOS = {
     # relógio: lembrete é hora marcada, e na lista ele fica ao lado de tarefa,
     # que tem prazo. O ícone é o que distingue as duas coisas de longe.
     "reminders": "M10 17a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM10 6.5V10l2.5 1.5",
+    # as ações da nota
+    "editar": "M4 16l.8-3.6 8.4-8.4 2.8 2.8-8.4 8.4zM11.5 5.7l2.8 2.8",
+    "dividido": "M3.5 4.5h13v11h-13zM10 4.5v11",
+    "ler": ("M3.5 5c2.5-1 4.5-1 6.5.5 2-1.5 4-1.5 6.5-.5v10.5c-2.5-1-4.5-1-6.5.5"
+            "-2-1.5-4-1.5-6.5-.5zM10 5.5V16"),
+    "privada": "M5.5 9h9v7.5h-9zM7.5 9V6.5a2.5 2.5 0 0 1 5 0V9",
+    "renomear": "M3.5 6.5h13v7h-13zM7 8.5v3",
+    "lixeira": "M4 6h12M8 6V4h4v2M5.5 6l.8 10.5h7.4L14.5 6M8.5 9v5M11.5 9v5",
 }
 
 
