@@ -286,6 +286,7 @@ JS = r"""
             versao = d.versao;
             salvo = texto;
             mostrarPrevia(d.html);
+            revelarAnexos();
             mostrar(editor.value === salvo ? "salvo" : "não salvo", editor.value === salvo ? "salvo" : "pendente");
           });
         }
@@ -624,6 +625,25 @@ JS = r"""
   // sem nome de verdade, o servidor dá "Captura <data hora>"
   var CAPTURA = /^image\.(png|jpe?g|gif|webp|bmp)$/i;
 
+  // os anexos recém-postos: na próxima prévia, ela rola até eles e pisca —
+  // no modo ler o link vai para o fim da nota, e sem isso nada apareceria
+  var aRevelar = [];
+  function revelarAnexos() {
+    if (!aRevelar.length) { return; }
+    var achado = null;
+    previa.querySelectorAll("[src], a.anexo[href]").forEach(function (el) {
+      var url = el.getAttribute("src") || el.getAttribute("href") || "";
+      var m = url.match(/[?&]caminho=([^&]*)/);
+      var caminhoAnexo = m ? decodeURIComponent(m[1]) : "";
+      if (aRevelar.indexOf(caminhoAnexo) >= 0) {
+        el.classList.add("destaque");
+        achado = achado || el;
+      }
+    });
+    aRevelar = [];
+    if (achado && area.dataset.modo !== "editar") { achado.scrollIntoView({ block: "center" }); }
+  }
+
   function anexar(arquivos, colado) {
     if (!arquivos.length) { return; }
     var links = [];
@@ -632,7 +652,7 @@ JS = r"""
     return arquivos.reduce(function (antes, arquivo) {
       return antes.then(function () {
         return enviarAnexo(arquivo, colado && CAPTURA.test(arquivo.name) ? "" : arquivo.name)
-          .then(function (d) { links.push(d.link); });
+          .then(function (d) { links.push(d.link); aRevelar.push(d.caminho); });
       });
     }, Promise.resolve()).then(function () {
       inserirNoCursor(links.join("\n"));
@@ -642,8 +662,27 @@ JS = r"""
     });
   }
 
-  editor.addEventListener("paste", function (e) {
-    var arquivos = Array.prototype.slice.call((e.clipboardData && e.clipboardData.files) || []);
+  // na página inteira, e não só no campo: no modo ler o campo está escondido
+  // e o foco fica na prévia ou em lugar nenhum. Outro campo (busca, renomear,
+  // nome da nota nova) cola o que for nele, normal
+  function arquivosColados(e) {
+    var dados = e.clipboardData;
+    if (!dados) { return []; }
+    var arquivos = Array.prototype.slice.call(dados.files || []);
+    if (!arquivos.length && dados.items) {
+      Array.prototype.forEach.call(dados.items, function (item) {
+        var arquivo = item.kind === "file" && item.getAsFile();
+        if (arquivo) { arquivos.push(arquivo); }
+      });
+    }
+    return arquivos;
+  }
+  document.addEventListener("paste", function (e) {
+    var alvo = e.target;
+    if (alvo !== editor && alvo && alvo.matches && alvo.matches("input, textarea, [contenteditable]")) {
+      return;
+    }
+    var arquivos = arquivosColados(e);
     if (!arquivos.length) { return; }  // texto: cola normal
     e.preventDefault();
     anexar(arquivos, true);
