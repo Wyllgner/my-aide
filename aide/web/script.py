@@ -750,8 +750,9 @@ JS = r"""
   previa.addEventListener("click", function (e) {
     if (area.dataset.modo !== "vivo" || bloco) { return; }
     var alvo = e.target;
-    // link, caixa de tarefa e player fazem o que já faziam
-    if (alvo.closest("a, input, button, audio, video, textarea")) { return; }
+    // link, caixa de tarefa, player e o título do callout que dobra fazem o
+    // que já faziam
+    if (alvo.closest("a, input, button, audio, video, textarea, summary")) { return; }
     // selecionando um trecho para copiar
     if (String(window.getSelection() || "")) { return; }
     var el = alvo.closest("[data-bloco]");

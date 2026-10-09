@@ -285,6 +285,33 @@ nav a svg { flex-shrink: 0; }
               overflow: auto; }
 .previa pre code { background: none; padding: 0; }
 .previa blockquote { border-left: 3px solid var(--line); padding-left: 12px; color: var(--muted); }
+/* callouts (> [!tipo]): caixa tingida pela cor do tipo, título com ícone.
+   Tipo desconhecido fica com a cor da nota */
+.previa .callout { --cor: #2B5FA8; border: 0; border-radius: var(--r-inner); padding: 10px 14px;
+  background: color-mix(in srgb, var(--cor) 9%, transparent); color: var(--ink); }
+.previa .callout[data-callout="note"] { --cor: #2B5FA8; }
+.previa .callout[data-callout="abstract"] { --cor: #1F8A8A; }
+.previa .callout[data-callout="info"] { --cor: #2B5FA8; }
+.previa .callout[data-callout="todo"] { --cor: #2B5FA8; }
+.previa .callout[data-callout="tip"] { --cor: #1F8A8A; }
+.previa .callout[data-callout="success"] { --cor: #3F7A54; }
+.previa .callout[data-callout="question"] { --cor: #B7791F; }
+.previa .callout[data-callout="warning"] { --cor: #B7791F; }
+.previa .callout[data-callout="failure"] { --cor: #C4432B; }
+.previa .callout[data-callout="danger"] { --cor: #C4432B; }
+.previa .callout[data-callout="bug"] { --cor: #C4432B; }
+.previa .callout[data-callout="example"] { --cor: #7A4FB5; }
+.previa .callout[data-callout="quote"] { --cor: #6B7280; }
+.previa .callout-titulo { display: flex; align-items: center; gap: 8px; font-weight: 600;
+  color: var(--cor); }
+.previa .callout-titulo svg { flex: none; }
+.previa .callout > .callout-titulo + * { margin-top: 6px; }
+.previa .callout > :last-child { margin-bottom: 0; }
+.previa details.callout > summary { cursor: pointer; list-style: none; }
+.previa details.callout > summary::-webkit-details-marker { display: none; }
+.previa details.callout > summary::after { content: "›"; margin-left: auto; font-size: 18px;
+  line-height: 1; transition: transform .15s; }
+.previa details.callout[open] > summary::after { transform: rotate(90deg); }
 .previa table { border-collapse: collapse; font-size: 13px; }
 .previa th, .previa td { border: 1px solid var(--line); padding: 5px 10px; text-align: left; }
 .previa hr { border: 0; border-top: 1px solid var(--line); margin: 1.4em 0; }
