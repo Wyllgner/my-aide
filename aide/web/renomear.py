@@ -75,7 +75,13 @@ def _reescrever(raiz: Path, mudancas: dict[str, str], ligacoes: list[grafo.Ligac
         aponta_para_movida = lig.destino in mudancas
         # os links markdown de uma nota movida são relativos à pasta dela
         relativo_de_movida = lig.origem in mudancas and lig.citacao.tipo == "md"
-        if aponta_para_movida or relativo_de_movida:
+        # [[Ideias]] apontava para Arquivo/Ideias; outra "Ideias" chegou na
+        # pasta de quem cita e, pela regra da mesma pasta, roubaria o link.
+        # O texto não mudou, mas o destino sim — então o texto passa a dizer
+        # o caminho, para continuar levando aonde levava
+        roubado = (lig.citacao.tipo == "wiki" and not aponta_para_movida
+                   and depois.resolver(lig.citacao.alvo, onde_esta(lig.origem)) != lig.destino)
+        if aponta_para_movida or relativo_de_movida or roubado:
             trocas.setdefault(onde_esta(lig.origem), []).append(
                 (lig.citacao, onde_esta(lig.destino)))
 
