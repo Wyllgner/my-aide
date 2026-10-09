@@ -681,6 +681,23 @@ JS = r"""
     }
   });
 
+  // ---------- lado a lado: as duas colunas rolam juntas ----------
+  // na mesma proporção: o texto e a prévia têm alturas diferentes, mas o meio
+  // de um fica perto do meio do outro. Quem começou a rolar manda; a rolagem
+  // que ele provoca na outra coluna não volta para ele
+  var rolando = null;
+  var soltarRolagem = null;
+  function acompanhar(de, para) {
+    if (area.dataset.modo !== "dividido" || rolando === para) { return; }
+    var max = de.scrollHeight - de.clientHeight;
+    rolando = de;
+    para.scrollTop = (max > 0 ? de.scrollTop / max : 0) * (para.scrollHeight - para.clientHeight);
+    clearTimeout(soltarRolagem);
+    soltarRolagem = setTimeout(function () { rolando = null; }, 120);
+  }
+  editor.addEventListener("scroll", function () { acompanhar(editor, previa); });
+  previa.addEventListener("scroll", function () { acompanhar(previa, editor); });
+
   // ---------- ao vivo: escrever na própria prévia ----------
   // a nota aparece formatada; clicar num bloco troca só ele pelo markdown das
   // linhas que o servidor marcou em data-bloco="início-fim". O campo da nota
