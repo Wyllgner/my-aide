@@ -5,26 +5,49 @@
 // não passar de 8 MB para menos de 3:
 // - o mermaid (o "colar diagrama mermaid" vira texto comum);
 // - os idiomas que não são pt-BR nem inglês.
-// E a reserva das fontes, que no pacote é o esm.sh, passa a ser a nossa
-// pasta: a página nunca tenta buscar nada fora, nem barrada pela CSP.
+// E duas trocas no código (TROCAS): a reserva das fontes, que no pacote é o
+// esm.sh, passa a ser a nossa pasta, e sai a config do Firebase do
+// excalidraw.com.
 import { readFile } from "node:fs/promises";
 import { build } from "esbuild";
 
 const IDIOMAS = /\/locales\/(pt-BR|en)-[A-Z0-9]+\.js$/;
 
-const RESERVA = /`https:\/\/esm\.sh\/.*?\/dist\/prod\/`/;
 const PASTA = "/vendor/excalidraw/";
 
-const fontesDaqui = {
-  name: "fontes-daqui",
+// Trocas no código do pacote. Cada uma tem uma marca que diz se o arquivo é o
+// dela; marca presente e padrão ausente quer dizer que a versão nova mudou o
+// trecho, e o build para em vez de deixar passar calado.
+const TROCAS = [
+  {
+    // a reserva das fontes; absoluta, porque o pacote monta new URL(fonte, reserva)
+    marca: "ASSETS_FALLBACK_URL\",",
+    padrao: /`https:\/\/esm\.sh\/.*?\/dist\/prod\/`/,
+    por: `new URL(${JSON.stringify(PASTA)}, self.location.origin).href`,
+  },
+  {
+    // a config do Firebase da colaboração do excalidraw.com, embutida no
+    // pacote. Pública e de outro projeto, mas é uma chave AIza… no nosso git,
+    // e o scanner de segredos do GitHub acusa; a colaboração não existe aqui
+    marca: "VITE_APP_FIREBASE_CONFIG:",
+    padrao: /VITE_APP_FIREBASE_CONFIG:'\{[^']*\}'/,
+    por: "VITE_APP_FIREBASE_CONFIG:'{}'",
+  },
+];
+
+const trocas = {
+  name: "trocas",
   setup(b) {
     b.onLoad({ filter: /@excalidraw\/excalidraw\/dist\/prod\/.*\.js$/ }, async (args) => {
-      const texto = await readFile(args.path, "utf8");
-      if (!texto.includes("ASSETS_FALLBACK_URL\",")) return undefined;
-      if (!RESERVA.test(texto)) throw new Error("a reserva das fontes mudou de forma");
-      // absoluta: o pacote monta new URL(fonte, reserva)
-      const daqui = `new URL(${JSON.stringify(PASTA)}, self.location.origin).href`;
-      return { contents: texto.replace(RESERVA, daqui), loader: "js" };
+      let texto = await readFile(args.path, "utf8");
+      let mudou = false;
+      for (const { marca, padrao, por } of TROCAS) {
+        if (!texto.includes(marca)) continue;
+        if (!padrao.test(texto)) throw new Error(`trecho mudou de forma: ${marca}`);
+        texto = texto.replace(padrao, por);
+        mudou = true;
+      }
+      return mudou ? { contents: texto, loader: "js" } : undefined;
     });
   },
 };
@@ -59,7 +82,7 @@ const resultado = await build({
   entryNames: "excalidraw",
   chunkNames: "partes/[name]-[hash]",
   outdir: process.argv[2],
-  plugins: [deFora, fontesDaqui],
+  plugins: [deFora, trocas],
   logLevel: "warning",
   metafile: true,
 });
