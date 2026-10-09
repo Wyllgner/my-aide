@@ -321,3 +321,31 @@ def citacoes(texto: str) -> list[Citacao]:
             de = linha  # o próximo link do bloco está nesta linha ou depois
             achadas.append(Citacao(tipo, alvo, secao, linha, linhas[linha].strip()))
     return achadas
+
+
+# ---------- tags ----------
+
+# #tag do Obsidian: letras, números, _, - e /; precisa de pelo menos uma letra
+# ("#2024" não é tag) e não pode vir colada em palavra (e-mail, URL#âncora)
+TAG = re.compile(r"(?<![\w/#&])#([\w/-]*[^\W\d_][\w/-]*)")
+
+
+def etiquetas(texto: str) -> list[str]:
+    """As tags da nota: as do frontmatter e as #tags do texto, sem as de
+    dentro de código. Cada uma uma vez, na grafia em que apareceu primeiro."""
+    meta, _ = vault.separar(texto)
+    achadas = [t.strip().lstrip("#") for t in meta.get("tags", "").strip("[]").split(",")]
+    inicio = vault.inicio_do_corpo(texto)
+    corpo = "\n".join(texto.split("\n")[inicio:])
+    for bloco in MOTOR.parse(corpo, {}):
+        if bloco.type != "inline" or not bloco.children:
+            continue
+        for token in bloco.children:
+            if token.type == "text":
+                achadas.extend(TAG.findall(token.content))
+    vistas: dict[str, str] = {}
+    for tag in achadas:
+        tag = tag.strip("/")
+        if tag and tag.casefold() not in vistas:
+            vistas[tag.casefold()] = tag
+    return list(vistas.values())
