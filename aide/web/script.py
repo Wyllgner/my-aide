@@ -71,6 +71,19 @@ JS = r"""
     });
   }
 
+  // ---------- criar a nota que um link quebrado pede ----------
+  document.querySelectorAll(".criar-quebrado").forEach(function (botao) {
+    botao.addEventListener("click", function () {
+      var caminho = botao.dataset.caminho;
+      botao.disabled = true;
+      pedir("POST", "/api/notas/arquivo", { caminho: caminho }).then(function (r) {
+        if (r.ok || r.status === 409) { abrir(caminho); return; }
+        botao.disabled = false;
+        erroDe(r).then(function (m) { botao.textContent = m; });
+      });
+    });
+  });
+
   // ---------- editor ----------
   var editor = document.getElementById("editor");
   if (!editor) { return; }
