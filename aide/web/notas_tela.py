@@ -11,6 +11,7 @@ enquanto você digita e dos botões de criar e apagar.
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime
 from html import escape
 from pathlib import Path
@@ -210,6 +211,29 @@ def _visao_geral(raiz: Path, agora: datetime, indice: links.Indice, conn=None) -
 </div>"""
 
 
+def _por_tag(raiz: Path, indice, tag: str, aberto: str | None) -> str:
+    """As notas com a tag, do frontmatter ou do texto. Como no Obsidian,
+    #casa traz também #casa/obra."""
+    alvo = tag.casefold()
+    achadas = []
+    for caminho, leitura in grafo.leituras(raiz, indice).items():
+        if any(t.casefold() == alvo or t.casefold().startswith(alvo + "/")
+               for t in leitura.tags):
+            achadas.append(caminho)
+    topo = (f'<p class="eyebrow">#{escape(tag)} · '
+            f'{formato.plural(len(achadas), "nota")}</p>')
+    if not achadas:
+        return topo + '<p class="vazio">Nenhuma nota com esta tag.</p>'
+    itens = ""
+    for caminho in sorted(achadas, key=str.casefold):
+        atual = ' aria-current="page"' if caminho == aberto else ""
+        nome = caminho.rpartition("/")[2].removesuffix(".md")
+        itens += (f'<a class="arquivo achado" href="{escape(_href(caminho))}&amp;tag='
+                  f'{escape(quote(tag, safe="/"))}"{atual}>{escape(nome)}'
+                  f'<span class="onde">{escape(caminho)}</span></a>')
+    return topo + itens
+
+
 def _quebrados(raiz: Path, quebrados: list[grafo.Ligacao]) -> str:
     """Os links para notas que não existem, um item por nota que falta, com
     quem cita e o botão de criar. Criar vai para a pasta de quem citou
@@ -357,8 +381,12 @@ def _editor(raiz: Path, aberto: str, agora: datetime, indice: links.Indice,
 def tela(ctx, registry, agora: datetime, nota: int | None = None,
          busca: str | None = None, arquivo: str | None = None,
          modo: str | None = None, quebrados: bool = False, geral: bool = False,
-         grafo_todo: bool = False) -> str:
+         grafo_todo: bool = False, tag: str | None = None) -> str:
     raiz = Path(ctx.config.vault_dir)
+    # "#casa" na busca é a lista da tag, e não uma busca de texto (que ignora o #)
+    if busca and re.fullmatch(r"#[\w/-]+", busca.strip()):
+        tag, busca = busca.strip()[1:], None
+    tag = (tag or "").strip().lstrip("#").strip("/") or None
     itens = vault.arvore(raiz)
     indice = links.indice(raiz, itens)
     aberto = _escolher(ctx, raiz, arquivo, nota, indice)
@@ -379,6 +407,8 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
         if na_lixeira else "") if p)
     if busca:
         resumo += f' · busca: "{busca}"'
+    if tag:
+        resumo += f" · tag: #{tag}"
 
     mapa = grafo.mapa(raiz, indice)
     entradas = mapa.entradas(aberto) if aberto else []
@@ -388,6 +418,8 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
 
     if busca:
         lateral = _busca(ctx, raiz, busca, aberto) + voltar
+    elif tag:
+        lateral = _por_tag(raiz, indice, tag, aberto) + voltar
     elif quebrados:
         lateral = _quebrados(raiz, quebrados_todos) + voltar
     else:

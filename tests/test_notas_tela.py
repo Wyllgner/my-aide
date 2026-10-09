@@ -438,3 +438,19 @@ def test_botao_de_anexar_aceita_so_os_tipos_da_lista(cliente):
     escolher = html.split('id="escolher-anexo"')[1].split(">")[0]
     assert ".png" in escolher and ".pdf" in escolher
     assert ".svg" not in escolher and ".html" not in escolher
+
+
+def test_a_lista_da_tag_traz_as_notas_com_ela_e_as_aninhadas(cliente, raiz):
+    (raiz / "Inbox" / "Obra.md").write_text("# Obra\n\nver #casa/telhado\n")
+    (raiz / "Inbox" / "Sem.md").write_text("# Sem\n\nnada aqui\n")
+    (raiz / "Inbox" / "Casa.md").write_text("---\ntags: [Casa]\n---\n\nx\n")
+    html = cliente.get("/notas?tag=casa").text
+    assert "#casa · 2 notas" in html
+    assert "Inbox/Obra.md" in html and "Inbox/Casa.md" in html
+    assert "Inbox/Sem.md</span>" not in html
+
+
+def test_buscar_por_hashtag_abre_a_lista_da_tag(cliente, raiz):
+    (raiz / "Inbox" / "Obra.md").write_text("# Obra\n\n#reforma\n")
+    html = cliente.get("/notas?busca=%23reforma").text
+    assert "#reforma · 1 nota" in html

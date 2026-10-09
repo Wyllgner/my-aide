@@ -172,7 +172,8 @@ def criar_app(config=None, conn_factory=None):
                 extra = {"ator": ator}
             elif tela.slug == "notas":
                 extra = {"nota": nota, "busca": busca, "arquivo": arquivo, "modo": notas_modo,
-                         "quebrados": quebrados, "geral": geral, "grafo_todo": grafo}
+                         "quebrados": quebrados, "geral": geral, "grafo_todo": grafo,
+                         "tag": tag}
             elif tela.slug == "calendario":
                 extra = {"ano": ano, "mes": mes, "dia": dia}
             return render(montar(ctx, toolbelt, agora, **extra), tela.slug)
