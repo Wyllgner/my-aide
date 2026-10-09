@@ -1,0 +1,13 @@
+{
+  "name": "aide-excalidraw",
+  "private": true,
+  "description": "Compila o Excalidraw para aide/web/vendor/excalidraw. Só roda na hora de atualizar a versão.",
+  "dependencies": {
+    "@excalidraw/excalidraw": "0.18.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.10"
+  }
+}
