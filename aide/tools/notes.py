@@ -9,7 +9,7 @@ import logging
 from pathlib import Path
 
 from aide.core.context import now_in
-from aide.storage import vault
+from aide.storage import atividade, vault
 from aide.storage.search import guardar_vetor, indexar, remover_do_indice
 from aide.tools.registry import ToolContext, registry
 
@@ -162,6 +162,7 @@ def create(ctx: ToolContext, title: str, body: str, tags: str | None = None,
         (title, str(caminho), tags, int(private)),
     )
     _indexar_tudo(ctx, cur.lastrowid, title, body, privada=private)
+    atividade.registrar(ctx.conn, Path(ctx.config.vault_dir), caminho, agora, "assessor")
     return _com_relatorio({"id": cur.lastrowid, "title": title, "path": str(caminho)},
                           ligadas, faltando)
 
@@ -204,6 +205,7 @@ def append(ctx: ToolContext, body: str, id: int | None = None,
     ctx.conn.execute("UPDATE notes SET updated_at = datetime('now') WHERE id = ?", (row["id"],))
     _indexar_tudo(ctx, row["id"], row["title"], vault.corpo_de(caminho),
                   privada=bool(row["private"]))
+    atividade.registrar(ctx.conn, Path(ctx.config.vault_dir), caminho, agora, "assessor")
     return _com_relatorio({"id": row["id"], "title": row["title"]}, ligadas, faltando)
 
 

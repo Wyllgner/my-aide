@@ -3,15 +3,16 @@
 Tudo sai do mapa de links e das leituras em cache (`grafo.py`) — nenhuma
 nota é relida para montar o painel se ela não mudou.
 
-"Atividade" é a data da última modificação de cada arquivo. Não é histórico:
-uma nota mexida hoje some do dia em que foi escrita. O painel diz isso.
+"Atividade" junta duas fontes: o registro de edições (`note_activity`), que
+guarda cada dia em que a nota foi mexida, e a data de modificação do arquivo,
+que cobre o que veio antes do registro existir.
 """
 
 from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from aide.storage import links
@@ -32,7 +33,7 @@ class Visao:
 
 
 def montar(vault_dir: Path, agora: datetime, dias: int = 30,
-           indice: links.Indice | None = None) -> Visao:
+           indice: links.Indice | None = None, conn=None) -> Visao:
     indice = indice or links.indice(vault_dir)
     lidas = grafo.leituras(vault_dir, indice)
     mapa = grafo.mapa(vault_dir, indice)
@@ -52,11 +53,16 @@ def montar(vault_dir: Path, agora: datetime, dias: int = 30,
             tags[tag.casefold()] += 1
 
     hoje = agora.date()
-    por_dia: Counter = Counter()
-    for leitura in lidas.values():
-        dia = datetime.fromtimestamp(leitura.modificada, tz=agora.tzinfo).date()
-        if (hoje - dia).days < dias:
-            por_dia[dia] += 1
+    inicio = hoje - timedelta(days=dias - 1)
+    # (nota, dia): a mesma nota no mesmo dia conta uma vez, venha de onde vier
+    mexidas = {(caminho, datetime.fromtimestamp(leitura.modificada, tz=agora.tzinfo).date())
+               for caminho, leitura in lidas.items()}
+    if conn is not None:
+        from aide.storage import atividade
+
+        mexidas |= {(caminho, date.fromisoformat(dia))
+                    for caminho, dia in atividade.por_dia(conn, inicio)}
+    por_dia: Counter = Counter(dia for _, dia in mexidas if inicio <= dia <= hoje)
 
     return Visao(
         notas=len(lidas),

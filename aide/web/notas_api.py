@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from aide.storage import vault
+from aide.storage import atividade, vault
 from aide.storage.reconciliacao import esquecer, mover_no_indice, sincronizar
 
 # uma nota de 2 MB já é um livro; acima disso é engano, não anotação
@@ -39,6 +39,11 @@ def instalar(app) -> None:
 
     def raiz() -> Path:
         return Path(config.vault_dir)
+
+    def agora():
+        from aide.core.context import now_in
+
+        return now_in(config.timezone)
 
     def local(caminho: str, pasta: bool = False) -> Path:
         try:
@@ -120,7 +125,9 @@ def instalar(app) -> None:
                 "erro": "a nota mudou fora daqui desde que você abriu",
                 "texto": no_disco, "versao": atual, "html": previa(no_disco, caminho)})
         vault.gravar(arquivo, texto)
-        sincronizar(app.state.conn_factory(), raiz() / caminho)
+        conn = app.state.conn_factory()
+        sincronizar(conn, raiz() / caminho)
+        atividade.registrar(conn, raiz(), arquivo, agora(), "pagina")
         auditar("notas.salvar", caminho)
         # a prévia volta junto: é o mesmo texto, e assim a página não precisa
         # de um segundo pedido nem de um renderizador próprio
@@ -133,7 +140,9 @@ def instalar(app) -> None:
             vault.criar_nota(arquivo)
         except FileExistsError:
             raise HTTPException(409, "já existe uma nota com esse nome") from None
-        sincronizar(app.state.conn_factory(), raiz() / caminho)
+        conn = app.state.conn_factory()
+        sincronizar(conn, raiz() / caminho)
+        atividade.registrar(conn, raiz(), arquivo, agora(), "pagina")
         auditar("notas.criar", caminho)
         return {"caminho": caminho, "versao": versao(arquivo)}
 
@@ -152,6 +161,7 @@ def instalar(app) -> None:
             raise HTTPException(409, "já existe uma nota com esse nome") from None
         conn = app.state.conn_factory()
         mover_no_indice(conn, raiz() / de, raiz() / para)
+        atividade.mover(conn, de, para)
         for nota in mudadas:
             sincronizar(conn, raiz() / nota)
         # mover reescreve outras notas: a trilha diz quais
@@ -176,6 +186,7 @@ def instalar(app) -> None:
         conn = app.state.conn_factory()
         for velho, novo in movidas.items():
             mover_no_indice(conn, raiz() / velho, raiz() / novo)
+            atividade.mover(conn, velho, novo)
         for nota in mudadas:
             sincronizar(conn, raiz() / nota)
         auditar("notas.mover_pasta", f"{de} → {para}", links_atualizados=mudadas)

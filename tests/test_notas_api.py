@@ -407,3 +407,12 @@ def test_apagar_pasta_de_outra_origem_e_recusado(app, vault_dir):
         headers={"origin": "http://evil.example", "x-aide": "1"})
     assert resposta.status_code == 403
     assert (vault_dir / "Inbox").exists()
+
+
+def test_salvar_e_mover_registram_a_atividade(cliente, app):
+    _salvar(cliente, "um", _abrir(cliente)["versao"])
+    _salvar(cliente, "dois", _abrir(cliente)["versao"])
+    _mover(cliente, "Inbox/Nota.md", "Nova.md")
+    linhas = list(app.state.conn_factory().execute(
+        "SELECT caminho, vezes, origem FROM note_activity"))
+    assert [tuple(r) for r in linhas] == [("Nova.md", 2, "pagina")]
