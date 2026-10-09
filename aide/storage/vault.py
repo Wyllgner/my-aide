@@ -252,3 +252,17 @@ def criar_nota(caminho: Path, texto: str = "") -> None:
 
 def criar_pasta(caminho: Path) -> None:
     caminho.mkdir(parents=True, exist_ok=False, mode=0o700)
+
+
+def mover(origem: Path, destino: Path) -> None:
+    """Renomeia ou move um arquivo de nota sem nunca passar por cima de outro.
+
+    `os.rename` sobrescreve o destino calado; criar o nome novo como link
+    para o mesmo arquivo falha se ele já existe, e só então o velho sai. Os
+    dois nomes nunca somem juntos: no pior caso sobra o arquivo com os dois.
+    """
+    import os
+
+    destino.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.link(origem, destino)
+    os.unlink(origem)
