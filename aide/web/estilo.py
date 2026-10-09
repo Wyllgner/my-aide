@@ -113,8 +113,13 @@ nav a svg { flex-shrink: 0; }
                  max-height: 78vh; overflow: auto; }
 .notas-editor { padding: 22px 26px; display: flex; flex-direction: column; gap: 10px;
                 min-height: 60vh; }
-.notas-botoes { display: flex; gap: 6px; padding: 2px 2px 6px;
+.notas-botoes { display: flex; gap: 6px; padding: 2px 2px 8px;
                 border-bottom: 1px solid var(--line-soft); }
+.notas-botoes .botao { flex: 1; justify-content: center; padding: 0 10px; }
+/* .botao vem depois nesta folha: as duas classes juntas para valer sobre ele */
+.botao.botao-principal, .botao.botao-principal svg { color: #fff; }
+.botao.botao-principal { background: var(--accent); border-color: var(--accent); font-weight: 600; }
+.botao.botao-principal:hover { background: var(--accent-forte); border-color: var(--accent-forte); }
 .botao-fraco { font: inherit; font-size: 12.5px; padding: 6px 12px; cursor: pointer;
                border: 1px solid var(--line); border-radius: var(--r-pill);
                background: var(--surface); color: var(--muted); }
@@ -123,6 +128,7 @@ nav a svg { flex-shrink: 0; }
                border: 1px solid var(--line); border-radius: var(--r-pill);
                background: var(--surface); }
 .criar { display: flex; flex-direction: column; gap: 4px; padding: 4px 2px; }
+.criar .dica { font-size: 11px; color: var(--faint); }
 .criar input { font: inherit; font-size: 13px; padding: 7px 10px; width: 100%;
                border: 1px solid var(--line); border-radius: var(--r-inner); }
 .erro { font-size: 12px; color: var(--accent); }
@@ -286,24 +292,31 @@ nav a svg { flex-shrink: 0; }
 /* renomear pasta: o lápis fica à vista, fraco — em tela de toque não há
    "passar o mouse" para fazê-lo aparecer */
 .arvore .nome-pasta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.renomear-pasta { font: inherit; font-size: 12px; border: 0; background: none; padding: 0 3px;
-                  color: var(--faint); cursor: pointer; opacity: .35; border-radius: 5px; }
-.apagar-pasta { font: inherit; font-size: 13px; line-height: 1; border: 0; background: none;
-                padding: 0 4px; color: var(--faint); cursor: pointer; opacity: .35;
-                border-radius: 5px; }
-.arvore summary:hover .renomear-pasta, .renomear-pasta:focus,
-.arvore summary:hover .apagar-pasta, .apagar-pasta:focus { opacity: 1; }
-.apagar-pasta:hover, .apagar-pasta[data-armado] { color: var(--accent); background: var(--surface); }
-.apagar-pasta[data-armado] { opacity: 1; font-size: 11.5px; }
-.renomear-pasta:hover { color: var(--accent); background: var(--surface); }
+.renomear-pasta, .apagar-pasta { font: inherit; font-size: 11.5px; border: 0; background: none;
+                                 min-width: 24px; height: 24px; padding: 0 5px;
+                                 display: inline-flex; align-items: center;
+                                 justify-content: center; gap: 4px; color: var(--muted);
+                                 cursor: pointer; opacity: .45; border-radius: 6px;
+                                 flex-shrink: 0; }
+.arvore summary:hover .renomear-pasta, .renomear-pasta:focus-visible,
+.arvore summary:hover .apagar-pasta, .apagar-pasta:focus-visible { opacity: 1; }
+.renomear-pasta:focus-visible, .apagar-pasta:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 1px; }
+.renomear-pasta:hover { color: var(--ink); background: var(--surface); }
+.apagar-pasta:hover { color: var(--accent); background: var(--surface); }
+/* armado: o segundo clique manda a pasta para a lixeira */
+.apagar-pasta[data-armado] { opacity: 1; color: #fff; background: var(--accent); font-weight: 600; }
+.apagar-pasta .rotulo:empty { display: none; }
 .renomear-pasta-form { display: flex; flex-direction: column; gap: 3px; padding: 4px 6px; }
 .renomear-pasta-form input { font: inherit; font-size: 13px; padding: 5px 8px; width: 100%;
                              border: 1px solid var(--faint); border-radius: 8px; }
 
 /* visão geral do vault */
-.atalho-visao { display: block; font-size: 12.5px; padding: 6px 8px; margin: 0 0 2px;
+.atalho-visao { display: flex; align-items: center; gap: 8px; font-size: 13px;
+                padding: 7px 8px; margin: 0 0 2px;
                 border-radius: var(--r-inner); color: var(--muted); }
 .atalho-visao:hover { background: var(--line-soft); color: var(--ink); }
+.atalho-visao svg, .aviso-quebrados svg { flex-shrink: 0; }
 .visao { display: flex; flex-direction: column; gap: 14px; }
 .visao-numeros { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
 .visao-dupla { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
@@ -344,7 +357,8 @@ nav a svg { flex-shrink: 0; }
 .grafo.focado a.perto text.so-perto { display: inline; }
 
 /* links quebrados */
-.aviso-quebrados { display: block; font-size: 12px; padding: 6px 8px; margin: 0 0 4px;
+.aviso-quebrados { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500;
+                   padding: 7px 8px; margin: 0 0 4px;
                    border-radius: var(--r-inner); background: var(--soft); color: var(--accent); }
 .quebrado-item { display: flex; align-items: flex-start; justify-content: space-between;
                  gap: 8px; padding: 8px; border-radius: var(--r-inner); font-size: 13px; }
