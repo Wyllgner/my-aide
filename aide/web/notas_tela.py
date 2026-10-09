@@ -246,7 +246,8 @@ def _grafo_local(mapa: grafo.Mapa, indice: links.Indice, aberto: str) -> str:
     if len(nos) < 2:
         return ""
     return (f'<section class="local"><p class="eyebrow">Grafo local · '
-            f'{formato.plural(len(nos) - 1, "vizinha")}</p>'
+            f'{formato.plural(len(nos) - 1, "vizinha")}'
+            f' <span class="dica-grafo">Ctrl + roda para zoom</span></p>'
             f'{grafo_svg.desenhar(nos, arestas, aberto, classe="grafo local", largura=420, altura=300)}'
             f'</section>')
 

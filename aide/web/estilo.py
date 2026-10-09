@@ -242,7 +242,10 @@ nav a svg { flex-shrink: 0; }
             align-items: start; }
 .ao-redor > :only-child { grid-column: 1 / -1; }
 .local { border-top: 1px solid var(--line-soft); padding-top: 14px; margin-top: 6px; }
-.grafo.local { height: 300px; margin-top: 10px; }
+.grafo.local { height: 300px; margin-top: 10px; touch-action: pan-y pinch-zoom; }
+.grafo a.no:focus { outline: none; }
+.dica-grafo { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: 6px; }
+.grafo a.no:focus circle { stroke: var(--accent); stroke-width: 3; }
 @media (max-width: 1100px) { .ao-redor { grid-template-columns: 1fr; } }
 .grafo.focado a.perto text.so-perto { display: inline; }
 

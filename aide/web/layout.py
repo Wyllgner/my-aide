@@ -36,7 +36,9 @@ def posicionar(nos: list[str], arestas: set[tuple[str, str]],
     return dict(_calcular(chave, iteracoes))
 
 
-@lru_cache(maxsize=8)
+# um por grafo local de cada nota aberta, mais o do vault: com poucos, abrir
+# notas em sequência expulsava o grafo inteiro e ele era recalculado à toa
+@lru_cache(maxsize=64)
 def _calcular(chave, iteracoes: int | None) -> tuple[tuple[str, tuple[float, float]], ...]:
     nos, arestas = chave
     n = len(nos)
