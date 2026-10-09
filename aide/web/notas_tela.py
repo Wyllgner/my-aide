@@ -222,12 +222,19 @@ def _editor(raiz: Path, aberto: str, agora: datetime, indice: links.Indice,
   <div style="min-width:0">
     <p class="mono" style="margin:0 0 4px;font-size:11.5px;overflow:hidden;
        text-overflow:ellipsis;white-space:nowrap">{trilha}{escape(nome)}</p>
-    <h2 style="margin:0;font-size:20px;font-weight:600">{escape(arquivo.stem)}</h2>
+    <h2 id="titulo" class="titulo-nota" title="clique para renomear ou mover">{escape(arquivo.stem)}</h2>
+    <form id="renomear" class="renomear" hidden>
+      <input id="renomear-caminho" autocomplete="off" spellcheck="false"
+        value="{escape(aberto.removesuffix(".md"))}" aria-label="caminho da nota">
+      <span class="dica">Enter salva · Esc cancela · mude a pasta para mover</span>
+      <span id="renomear-erro" class="erro"></span>
+    </form>
   </div>
   <div class="editor-acoes">
     <label class="privada"><input type="checkbox" id="privada"{" checked" if privada else ""}>
       privada</label>
     {_modos(modo)}
+    <button type="button" id="botao-renomear" class="botao-fraco">renomear</button>
     <button type="button" id="apagar" class="botao-fraco">apagar</button>
   </div>
 </div>
