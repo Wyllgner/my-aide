@@ -33,7 +33,7 @@ PORTA_PADRAO = 8787
 
 def criar_app(config=None, conn_factory=None):
     """Monta a aplicação. Recebe as dependências para poder ser testada."""
-    from fastapi import Cookie, FastAPI, Query
+    from fastapi import Cookie, FastAPI, Header, Query
     from fastapi.responses import HTMLResponse, Response
 
     from aide.config import load_config
@@ -122,16 +122,24 @@ def criar_app(config=None, conn_factory=None):
               if p.suffix in tipos_vendor and p.is_file() and not p.is_symlink()}
 
     @app.get("/vendor/{caminho:path}")
-    def arquivo_vendor(caminho: str) -> Response:
+    def arquivo_vendor(caminho: str, if_none_match: str = Header("")) -> Response:
+        import hashlib
+
         arquivo = vendor.get(caminho)
         if arquivo is None:
             return Response("arquivo não encontrado", status_code=404, media_type="text/plain")
-        # partes/ e quase todas as fontes levam o hash no nome; a entrada e o
-        # CSS mantêm o nome a cada versão e precisam ser conferidos sempre
-        fixo = "/partes/" in caminho or "/fonts/" in caminho
-        return Response(arquivo.read_bytes(), media_type=tipos_vendor[arquivo.suffix],
-                        headers={"cache-control": "max-age=31536000, immutable" if fixo
-                                 else "no-cache"})
+        # só partes/ tem a garantia do hash no nome (o esbuild põe). A entrada,
+        # o CSS e algumas fontes (Assistant, Cascadia…) mantêm o nome entre
+        # versões: o navegador confere sempre e recebe 304 se nada mudou.
+        if caminho.startswith("excalidraw/partes/"):
+            return Response(arquivo.read_bytes(), media_type=tipos_vendor[arquivo.suffix],
+                            headers={"cache-control": "max-age=31536000, immutable"})
+        conteudo = arquivo.read_bytes()
+        etag = '"' + hashlib.sha256(conteudo).hexdigest()[:32] + '"'
+        cabecalhos = {"cache-control": "no-cache", "etag": etag}
+        if etag in if_none_match:
+            return Response(status_code=304, headers=cabecalhos)
+        return Response(conteudo, media_type=tipos_vendor[arquivo.suffix], headers=cabecalhos)
 
     @app.get("/app.css")
     def folha_de_estilo() -> Response:
