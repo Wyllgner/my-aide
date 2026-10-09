@@ -1078,7 +1078,7 @@ JS = r"""
     }
   })();
 
-  // ---------- autocompletar [[ ----------
+  // ---------- autocompletar [[ e comandos com / ----------
   var notas = [];
   try { notas = JSON.parse(editor.dataset.notas || "[]"); } catch (e) { notas = []; }
   var nomes = {};
@@ -1128,36 +1128,54 @@ JS = r"""
     caixa.style.left = Math.min(esquerda, window.innerWidth - 300) + window.scrollX + "px";
   }
 
+  // cada sugestão é { nome, onde, escolher }: uma nota para o [[, ou um
+  // comando do /
   function desenhar() {
     caixa.textContent = "";
-    achados.forEach(function (n, i) {
+    achados.forEach(function (sugestao, i) {
       var item = document.createElement("li");
       item.setAttribute("role", "option");
       item.setAttribute("aria-selected", String(i === escolhido));
       var nome = document.createElement("span");
-      nome.textContent = n.replace(/^.*\//, "").replace(/\.md$/i, "");
+      nome.textContent = sugestao.nome;
       var onde = document.createElement("span");
       onde.className = "onde";
-      onde.textContent = n;
+      onde.textContent = sugestao.onde;
       item.appendChild(nome);
       item.appendChild(onde);
-      item.addEventListener("mousedown", function (e) { e.preventDefault(); inserir(n); });
+      item.addEventListener("mousedown", function (e) { e.preventDefault(); sugestao.escolher(); });
       caixa.appendChild(item);
+      // a lista rola: o escolhido pelas setas continua à vista
+      if (i === escolhido && item.scrollIntoView) { item.scrollIntoView({ block: "nearest" }); }
     });
   }
 
-  function sugerir() {
-    var antes = campoSugestao.value.slice(0, campoSugestao.selectionStart);
-    var aberto = antes.match(ABERTO);
-    if (!aberto || campoSugestao.selectionStart !== campoSugestao.selectionEnd) { fecharSugestoes(); return; }
-    var busca = aberto[1].toLowerCase();
-    achados = notas.filter(function (n) {
+  function notasPara(busca) {
+    return notas.filter(function (n) {
       return n !== caminho && n.toLowerCase().indexOf(busca) >= 0;
     }).sort(function (a, b) {
       var na = a.replace(/^.*\//, "").toLowerCase().indexOf(busca) === 0 ? 0 : 1;
       var nb = b.replace(/^.*\//, "").toLowerCase().indexOf(busca) === 0 ? 0 : 1;
       return na - nb || a.localeCompare(b);
-    }).slice(0, 8);
+    }).slice(0, 8).map(function (n) {
+      return { nome: n.replace(/^.*\//, "").replace(/\.md$/i, ""), onde: n,
+        escolher: function () { inserir(n); } };
+    });
+  }
+
+  function sugerir() {
+    if (campoSugestao.selectionStart !== campoSugestao.selectionEnd) { fecharSugestoes(); return; }
+    var antes = campoSugestao.value.slice(0, campoSugestao.selectionStart);
+    var aberto = antes.match(ABERTO);
+    var barra = !aberto && antes.match(BARRA);
+    if (aberto) {
+      achados = notasPara(aberto[1].toLowerCase());
+    } else if (barra) {
+      achados = comandosPara(barra[2]);
+    } else {
+      fecharSugestoes();
+      return;
+    }
     if (!achados.length) { fecharSugestoes(); return; }
     escolhido = 0;
     desenhar();
@@ -1181,6 +1199,105 @@ JS = r"""
     campoSugestao.dispatchEvent(new Event("input"));
   }
 
+  // ---------- comandos com / ----------
+  // "/" no começo da linha ou depois de um espaço abre a lista; o que vem
+  // depois filtra ("/tab" → Tabela). § marca onde o cursor fica. `bloco`:
+  // precisa começar numa linha só sua; `separar`: e com uma linha vazia antes
+  // (sem ela, "---" embaixo de um parágrafo vira título, e a tabela não vale)
+  var BARRA = /(^|\s)\/([^\s\/]{0,24})$/;
+  var CALLOUT_TIPOS = [
+    ["note", "Nota", ""], ["abstract", "Resumo", "summary tldr"], ["info", "Info", ""],
+    ["todo", "A fazer", ""], ["tip", "Dica", "hint important"], ["success", "Feito", "check done"],
+    ["question", "Pergunta", "help faq"], ["warning", "Atenção", "caution aviso"],
+    ["failure", "Falhou", "fail missing"], ["danger", "Perigo", "error erro"],
+    ["bug", "Bug", ""], ["example", "Exemplo", ""], ["quote", "Citação", "cite"],
+  ];
+  var COMANDOS = [
+    { nome: "Título 1", onde: "#", texto: "# §", bloco: true, chaves: "heading h1" },
+    { nome: "Título 2", onde: "##", texto: "## §", bloco: true, chaves: "heading h2" },
+    { nome: "Título 3", onde: "###", texto: "### §", bloco: true, chaves: "heading h3" },
+    { nome: "Lista", onde: "-", texto: "- §", bloco: true, chaves: "bullet marcadores" },
+    { nome: "Lista numerada", onde: "1.", texto: "1. §", bloco: true, chaves: "ordenada numbered" },
+    { nome: "Tarefa", onde: "- [ ]", texto: "- [ ] §", bloco: true, chaves: "todo checkbox caixa" },
+    { nome: "Citação", onde: ">", texto: "> §", bloco: true, chaves: "quote" },
+    { nome: "Bloco de código", onde: "```", texto: "```\n§\n```", bloco: true, chaves: "code" },
+    { nome: "Tabela", onde: "| a | b |", texto: "| Coluna | Coluna |\n| --- | --- |\n| § |  |",
+      bloco: true, separar: true, chaves: "table" },
+    { nome: "Divisória", onde: "---", texto: "---\n§", bloco: true, separar: true, chaves: "linha hr divider" },
+    { nome: "Link para nota", onde: "[[ ]]", texto: "[[§]]", chaves: "wikilink nota" },
+    { nome: "Link", onde: "[texto](url)", texto: "[§]()", chaves: "url endereco Ctrl+K" },
+    { nome: "Imagem ou anexo", onde: "escolher arquivo", anexo: true, chaves: "arquivo foto pdf audio video" },
+    { nome: "Negrito", onde: "**texto** · Ctrl+B", texto: "**§**", chaves: "bold forte" },
+    { nome: "Itálico", onde: "*texto* · Ctrl+I", texto: "*§*", chaves: "italic" },
+    { nome: "Riscado", onde: "~~texto~~", texto: "~~§~~", chaves: "strike tachado" },
+    { nome: "Código no texto", onde: "`texto`", texto: "`§`", chaves: "code inline" },
+    { nome: "Data de hoje", onde: "dd/mm/aaaa", data: "dia", chaves: "hoje date dia" },
+    { nome: "Data e hora", onde: "dd/mm/aaaa hh:mm", data: "tudo", chaves: "agora now" },
+    { nome: "Hora", onde: "hh:mm", data: "hora", chaves: "agora now time" },
+  ];
+  CALLOUT_TIPOS.forEach(function (t) {
+    COMANDOS.push({ nome: "Callout " + t[1], onde: "> [!" + t[0] + "]", texto: "> [!" + t[0] + "] §",
+      bloco: true, chaves: "caixa aviso " + t[0] + " " + t[2] });
+  });
+  COMANDOS.push({ nome: "Callout recolhível", onde: "> [!faq]-", texto: "> [!faq]- §",
+    bloco: true, chaves: "caixa dobra fold details question" });
+
+  function semAcento(t) {
+    return t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  }
+
+  function comandosPara(busca) {
+    var b = semAcento(busca);
+    var achou = COMANDOS.filter(function (c) {
+      return semAcento(c.nome + " " + c.onde + " " + (c.chaves || "")).indexOf(b) >= 0;
+    });
+    // quem começa com o que foi digitado vem primeiro; o resto, na ordem da lista
+    return achou.filter(function (c) { return semAcento(c.nome).indexOf(b) === 0; }).concat(
+      achou.filter(function (c) { return semAcento(c.nome).indexOf(b) !== 0; })
+    ).map(function (c) {
+      return { nome: c.nome, onde: c.onde, escolher: function () { aplicarComando(c); } };
+    });
+  }
+
+  function dois(n) { return (n < 10 ? "0" : "") + n; }
+
+  function aplicarComando(c) {
+    var campo = campoSugestao;
+    var cursor = campo.selectionStart;
+    var casado = campo.value.slice(0, cursor).match(BARRA);
+    fecharSugestoes();
+    if (!casado) { return; }
+    var ini = cursor - casado[2].length - 1;
+    if (c.anexo) {
+      // tira o "/..." e abre o seletor; o link entra onde estava a barra
+      trocar(campo, ini, cursor, "", ini);
+      escolher.click();
+      return;
+    }
+    var texto = c.texto;
+    if (c.data) {
+      var d = new Date();
+      var dia = dois(d.getDate()) + "/" + dois(d.getMonth() + 1) + "/" + d.getFullYear();
+      var hora = dois(d.getHours()) + ":" + dois(d.getMinutes());
+      texto = (c.data === "dia" ? dia : c.data === "hora" ? hora : dia + " " + hora) + "§";
+    }
+    var v = campo.value;
+    var linhaAntes = v.slice(v.lastIndexOf("\n", ini - 1) + 1, ini);
+    var prefixo = "";
+    if (c.bloco && linhaAntes.trim()) {
+      prefixo = "\n\n";
+    } else if (c.separar && ini > 0) {
+      var anterior = v.slice(0, ini - linhaAntes.length).replace(/\n$/, "");
+      if (anterior.slice(anterior.lastIndexOf("\n") + 1).trim()) { prefixo = "\n"; }
+    }
+    texto = prefixo + texto;
+    var marca = texto.indexOf("§");
+    texto = texto.replace("§", "");
+    trocar(campo, ini, cursor, texto, ini + (marca < 0 ? texto.length : marca));
+    // de novo, com o cursor já no lugar: o "Link para nota" abre a lista de notas
+    sugerir();
+  }
+
   function ligarSugestoes(campo) {
     campo.addEventListener("keydown", function (e) {
       if (caixa.hidden || campoSugestao !== campo) { return; }
@@ -1190,7 +1307,7 @@ JS = r"""
         desenhar();
       } else if (e.key === "Enter" || e.key === "Tab") {
         e.preventDefault();
-        inserir(achados[escolhido]);
+        achados[escolhido].escolher();
       } else if (e.key === "Escape") {
         fecharSugestoes();
       } else {
