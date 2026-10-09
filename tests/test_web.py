@@ -84,13 +84,15 @@ def test_a_url_anunciada_e_local(config, tmp_path, monkeypatch):
 
 # ---------- só leitura ----------
 
-def test_so_as_notas_escrevem(app):
+def test_so_o_vault_escreve(app):
     """Escrita é decisão, não acidente: rota nova que escreve quebra aqui até
-    alguém pensar em CSRF, auditoria e caminho para ela."""
+    alguém pensar em CSRF, auditoria e caminho para ela. Notas e desenhos
+    passaram por isso (test_notas_api, test_desenhos_api)."""
     for rota in app.routes:
         metodos = getattr(rota, "methods", set()) - {"GET", "HEAD"}
         if metodos:
-            assert rota.path.startswith("/api/notas/"), f"rota de escrita exposta: {rota.path}"
+            assert rota.path.startswith(("/api/notas/", "/api/desenhos/")), \
+                f"rota de escrita exposta: {rota.path}"
 
 
 def test_a_api_nao_publica_documentacao(cliente):
@@ -722,9 +724,11 @@ def test_a_web_so_pode_calar_a_trilha_porque_as_telas_nao_escrevem(app):
     assert app.state.contexto().auditar is False
     escrita = {rota.path for rota in app.routes
                if getattr(rota, "methods", set()) - {"GET", "HEAD"}}
-    # /api/notas/anexo e /api/notas/ligar auditam também (test_anexos, test_notas_api)
+    # /api/notas/anexo e /api/notas/ligar auditam também (test_anexos, test_notas_api);
+    # os desenhos, em test_desenhos_api
     assert escrita == {"/api/notas/arquivo", "/api/notas/pasta", "/api/notas/mover",
-                       "/api/notas/mover-pasta", "/api/notas/anexo", "/api/notas/ligar"}
+                       "/api/notas/mover-pasta", "/api/notas/anexo", "/api/notas/ligar",
+                       "/api/desenhos/arquivo"}
 
 
 # ---------- a janela antiga ----------
