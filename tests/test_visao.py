@@ -87,3 +87,12 @@ def test_vault_vazio(tmp_path):
 ])
 def test_etiquetas(texto, tags):
     assert etiquetas(texto) == tags
+
+
+@pytest.mark.parametrize("texto, tags", [
+    ("---\ntags:\n  - casa\n  - projeto/telhado\n---\n", ["casa", "projeto/telhado"]),
+    ("---\ntag: solta\n---\n", ["solta"]),
+    ('---\ntags: "[a, b]"\n---\n', ["a", "b"]),
+])
+def test_etiquetas_no_formato_do_obsidian(texto, tags):
+    assert etiquetas(texto) == tags

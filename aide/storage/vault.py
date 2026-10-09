@@ -125,12 +125,33 @@ def separar(texto: str) -> tuple[dict[str, str], str]:
     if not inicio:
         return {}, texto.strip()
     linhas = texto.split("\n")
-    meta = {}
+    meta: dict[str, str] = {}
+    lista: list[str] | None = None
+    chave = ""
     for linha in linhas[1:inicio - 1]:
-        if ":" in linha:
+        item = re.match(r"\s*-\s+(.*)", linha)
+        if item and lista is not None:
+            # a lista em várias linhas que o Obsidian grava pela tela de
+            # propriedades: "tags:" e depois "  - casa". Vira "casa, obra",
+            # o mesmo formato de "tags: [casa, obra]"
+            lista.append(_sem_aspas(item.group(1)))
+            meta[chave] = ", ".join(lista)
+            continue
+        lista = None
+        if ":" in linha and not linha[:1].isspace():
             chave, valor = linha.split(":", 1)
-            meta[chave.strip()] = valor.strip()
+            chave, valor = chave.strip(), _sem_aspas(valor.strip())
+            meta[chave] = valor
+            if not valor:
+                lista = []
     return meta, "\n".join(linhas[inicio:]).strip()
+
+
+def _sem_aspas(valor: str) -> str:
+    valor = valor.strip()
+    if len(valor) >= 2 and valor[0] == valor[-1] and valor[0] in "\"'":
+        return valor[1:-1]
+    return valor
 
 
 def ler(caminho: Path) -> tuple[dict[str, str], str]:
