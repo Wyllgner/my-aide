@@ -206,6 +206,20 @@ nav a svg { flex-shrink: 0; }
 .renomear-pasta-form input { font: inherit; font-size: 13px; padding: 5px 8px; width: 100%;
                              border: 1px solid var(--faint); border-radius: 8px; }
 
+/* visão geral do vault */
+.atalho-visao { display: block; font-size: 12.5px; padding: 6px 8px; margin: 0 0 2px;
+                border-radius: var(--r-inner); color: var(--muted); }
+.atalho-visao:hover { background: var(--line-soft); color: var(--ink); }
+.visao { display: flex; flex-direction: column; gap: 14px; }
+.visao-numeros { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.visao-dupla { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+.nota-grafico { margin: 8px 0 0; font-size: 11.5px; color: var(--faint); }
+.orfas { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; }
+@media (max-width: 1100px) {
+  .visao-numeros { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .visao-dupla { grid-template-columns: 1fr; }
+}
+
 /* links quebrados */
 .aviso-quebrados { display: block; font-size: 12px; padding: 6px 8px; margin: 0 0 4px;
                    border-radius: var(--r-inner); background: var(--soft); color: var(--accent); }
