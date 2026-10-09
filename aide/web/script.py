@@ -135,12 +135,14 @@ JS = r"""
   }
 
   // o frontmatter é a verdade: a caixa só escreve ou tira a linha nele
-  var FRONT = /^---\n([\s\S]*?)\n---\n?/;
+  // igual a vault.separar: abre com uma linha "---" e fecha na próxima linha
+  // que seja só "---"; pode vir vazio
+  var FRONT = /^---\n(?:([\s\S]*?)\n)?---(?:\n|$)/;
   var LINHA = /^private:\s*(true|yes|sim|1)\s*$/im;
 
   function marcadaNoTexto() {
     var m = editor.value.match(FRONT);
-    return !!(m && LINHA.test(m[1]));
+    return !!(m && LINHA.test(m[1] || ""));
   }
 
   // o corretor avançado do Chrome manda o texto para o Google
@@ -149,7 +151,7 @@ JS = r"""
   privada.addEventListener("change", function () {
     var texto = editor.value;
     var m = texto.match(FRONT);
-    var resto = m ? m[1].split("\n").filter(function (l) { return !/^private:/i.test(l); }) : [];
+    var resto = m ? (m[1] || "").split("\n").filter(function (l) { return !/^private:/i.test(l); }) : [];
     var depois = m ? texto.slice(m[0].length) : "\n" + texto;
     if (privada.checked) { resto.push("private: true"); }
     editor.value = resto.join("").trim()
@@ -174,10 +176,10 @@ JS = r"""
     document.querySelectorAll(".modo").forEach(function (b) {
       b.setAttribute("aria-pressed", String(b.dataset.modo === modo));
     });
-    try { localStorage.setItem("aide.notas.modo", modo); } catch (e) { /* sem armazenamento: vale só agora */ }
+    // cookie, e não localStorage: o servidor lê e a página já nasce no modo
+    document.cookie = "notas_modo=" + modo + "; path=/notas; max-age=31536000; SameSite=Strict";
   }
 
-  try { aplicarModo(localStorage.getItem("aide.notas.modo")); } catch (e) { /* idem */ }
   document.querySelectorAll(".modo").forEach(function (b) {
     b.addEventListener("click", function () { aplicarModo(b.dataset.modo); });
   });
@@ -212,6 +214,29 @@ JS = r"""
       if (r.ok || r.status === 409) { abrir(novo); } else { erroDe(r).then(function (m) { mostrar(m, "erro"); }); }
     });
   }
+  // ---------- tarefa marcada na prévia ----------
+  // a caixa diz a linha; o script troca [ ] por [x] no texto e salva. Se o
+  // texto mudou desde a última prévia, a linha pode não ser mais a tarefa:
+  // aí não mexe em nada e espera a prévia nova
+  var TAREFA = /^(\s*(?:[-*+]|\d+[.)])\s+\[)([ xX])(\])/;
+  previa.addEventListener("change", function (e) {
+    var caixa = e.target;
+    if (!caixa.matches || !caixa.matches("input[data-linha]")) { return; }
+    var linhas = editor.value.split("\n");
+    var n = parseInt(caixa.dataset.linha, 10);
+    var casado = TAREFA.exec(linhas[n] || "");
+    var estavaFeita = !caixa.checked;
+    if (!casado || (casado[2] !== " ") !== estavaFeita || editor.value !== salvo || !conflito.hidden) {
+      caixa.checked = estavaFeita;
+      mostrar("a prévia está atrás do texto; tente de novo", "pendente");
+      salvar();
+      return;
+    }
+    linhas[n] = linhas[n].replace(TAREFA, "$1" + (caixa.checked ? "x" : " ") + "$3");
+    editor.value = linhas.join("\n");
+    salvar();
+  });
+
   previa.addEventListener("click", criarDoLink);
   previa.addEventListener("keydown", criarDoLink);
 

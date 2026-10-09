@@ -90,9 +90,21 @@ def test_link_markdown_para_outra_nota(indice):
 
 def test_lista_de_tarefas(indice):
     html = _html("- [ ] comprar telha\n- [x] medir o telhado\n- item comum", indice)
-    assert '<input type="checkbox" disabled> comprar telha' in html
-    assert '<input type="checkbox" disabled checked> medir o telhado' in html
+    assert '<input type="checkbox" data-linha="0"> comprar telha' in html
+    assert '<input type="checkbox" data-linha="1" checked> medir o telhado' in html
     assert "<li>item comum</li>" in html
+
+
+def test_a_linha_da_tarefa_e_a_do_arquivo(indice):
+    """Com frontmatter e linhas vazias antes: a caixa marca a linha certa."""
+    texto = "---\ntitle: x\n---\n\n\n# Lista\n\n- [ ] a\n  - [x] dentro\n\n```\n- [ ] código\n```\n- [ ] b"
+    html = _html(texto, indice)
+    linhas = texto.split("\n")
+    import re
+
+    for numero in re.findall(r'data-linha="(\d+)"', html):
+        assert re.match(r"\s*- \[[ x]\] ", linhas[int(numero)])
+    assert re.findall(r'data-linha="(\d+)"', html) == ["7", "8", "13"]
 
 
 def test_titulos_repetidos_ganham_numero(indice):
@@ -166,3 +178,34 @@ def test_imagem_nunca_carrega(indice):
 def test_link_relativo_que_nao_e_nota_fica_sem_destino(indice):
     html = _html("[x](/api/notas/arquivo?caminho=a.md)", indice)
     assert "href" not in html
+
+
+def test_link_markdown_leva_a_secao(indice):
+    html = _html("[ir](../../Inbox/Reuni%C3%A3o%20de%20or%C3%A7amento.md#Pr%C3%B3ximos%20passos)",
+                 indice)
+    assert "Inbox/Reuni%C3%A3o%20de%20or%C3%A7amento.md#s-pr%C3%B3ximos-passos" in html
+
+
+def test_link_markdown_para_titulo_da_propria_nota(indice):
+    html = _html("[topo](#Fim)\n\n# Fim", indice)
+    assert 'href="/notas?arquivo=Projetos/Casa/Telhado.md#s-fim"' in html
+
+
+@pytest.mark.parametrize("texto", ["![[foto.png]]", "[[relatório.pdf]]", "![[Plano.PDF|o plano]]"])
+def test_anexo_nao_vira_nota_para_criar(indice, texto):
+    """Como link quebrado, um clique criaria "foto.png.md"."""
+    html = _html(texto, indice)
+    assert 'class="anexo"' in html
+    assert "quebrado" not in html
+    assert not html.startswith("<p>!")
+
+
+def test_embutir_nota_vira_link(indice):
+    html = _html("![[Reunião de orçamento]]", indice)
+    assert 'class="wikilink" href="/notas?arquivo=Inbox/' in html
+    assert "<p>!" not in html
+
+
+def test_nome_com_ponto_continua_nota(indice):
+    """"v1.2" não é extensão de anexo que importe: "Plano v1.2" é nota."""
+    assert "quebrado" in _html("[[Plano v1.2]]", indice)

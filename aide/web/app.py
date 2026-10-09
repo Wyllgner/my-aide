@@ -33,7 +33,7 @@ PORTA_PADRAO = 8787
 
 def criar_app(config=None, conn_factory=None):
     """Monta a aplicação. Recebe as dependências para poder ser testada."""
-    from fastapi import FastAPI, Query
+    from fastapi import Cookie, FastAPI, Query
     from fastapi.responses import HTMLResponse, Response
 
     from aide.config import load_config
@@ -134,7 +134,9 @@ def criar_app(config=None, conn_factory=None):
                 q: str = "", categoria: str = "", tag: str = "", forma: str = "",
                 tipo: str = "", de: str = "", ate: str = "", ordem: str = "",
                 valor_min: str = Query("", alias="min"),
-                valor_max: str = Query("", alias="max")) -> str:
+                valor_max: str = Query("", alias="max"),
+                # o modo da tela de notas, lembrado pelo /app.js
+                notas_modo: str | None = Cookie(None)) -> str:
             montar = MONTADORES.get(tela.slug)
             if montar is None:
                 return render(cabecalho(tela.rotulo) + em_breve(tela.rotulo), tela.slug)
@@ -153,7 +155,7 @@ def criar_app(config=None, conn_factory=None):
             elif tela.slug == "auditoria":
                 extra = {"ator": ator}
             elif tela.slug == "notas":
-                extra = {"nota": nota, "busca": busca, "arquivo": arquivo}
+                extra = {"nota": nota, "busca": busca, "arquivo": arquivo, "modo": notas_modo}
             elif tela.slug == "calendario":
                 extra = {"ano": ano, "mes": mes, "dia": dia}
             return render(montar(ctx, toolbelt, agora, **extra), tela.slug)

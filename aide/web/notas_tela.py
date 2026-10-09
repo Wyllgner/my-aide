@@ -120,17 +120,24 @@ def _busca(ctx, raiz: Path, busca: str, aberto: str | None) -> str:
 MODOS = (("editar", "editar"), ("dividido", "lado a lado"), ("ler", "ler"))
 
 
-def _modos() -> str:
-    """O modo escolhido fica no navegador (`/app.js`); daqui sai o padrão."""
+def _modo(pedido: str | None) -> str:
+    """O modo vem de um cookie que o `/app.js` grava: lido aqui, a página já
+    nasce no modo certo, em vez de abrir lado a lado e trocar um instante
+    depois. Valor desconhecido cai no padrão — o cookie não é confiável."""
+    return pedido if pedido in dict(MODOS) else "dividido"
+
+
+def _modos(atual: str) -> str:
     botoes = ""
     for modo, rotulo in MODOS:
-        apertado = "true" if modo == "dividido" else "false"
+        apertado = "true" if modo == atual else "false"
         botoes += (f'<button type="button" class="modo" data-modo="{modo}"'
                    f' aria-pressed="{apertado}">{rotulo}</button>')
     return f'<div class="modos" role="group" aria-label="modo de visualização">{botoes}</div>'
 
 
-def _editor(raiz: Path, aberto: str, agora: datetime, indice: links.Indice) -> str:
+def _editor(raiz: Path, aberto: str, agora: datetime, indice: links.Indice,
+            modo: str = "dividido") -> str:
     """O editor da nota aberta.
 
     Corretor desligado em nota privada: o "corretor avançado" do Chrome manda
@@ -156,7 +163,7 @@ def _editor(raiz: Path, aberto: str, agora: datetime, indice: links.Indice) -> s
   <div class="editor-acoes">
     <label class="privada"><input type="checkbox" id="privada"{" checked" if privada else ""}>
       privada</label>
-    {_modos()}
+    {_modos(modo)}
     <button type="button" id="apagar" class="botao-fraco">apagar</button>
   </div>
 </div>
@@ -168,7 +175,7 @@ def _editor(raiz: Path, aberto: str, agora: datetime, indice: links.Indice) -> s
   <button type="button" id="usar-disco" class="botao-fraco">ficar com a do disco</button>
   <button type="button" id="usar-meu" class="botao-fraco">manter o que eu escrevi</button>
 </div>
-<div class="area" data-modo="dividido">
+<div class="area" data-modo="{modo}">
 <textarea id="editor" spellcheck="{"false" if privada else "true"}" data-caminho="{escape(aberto)}"
   data-versao="{escape(str(arquivo.stat().st_mtime_ns))}"
   data-notas="{escape(json.dumps(indice.caminhos, ensure_ascii=False))}">
@@ -178,7 +185,8 @@ def _editor(raiz: Path, aberto: str, agora: datetime, indice: links.Indice) -> s
 
 
 def tela(ctx, registry, agora: datetime, nota: int | None = None,
-         busca: str | None = None, arquivo: str | None = None) -> str:
+         busca: str | None = None, arquivo: str | None = None,
+         modo: str | None = None) -> str:
     raiz = Path(ctx.config.vault_dir)
     itens = vault.arvore(raiz)
     aberto = _escolher(ctx, raiz, arquivo, nota)
@@ -204,7 +212,7 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
             '<p class="vazio">Nenhuma nota ainda. Crie a primeira com “+ nota”.</p>')
 
     pasta_atual = aberto.rpartition("/")[0] if aberto else ""
-    corpo = (_editor(raiz, aberto, agora, links.indice(raiz)) if aberto else
+    corpo = (_editor(raiz, aberto, agora, links.indice(raiz), _modo(modo)) if aberto else
              '<p class="vazio">Escolha uma nota à esquerda ou crie uma nova.</p>')
 
     busca_form = (

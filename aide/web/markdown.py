@@ -51,15 +51,23 @@ def _seguro(url: str) -> bool:
 # ---------- regras ----------
 
 
+# `[[foto.png]]`, `![[relatório.pdf]]`: os tipos de anexo que o Obsidian
+# reconhece. Lista, e não "qualquer extensão": "Plano v1.2" é nota
+ANEXO = re.compile(r"\.(png|jpe?g|gif|bmp|svg|webp|avif|mp3|wav|m4a|ogg|flac|3gp"
+                   r"|mp4|webm|ogv|mov|mkv|pdf|canvas|base)$", re.IGNORECASE)
+
+
 def _wikilink(state, silent: bool) -> bool:
-    """[[alvo#seção|apelido]], numa linha só e sem colchete dentro."""
+    """[[alvo#seção|apelido]] e ![[...]], numa linha só e sem colchete dentro."""
     inicio = state.pos
-    if not state.src.startswith("[[", inicio):
+    embutido = state.src.startswith("![[", inicio)
+    abre = inicio + (3 if embutido else 2)
+    if not embutido and not state.src.startswith("[[", inicio):
         return False
-    fim = state.src.find("]]", inicio + 2)
+    fim = state.src.find("]]", abre)
     if fim < 0:
         return False
-    dentro = state.src[inicio + 2:fim]
+    dentro = state.src[abre:fim]
     if not dentro.strip() or any(c in dentro for c in "[]\n"):
         return False
     if not silent:
@@ -75,6 +83,11 @@ def _render_wikilink(self, tokens, idx, options, env) -> str:
     meta = tokens[idx].meta
     nome, secao, apelido = meta["nome"], meta["secao"], meta["apelido"]
     texto = apelido or (f"{nome} › {secao}" if nome and secao else nome or secao)
+    if ANEXO.search(nome):
+        # a página ainda não serve anexos; como link quebrado, um clique
+        # criaria "foto.png.md"
+        return (f'<span class="anexo" title="anexos ainda não aparecem aqui">'
+                f'{escape(apelido or nome)}</span>')
     destino = env["indice"].resolver(nome, env["origem"]) if nome else env["origem"]
     if destino is None:
         # quebrado: sem href, para não levar a lugar nenhum; o alvo fica
@@ -95,30 +108,35 @@ def _render_link_open(self, tokens, idx, options, env) -> str:
         token.attrSet("target", "_blank")
         token.attrSet("rel", "noopener noreferrer")
     else:
-        destino = _nota_por_link_markdown(href, env)
+        destino, secao = _nota_por_link_markdown(href, env)
         if destino:
-            token.attrSet("href", href_da_nota(destino))
+            token.attrSet("href", href_da_nota(destino, secao))
         else:
             token.attrs.pop("href", None)
     return self.renderToken(tokens, idx, options, env)
 
 
-def _nota_por_link_markdown(href: str, env) -> str | None:
-    """[texto](Outra%20nota.md): o link markdown para outra nota do vault."""
+def _nota_por_link_markdown(href: str, env) -> tuple[str | None, str]:
+    """[texto](Outra%20nota.md#Seção) e [texto](#Seção): (nota, seção).
+
+    O link markdown para outra nota do vault, ou para um título da própria."""
     import posixpath
     from urllib.parse import unquote
 
-    alvo = unquote(href.split("#")[0])
+    caminho, _, fragmento = href.partition("#")
+    alvo, secao = unquote(caminho), unquote(fragmento)
+    if not alvo:
+        return (env["origem"], secao) if secao else (None, "")
     if not alvo.lower().endswith(".md") or urlsplit(alvo).scheme:
-        return None
+        return None, ""
     pasta = env["origem"].rpartition("/")[0] if env["origem"] else ""
     # relativo à nota, como o Obsidian grava: ../Inbox/Nota.md
     relativo = posixpath.normpath(posixpath.join(pasta, alvo))
     if not relativo.startswith(".."):
         achado = env["indice"].por_caminho.get(chave_link(relativo))
         if achado:
-            return achado
-    return env["indice"].resolver(alvo, env["origem"])
+            return achado, secao
+    return env["indice"].resolver(alvo, env["origem"]), secao
 
 
 def _render_imagem(self, tokens, idx, options, env) -> str:
@@ -148,7 +166,9 @@ TAREFA = re.compile(r"\[([ xX])\] ")
 
 
 def _tarefas(state) -> None:
-    """`- [ ] item` vira caixa marcável só de olhar; quem muda é o texto."""
+    """`- [ ] item` vira caixa marcável. A caixa leva a linha do arquivo onde
+    a tarefa está, e quem marca é o script, trocando `[ ]` por `[x]` no texto
+    — a prévia nunca escreve sozinha."""
     tokens = state.tokens
     for i, token in enumerate(tokens):
         if (token.type != "inline" or i < 2 or tokens[i - 1].type != "paragraph_open"
@@ -160,14 +180,20 @@ def _tarefas(state) -> None:
         primeiro = token.children[0]
         primeiro.content = primeiro.content[casado.end():]
         caixa = Token("tarefa", "", 0)
-        caixa.meta = {"feita": casado.group(1) != " "}
+        item = tokens[i - 2]
+        caixa.meta = {"feita": casado.group(1) != " ",
+                      "linha": state.env.get("deslocamento", 0) + item.map[0]
+                      if item.map else None}
         token.children.insert(0, caixa)
         tokens[i - 2].attrSet("class", "tarefa")
 
 
 def _render_tarefa(self, tokens, idx, options, env) -> str:
-    feita = " checked" if tokens[idx].meta["feita"] else ""
-    return f'<input type="checkbox" disabled{feita}> '
+    meta = tokens[idx].meta
+    feita = " checked" if meta["feita"] else ""
+    if meta["linha"] is None:
+        return f'<input type="checkbox" disabled{feita}> '
+    return f'<input type="checkbox" data-linha="{int(meta["linha"])}"{feita}> '
 
 
 def _motor() -> MarkdownIt:
@@ -196,6 +222,10 @@ def _propriedades(meta: dict[str, str]) -> str:
 
 def renderizar(texto: str, origem: str | None, indice: Indice) -> str:
     """O HTML da prévia da nota `origem` (caminho no vault)."""
-    meta, corpo = vault.separar(texto)
-    env = {"origem": origem, "indice": indice}
+    meta, _ = vault.separar(texto)
+    inicio = vault.inicio_do_corpo(texto)
+    # o corpo sem cortar as linhas vazias do começo: a linha de cada tarefa na
+    # prévia precisa bater com a do arquivo
+    corpo = "\n".join(texto.split("\n")[inicio:])
+    env = {"origem": origem, "indice": indice, "deslocamento": inicio}
     return _propriedades(meta) + MOTOR.render(corpo, env)

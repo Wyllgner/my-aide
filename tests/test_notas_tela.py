@@ -193,3 +193,18 @@ def test_os_tres_modos(cliente):
     html = _tela(cliente, "Inbox/Ideia.md")
     for modo in ("editar", "dividido", "ler"):
         assert f'data-modo="{modo}"' in html
+
+
+def test_o_modo_lembrado_vem_do_cookie(cliente):
+    """Lido no servidor, a página já nasce no modo; sem piscar."""
+    cliente.cookies.set("notas_modo", "ler")
+    html = _tela(cliente, "Inbox/Ideia.md")
+    assert '<div class="area" data-modo="ler">' in html
+    assert 'data-modo="ler" aria-pressed="true"' in html
+
+
+def test_cookie_de_modo_estranho_cai_no_padrao(cliente):
+    cliente.cookies.set("notas_modo", '"><script>')
+    html = _tela(cliente, "Inbox/Ideia.md")
+    assert '<div class="area" data-modo="dividido">' in html
+    assert "<script>" not in html.split("</head>")[1]

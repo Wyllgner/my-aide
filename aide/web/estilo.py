@@ -160,7 +160,8 @@ nav a svg { flex-shrink: 0; }
 .previa p, .previa ul, .previa ol, .previa pre, .previa table, .previa blockquote { margin: 0 0 .9em; }
 .previa ul, .previa ol { padding-left: 1.4em; }
 .previa li.tarefa { list-style: none; margin-left: -1.3em; }
-.previa li.tarefa input { margin: 0 6px 0 0; vertical-align: -1px; }
+.previa li.tarefa input { margin: 0 6px 0 0; vertical-align: -1px; cursor: pointer;
+                          accent-color: var(--accent); }
 .previa code { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 12.5px;
                background: var(--line-soft); padding: 1px 5px; border-radius: 5px; }
 .previa pre { background: var(--line-soft); padding: 12px 14px; border-radius: var(--r-inner);
@@ -175,6 +176,8 @@ nav a svg { flex-shrink: 0; }
                              cursor: pointer; }
 .previa .wikilink.quebrado:hover { color: var(--accent); border-color: var(--accent); }
 .previa .imagem-externa::before { content: "▧ "; color: var(--faint); }
+.previa .anexo { color: var(--muted); }
+.previa .anexo::before { content: "⎘ "; color: var(--faint); }
 .propriedades { display: grid; grid-template-columns: max-content 1fr; gap: 3px 14px;
                 margin: 0 0 16px; padding: 10px 12px; border-radius: var(--r-inner);
                 background: var(--paper); border: 1px solid var(--line-soft);
