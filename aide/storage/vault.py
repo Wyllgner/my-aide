@@ -102,6 +102,18 @@ def acrescentar(caminho: Path, texto: str, quando: datetime) -> None:
         arquivo.write(f"\n\n_{quando.strftime('%d/%m/%Y %H:%M')}_\n\n{texto.strip()}\n")
 
 
+def inicio_do_corpo(texto: str) -> int:
+    """A linha onde o corpo começa: 0 sem frontmatter, senão a seguinte à
+    linha `---` que o fecha. É o que liga uma linha da prévia à do arquivo."""
+    linhas = texto.split("\n")
+    if not linhas or linhas[0].rstrip("\r") != SEPARADOR:
+        return 0
+    for fim in range(1, len(linhas)):
+        if linhas[fim].rstrip("\r") == SEPARADOR:
+            return fim + 1
+    return 0
+
+
 def separar(texto: str) -> tuple[dict[str, str], str]:
     """(frontmatter, corpo) de um texto de nota. Sem frontmatter também serve.
 
@@ -109,21 +121,16 @@ def separar(texto: str) -> tuple[dict[str, str], str]:
     até a próxima linha `---` sozinha. Partir no primeiro "---" que aparecer
     cortava a nota ao meio quando um valor ou o próprio corpo tinha um.
     """
+    inicio = inicio_do_corpo(texto)
+    if not inicio:
+        return {}, texto.strip()
     linhas = texto.split("\n")
-    if not linhas or linhas[0].rstrip("\r") != SEPARADOR:
-        return {}, texto.strip()
-    for fim in range(1, len(linhas)):
-        if linhas[fim].rstrip("\r") == SEPARADOR:
-            break
-    else:
-        return {}, texto.strip()
-
     meta = {}
-    for linha in linhas[1:fim]:
+    for linha in linhas[1:inicio - 1]:
         if ":" in linha:
             chave, valor = linha.split(":", 1)
             meta[chave.strip()] = valor.strip()
-    return meta, "\n".join(linhas[fim + 1:]).strip()
+    return meta, "\n".join(linhas[inicio:]).strip()
 
 
 def ler(caminho: Path) -> tuple[dict[str, str], str]:
