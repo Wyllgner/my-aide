@@ -198,6 +198,19 @@ def _ancoras(state) -> None:
         token.attrSet("id", base if vistos[base] == 1 else f"{base}-{vistos[base]}")
 
 
+# os blocos que ganham a linha do arquivo onde começam, para a página poder
+# rolar a prévia até um link citado (a lista de links quebrados leva até ele)
+BLOCOS_COM_FONTE = frozenset({"paragraph_open", "heading_open", "list_item_open",
+                              "blockquote_open", "table_open", "hr"})
+
+
+def _fontes(state) -> None:
+    deslocamento = state.env.get("deslocamento", 0)
+    for token in state.tokens:
+        if token.type in BLOCOS_COM_FONTE and token.map and not token.hidden:
+            token.attrSet("data-fonte", str(deslocamento + token.map[0]))
+
+
 TAREFA = re.compile(r"\[([ xX])\] ")
 
 
@@ -294,6 +307,7 @@ def _motor() -> MarkdownIt:
     md.core.ruler.push("ancoras", _ancoras)
     md.core.ruler.push("tarefas", _tarefas)
     md.core.ruler.push("url_solta", _url_solta)
+    md.core.ruler.push("fontes", _fontes)
     md.add_render_rule("wikilink", _render_wikilink)
     md.add_render_rule("link_open", _render_link_open)
     md.add_render_rule("image", _render_imagem)

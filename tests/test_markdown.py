@@ -26,11 +26,11 @@ def test_markdown_basico(indice):
     assert "<strong>negrito</strong>" in html
     assert "<em>itálico</em>" in html
     assert "<s>riscado</s>" in html
-    assert "<li>um</li>" in html
+    assert '<li data-fonte="4">um</li>' in html
 
 
 def test_tabela(indice):
-    assert "<table>" in _html("| a | b |\n|---|---|\n| 1 | 2 |", indice)
+    assert '<table data-fonte="0">' in _html("| a | b |\n|---|---|\n| 1 | 2 |", indice)
 
 
 def test_frontmatter_vira_propriedades_e_nao_texto(indice):
@@ -57,7 +57,7 @@ def test_wikilink_com_apelido_e_secao(indice):
 def test_wikilink_so_com_secao_aponta_para_a_propria_nota(indice):
     html = _html("[[#Fim]]\n\n# Fim", indice)
     assert 'href="/notas?arquivo=Projetos/Casa/Telhado.md#s-fim"' in html
-    assert '<h1 id="s-fim">' in html
+    assert '<h1 id="s-fim" data-fonte="2">' in html
 
 
 def test_wikilink_quebrado_nao_leva_a_lugar_nenhum(indice):
@@ -92,7 +92,7 @@ def test_lista_de_tarefas(indice):
     html = _html("- [ ] comprar telha\n- [x] medir o telhado\n- item comum", indice)
     assert '<input type="checkbox" data-linha="0"> comprar telha' in html
     assert '<input type="checkbox" data-linha="1" checked> medir o telhado' in html
-    assert "<li>item comum</li>" in html
+    assert '<li data-fonte="2">item comum</li>' in html
 
 
 def test_a_linha_da_tarefa_e_a_do_arquivo(indice):
@@ -249,3 +249,14 @@ def test_url_solta_nao_conta_como_ligacao_entre_notas():
     from aide.web.markdown import citacoes
 
     assert citacoes("veja https://exemplo.org/nota.md") == []
+
+
+def test_cada_bloco_diz_a_linha_do_arquivo_onde_comeca(indice):
+    """A lista de links quebrados leva até o link: a prévia precisa saber onde
+    cada bloco está no arquivo, contando o frontmatter."""
+    from aide.web import markdown
+
+    html = markdown.renderizar("---\ntitle: x\n---\n\n# Um\n\ntexto\n\n> citação", "a.md", indice)
+    assert '<h1 id="s-um" data-fonte="4">' in html
+    assert '<p data-fonte="6">texto</p>' in html
+    assert '<blockquote data-fonte="8">' in html

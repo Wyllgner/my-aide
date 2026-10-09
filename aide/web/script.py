@@ -586,6 +586,75 @@ JS = r"""
   previa.addEventListener("click", criarDoLink);
   previa.addEventListener("keydown", criarDoLink);
 
+  // ---------- chegar no link citado ----------
+  // a lista de links quebrados abre a nota com ?linha=&alvo=: a prévia rola
+  // até o link e pisca, e o campo seleciona o link no texto
+  function alturaAte(posicao) {
+    // o mesmo espelho do autocompletar: a linha pode quebrar em várias
+    var espelho = document.createElement("div");
+    var estilo = getComputedStyle(editor);
+    ["fontFamily", "fontSize", "lineHeight", "padding", "border", "letterSpacing",
+     "tabSize", "boxSizing", "width"].forEach(function (p) { espelho.style[p] = estilo[p]; });
+    espelho.style.position = "absolute";
+    espelho.style.visibility = "hidden";
+    espelho.style.whiteSpace = "pre-wrap";
+    espelho.style.wordWrap = "break-word";
+    espelho.textContent = editor.value.slice(0, posicao);
+    var marca = document.createElement("span");
+    marca.textContent = "\u200b";
+    espelho.appendChild(marca);
+    document.body.appendChild(espelho);
+    var topo = marca.offsetTop;
+    document.body.removeChild(espelho);
+    return topo;
+  }
+
+  (function irAoLink() {
+    var busca = new URLSearchParams(location.search);
+    var linha = parseInt(busca.get("linha"), 10);
+    if (isNaN(linha) || linha < 0) { return; }
+    var alvo = (busca.get("alvo") || "").trim();
+    // sai da URL: recarregar a página não deve pular de novo
+    // tirado do texto da URL, e não remontado: URLSearchParams trocaria "/"
+    // por %2F e espaço por +, e o endereço ficaria ilegível
+    var limpa = location.search.replace(/[?&](linha|alvo)=[^&]*/g, "").replace(/^&/, "?");
+    history.replaceState(null, "", location.pathname + limpa + location.hash);
+
+    // prévia: o último bloco que começa nessa linha ou antes; dentro dele, o
+    // link quebrado com esse alvo, se houver
+    var bloco = null;
+    previa.querySelectorAll("[data-fonte]").forEach(function (b) {
+      if (parseInt(b.dataset.fonte, 10) <= linha) { bloco = b; }
+    });
+    var marca = bloco;
+    if (bloco && alvo) {
+      bloco.querySelectorAll("a.quebrado").forEach(function (a) {
+        if (marca === bloco && (a.dataset.alvo || "").toLowerCase() === alvo.toLowerCase()) { marca = a; }
+      });
+    }
+    if (marca && area.dataset.modo !== "editar") {
+      marca.scrollIntoView({ block: "center" });
+      marca.classList.add("destaque");
+    }
+
+    // campo: seleciona o link na linha (ou a linha inteira) e rola até ele
+    var linhas = editor.value.split("\n");
+    if (area.dataset.modo === "ler" || linha >= linhas.length) { return; }
+    var inicio = 0;
+    for (var i = 0; i < linha; i++) { inicio += linhas[i].length + 1; }
+    var texto = linhas[linha];
+    var achado = alvo ? texto.toLowerCase().indexOf(alvo.toLowerCase()) : -1;
+    var de = achado >= 0 ? achado : 0;
+    var ate = achado >= 0 ? achado + alvo.length : texto.length;
+    editor.focus({ preventScroll: true });
+    editor.setSelectionRange(inicio + de, inicio + ate);
+    editor.scrollTop = Math.max(0, alturaAte(inicio + de) - editor.clientHeight / 2);
+    if (realce) { realce.scrollTop = editor.scrollTop; }
+    if (!marca || area.dataset.modo === "editar") {
+      editor.scrollIntoView({ block: "nearest" });
+    }
+  })();
+
   // ---------- autocompletar [[ ----------
   var notas = [];
   try { notas = JSON.parse(editor.dataset.notas || "[]"); } catch (e) { notas = []; }

@@ -366,8 +366,21 @@ nav a svg { flex-shrink: 0; }
 .quebrado-item { display: flex; align-items: flex-start; justify-content: space-between;
                  gap: 8px; padding: 8px; border-radius: var(--r-inner); font-size: 13px; }
 .quebrado-item:hover { background: var(--line-soft); }
+.quebrado-item { flex-direction: column; align-items: stretch; }
+.quebrado-alvo { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .quebrado-item .onde { display: block; font-size: 11.5px; color: var(--faint); margin-top: 2px; }
-.quebrado-item .onde a { font-weight: 400; }
+.quebrado-citacoes { list-style: none; margin: 4px 0 0; padding: 0; display: flex;
+                     flex-direction: column; gap: 2px; }
+.quebrado-citacoes a { display: inline-block; font-size: 12.5px; padding: 2px 0; }
+.quebrado-citacoes a:hover { text-decoration: underline; }
+.quebrado-citacoes .vezes { font-size: 11px; color: var(--faint); }
+.quebrado-citacoes .trecho { display: block; font-size: 11.5px; color: var(--faint);
+                             overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* o link aonde a lista de quebrados levou: pisca e some devagar */
+@keyframes destaque { from { background: #FBE3DC; box-shadow: 0 0 0 4px #FBE3DC; }
+                      to { background: transparent; box-shadow: 0 0 0 4px transparent; } }
+.previa .destaque { animation: destaque 2.4s ease-out; border-radius: 4px; }
 
 /* backlinks */
 .backlinks { border-top: 1px solid var(--line-soft); padding-top: 14px; margin-top: 6px; }
