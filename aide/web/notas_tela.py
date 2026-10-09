@@ -164,12 +164,12 @@ def _backlinks(entradas: list[grafo.Ligacao]) -> str:
             f'{formato.plural(len(por_origem), "nota")}</p><ul>{itens}</ul></section>')
 
 
-def _visao_geral(raiz: Path, agora: datetime, indice: links.Indice) -> str:
+def _visao_geral(raiz: Path, agora: datetime, indice: links.Indice, conn=None) -> str:
     """O painel do vault: números, atividade, as mais citadas, tags e órfãs."""
     from aide.web import graficos
     from aide.web.telas import _cartao, _indicador
 
-    v = visao.montar(raiz, agora, dias=30, indice=indice)
+    v = visao.montar(raiz, agora, dias=30, indice=indice, conn=conn)
 
     def nome(caminho: str) -> str:
         return caminho.rpartition("/")[2].removesuffix(".md")
@@ -194,8 +194,9 @@ def _visao_geral(raiz: Path, agora: datetime, indice: links.Indice) -> str:
 <div class="visao">
   <div class="visao-numeros">{indicadores}</div>
   {_cartao("Notas mexidas por dia · últimos 30 dias",
-           atividade + '<p class="nota-grafico">pela data da última modificação de cada '
-           'arquivo — uma nota mexida hoje sai do dia em que foi escrita</p>')}
+           atividade + '<p class="nota-grafico">cada nota conta uma vez por dia em que foi '
+           'mexida — pela página, pelo assessor ou por fora; antes do registro existir, '
+           'vale a data de modificação do arquivo</p>')}
   <div class="visao-dupla">
     {_cartao("Mais citadas", citadas)}
     {_cartao("Tags", tags)}
@@ -378,7 +379,7 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
                  f' clique numa nota para abrir</span></div>'
                  + grafo_svg.desenhar(nos, arestas, aberto))
     elif geral:
-        corpo = _visao_geral(raiz, agora, indice)
+        corpo = _visao_geral(raiz, agora, indice, ctx.conn)
     elif aberto:
         corpo = _editor(raiz, aberto, agora, indice, _modo(modo), entradas,
                         _grafo_local(mapa, indice, aberto))
