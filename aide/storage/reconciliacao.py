@@ -73,6 +73,7 @@ def reconciliar(conn, vault_dir: Path, embedder=None, forcar: bool = False) -> R
                     remover_vetor(conn, row["id"])
                 _indexar(conn, row["id"], row["title"], corpo,
                          None if privada else embedder)
+                _registrar_fora(conn, vault_dir, caminho)
                 conn.execute("UPDATE notes SET updated_at = datetime('now') WHERE id = ?",
                              (row["id"],))
                 relatorio.reindexadas.append((row["id"], row["title"]))
@@ -91,6 +92,7 @@ def reconciliar(conn, vault_dir: Path, embedder=None, forcar: bool = False) -> R
                            (titulo, str(caminho), (meta.get("tags") or "").strip("[]") or None,
                             int(privada)))
         _indexar(conn, cur.lastrowid, titulo, corpo, None if privada else embedder)
+        _registrar_fora(conn, vault_dir, caminho)
         relatorio.adotadas.append((cur.lastrowid, titulo))
 
     for real, row in vivas.items():
@@ -188,6 +190,15 @@ def _sem_vetor(conn, embedder, relatorio: Relatorio) -> None:
             continue
         _indexar(conn, row["id"], row["title"], corpo, embedder)
         relatorio.vetorizadas.append((row["id"], row["title"]))
+
+
+def _registrar_fora(conn, vault_dir: Path, caminho: Path) -> None:
+    """Mexida por fora (Obsidian, editor): o dia é o da modificação do arquivo,
+    no fuso desta máquina, que é o de quem escreveu."""
+    from aide.storage import atividade
+
+    quando = datetime.fromtimestamp(caminho.stat().st_mtime).astimezone()
+    atividade.registrar(conn, vault_dir, caminho, quando, "fora")
 
 
 def _mudou(caminho: Path, indexado_em: str) -> bool:
