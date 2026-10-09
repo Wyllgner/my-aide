@@ -59,30 +59,23 @@ def _trocar_na_linha(linha: str, citacao: Citacao, novo_wiki: str, novo_href: st
     return linha
 
 
-def mover(raiz: Path, de: str, para: str) -> list[str]:
-    """Move a nota `de` para `para` (caminhos no vault) e conserta os links.
-
-    Devolve os caminhos das notas cujo texto mudou. Quem chama já conferiu
-    os dois caminhos e cuida do índice e da auditoria.
-    """
-    antes = links.indice(raiz)
-    ligacoes = grafo.mapa(raiz, antes).ligacoes
-    vault.mover(vault.resolver(raiz, de), vault.resolver(raiz, para))
+def _reescrever(raiz: Path, mudancas: dict[str, str], ligacoes: list[grafo.Ligacao]) -> list[str]:
+    """Conserta os links depois que as notas de `mudancas` (velho -> novo)
+    mudaram de lugar. `ligacoes` é o mapa de antes da mudança."""
     depois = links.indice(raiz)
 
     def onde_esta(caminho: str) -> str:
-        return para if caminho == de else caminho
+        return mudancas.get(caminho, caminho)
 
-    # (nota, linha) -> citações a trocar ali, com o destino de cada uma
     trocas: dict[str, list[tuple[Citacao, str]]] = {}
     for lig in ligacoes:
         # sem destino, ou só "#seção" da própria nota: nada a trocar
         if lig.destino is None or not lig.citacao.alvo or lig.citacao.alvo.startswith("#"):
             continue
-        aponta_para_a_movida = lig.destino == de
-        # os links markdown da própria nota movida são relativos à pasta dela
-        relativo_da_movida = lig.origem == de and lig.citacao.tipo == "md" and lig.destino != de
-        if aponta_para_a_movida or relativo_da_movida:
+        aponta_para_movida = lig.destino in mudancas
+        # os links markdown de uma nota movida são relativos à pasta dela
+        relativo_de_movida = lig.origem in mudancas and lig.citacao.tipo == "md"
+        if aponta_para_movida or relativo_de_movida:
             trocas.setdefault(onde_esta(lig.origem), []).append(
                 (lig.citacao, onde_esta(lig.destino)))
 
@@ -102,3 +95,34 @@ def mover(raiz: Path, de: str, para: str) -> list[str]:
             vault.gravar(arquivo, novo)
             mudadas.append(nota)
     return mudadas
+
+
+def mover(raiz: Path, de: str, para: str) -> list[str]:
+    """Move a nota `de` para `para` (caminhos no vault) e conserta os links.
+
+    Devolve os caminhos das notas cujo texto mudou. Quem chama já conferiu
+    os dois caminhos e cuida do índice e da auditoria.
+    """
+    ligacoes = grafo.mapa(raiz).ligacoes
+    vault.mover(vault.resolver(raiz, de), vault.resolver(raiz, para))
+    return _reescrever(raiz, {de: para}, ligacoes)
+
+
+def mover_pasta(raiz: Path, de: str, para: str) -> tuple[dict[str, str], list[str]]:
+    """Move a pasta `de` para `para` e conserta os links das notas de dentro.
+
+    Devolve (velho -> novo de cada nota movida, notas cujo texto mudou). Link
+    por nome curto continua valendo; quem muda é [[Pasta/Nota]] e o link
+    markdown relativo que entra ou sai da pasta.
+    """
+    origem = vault.resolver(raiz, de, pasta=True)
+    destino = vault.resolver(raiz, para, pasta=True)
+    if destino == origem or destino.is_relative_to(origem):
+        raise ValueError("uma pasta não pode ir para dentro dela mesma")
+    indice = links.indice(raiz)
+    prefixo = de.rstrip("/") + "/"
+    mudancas = {c: para.rstrip("/") + "/" + c[len(prefixo):]
+                for c in indice.caminhos if c.startswith(prefixo)}
+    ligacoes = grafo.mapa(raiz, indice).ligacoes
+    vault.mover_pasta(origem, destino)
+    return mudancas, _reescrever(raiz, mudancas, ligacoes)
