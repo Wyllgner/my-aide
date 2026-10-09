@@ -273,3 +273,50 @@ def test_cada_bloco_de_fora_diz_onde_comeca_e_termina(indice):
     assert '<ul data-bloco="7-10">' in html
     assert html.count("data-bloco") == 4  # o item de dentro da lista não
     assert 'data-bloco="11-14"' in html
+
+
+# ---------- callouts ----------
+
+def test_callout_vira_caixa_com_titulo_e_corpo(indice):
+    html = _html("> [!warning] Cuidado **aqui**\n> o corpo", indice)
+    assert '<blockquote class="callout" data-callout="warning"' in html
+    assert '<div class="callout-titulo"><svg' in html
+    assert "<span>Cuidado <strong>aqui</strong></span></div>" in html
+    assert "<p data-fonte=\"0\">o corpo</p>" in html
+    assert "[!warning]" not in html
+
+
+def test_callout_sem_titulo_usa_o_nome_do_tipo_e_apelido_vira_o_tipo(indice):
+    html = _html("> [!tldr]\n> resumo", indice)
+    assert 'data-callout="abstract"' in html
+    assert "<span>Resumo</span>" in html
+
+
+def test_callout_so_com_titulo_nao_deixa_paragrafo_vazio(indice):
+    html = _html("> [!tip] Só isto", indice)
+    assert "<p>" not in html and "<p " not in html
+    assert "<span>Só isto</span>" in html
+
+
+def test_callout_que_dobra_vira_details(indice):
+    fechado = _html("> [!faq]- Pergunta?\n> resposta", indice)
+    assert '<details class="callout" data-callout="question"' in fechado
+    assert ' open=""' not in fechado
+    assert '<summary class="callout-titulo">' in fechado and "</details>" in fechado
+    assert ' open=""' in _html("> [!faq]+ Pergunta?\n> resposta", indice)
+
+
+def test_callout_de_tipo_desconhecido_e_citacao_comum(indice):
+    html = _html("> [!inventado] x\n\n> só uma citação", indice)
+    assert 'data-callout="inventado"' in html
+    assert "<blockquote data-fonte" in html  # a citação comum segue como era
+
+
+def test_callout_nao_injeta_html(indice):
+    html = _html('> [!info] <img src=x onerror=alert(1)>\n> <script>x</script>', indice)
+    assert "<img" not in html and "<script" not in html
+
+
+def test_link_no_titulo_do_callout_conta_como_ligacao():
+    achadas = markdown.citacoes("> [!info] veja [[Telhado]]\n> e [[Ideias]]")
+    assert [c.alvo for c in achadas] == ["Telhado", "Ideias"]
