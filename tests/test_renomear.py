@@ -120,3 +120,38 @@ def test_pasta_nunca_passa_por_cima_de_outra(raiz):
     with pytest.raises(FileExistsError):
         renomear.mover_pasta(raiz, "Projetos/Casa", "Destino")
     assert (raiz / "Projetos" / "Casa" / "Telhado.md").exists()
+
+
+# ---------- o destino dos outros links não muda ----------
+
+@pytest.fixture
+def homonimas(tmp_path):
+    pasta = tmp_path / "v2"
+    for caminho, texto in {"Arquivo/Ideias.md": "a de verdade", "Projetos/Lista.md": "ver [[Ideias]]",
+                           "Inbox/Ideias.md": "outra"}.items():
+        (pasta / caminho).parent.mkdir(parents=True, exist_ok=True)
+        (pasta / caminho).write_text(texto)
+    return pasta
+
+
+def test_nota_que_chega_nao_rouba_o_link_de_outra(homonimas):
+    """Mover a Inbox/Ideias para Projetos faria o [[Ideias]] da Lista mudar
+    de destino sozinho, pela preferência da mesma pasta."""
+    from aide.storage import links
+
+    renomear.mover(homonimas, "Inbox/Ideias.md", "Projetos/Ideias.md")
+    assert _ler(homonimas, "Projetos/Lista.md") == "ver [[Arquivo/Ideias]]"
+    assert links.indice(homonimas).resolver("Arquivo/Ideias", "Projetos/Lista.md") \
+        == "Arquivo/Ideias.md"
+
+
+def test_nota_movida_nao_muda_o_destino_dos_proprios_links(homonimas):
+    """A Lista indo para Arquivo: o [[Ideias]] dela já ia para Arquivo/Ideias."""
+    renomear.mover(homonimas, "Projetos/Lista.md", "Inbox/Lista.md")
+    assert _ler(homonimas, "Inbox/Lista.md") == "ver [[Arquivo/Ideias]]"
+
+
+def test_link_sem_ambiguidade_nao_e_tocado(raiz):
+    antes = _ler(raiz, "Inbox/Reunião.md")
+    renomear.mover(raiz, "Solta.md", "Arquivo/Solta.md")
+    assert _ler(raiz, "Inbox/Reunião.md") == antes
