@@ -207,6 +207,36 @@ JS = r"""
     });
   });
 
+  // ---------- apagar pasta: dois cliques, como a nota ----------
+  document.querySelectorAll(".apagar-pasta").forEach(function (botao) {
+    var armado = null;
+    botao.addEventListener("click", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!armado) {
+        botao.dataset.armado = "1";
+        botao.textContent = "apagar?";
+        armado = setTimeout(function () {
+          armado = null;
+          delete botao.dataset.armado;
+          botao.textContent = "×";
+        }, 4000);
+        return;
+      }
+      var pasta = botao.dataset.pasta;
+      var editorAberto = document.getElementById("editor");
+      var aberta = editorAberto ? editorAberto.dataset.caminho : "";
+      var guardar = window.aideSalvar ? window.aideSalvar() : Promise.resolve();
+      guardar.then(function () {
+        return pedir("DELETE", "/api/notas/pasta?caminho=" + encodeURIComponent(pasta));
+      }).then(function (r) {
+        if (!r.ok) { return erroDe(r).then(function (m) { botao.textContent = m; }); }
+        // a nota aberta ia junto: volta para a lista
+        location.href = aberta.indexOf(pasta + "/") === 0 ? "/notas" : location.href;
+      }).catch(function (e2) { botao.textContent = e2.message; });
+    });
+  });
+
   // ---------- editor ----------
   var editor = document.getElementById("editor");
   if (!editor) { return; }

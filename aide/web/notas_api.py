@@ -164,6 +164,22 @@ def instalar(app) -> None:
         auditar("notas.criar_pasta", caminho)
         return {"caminho": caminho}
 
+    @app.delete("/api/notas/pasta")
+    def apagar_pasta(caminho: str = Query(...)) -> dict:
+        """A pasta inteira vai para a `.trash`, com o que tem dentro — como no
+        Obsidian, e como a nota sozinha: nada é destruído, voltar é um `mv`."""
+        pasta = local(caminho, pasta=True)
+        if not pasta.is_dir():
+            raise HTTPException(404, "pasta não encontrada")
+        conn = app.state.conn_factory()
+        notas = [vault.relativo_de(raiz(), p) for p in pasta.rglob("*.md")]
+        for nota in notas:
+            esquecer(conn, raiz() / nota)
+        destino = vault.para_lixeira(raiz(), pasta)
+        auditar("notas.apagar_pasta", caminho, notas=len(notas))
+        return {"caminho": caminho, "lixeira": destino.name if destino else None,
+                "notas": len(notas)}
+
     @app.delete("/api/notas/arquivo")
     def apagar(caminho: str = Query(...)) -> dict:
         arquivo = local(caminho)

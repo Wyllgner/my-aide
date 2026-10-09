@@ -346,3 +346,14 @@ def test_grafo_local_ao_lado_dos_backlinks(cliente, raiz):
 
 def test_nota_sem_ligacao_nao_tem_grafo_local(cliente):
     assert "Grafo local" not in _tela(cliente, "Inbox/Ideia.md")
+
+
+def test_cada_pasta_tem_o_botao_de_apagar(cliente):
+    assert 'class="apagar-pasta" data-pasta="Projetos/Casa"' in _tela(cliente)
+
+
+def test_a_lixeira_conta_as_notas_de_pasta_apagada(cliente, raiz):
+    (raiz / ".trash" / "Velha" / "Sub").mkdir(parents=True)
+    (raiz / ".trash" / "Velha" / "Sub" / "a.md").write_text("x")
+    (raiz / ".trash" / "Velha" / "b.md").write_text("x")
+    assert "2 arquivos na lixeira" in _tela(cliente)

@@ -46,7 +46,7 @@ def caminho_para(vault_dir: Path, titulo: str) -> Path:
 
 
 def para_lixeira(vault_dir: Path, caminho: Path) -> Path | None:
-    """Tira o arquivo do vault sem destruí-lo, e devolve onde ele foi parar.
+    """Tira o arquivo (ou a pasta) do vault sem destruir, e devolve onde foi parar.
 
     Apagar uma nota tem de ser um ato completo: enquanto o arquivo ficava no
     vault com a linha marcada como apagada, ele não aparecia em lugar nenhum e
