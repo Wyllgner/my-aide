@@ -203,8 +203,16 @@ def append(ctx: ToolContext, body: str, id: int | None = None,
     ligadas, faltando = _ligar(ctx, relacionadas or [], origem=caminho)
     vault.acrescentar(caminho, _com_links(body, ligadas), agora)
     ctx.conn.execute("UPDATE notes SET updated_at = datetime('now') WHERE id = ?", (row["id"],))
-    _indexar_tudo(ctx, row["id"], row["title"], vault.corpo_de(caminho),
-                  privada=bool(row["private"]))
+    meta, corpo = vault.ler(caminho)
+    # quem vê privado (terminal) passou pelo _negar_se_privada sem ler o
+    # arquivo: marcada no Obsidian e ainda não reindexada, o banco diz normal
+    privada = bool(row["private"]) or vault.privada(meta)
+    if privada and not row["private"]:
+        from aide.storage.search import remover_vetor
+
+        ctx.conn.execute("UPDATE notes SET private = 1 WHERE id = ?", (row["id"],))
+        remover_vetor(ctx.conn, row["id"])
+    _indexar_tudo(ctx, row["id"], row["title"], corpo, privada=privada)
     atividade.registrar(ctx.conn, Path(ctx.config.vault_dir), caminho, agora, "assessor")
     return _com_relatorio({"id": row["id"], "title": row["title"]}, ligadas, faltando)
 
