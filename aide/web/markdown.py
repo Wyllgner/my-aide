@@ -197,12 +197,68 @@ def _render_tarefa(self, tokens, idx, options, env) -> str:
     return f'<input type="checkbox" data-linha="{int(meta["linha"])}"{feita}> '
 
 
+# endereço com esquema, até o primeiro espaço ou caractere que não cabe em URL
+URL_SOLTA = re.compile(r"https?://[^\s<>\"'`]+", re.IGNORECASE)
+
+
+def _aparar(url: str) -> str:
+    """Pontuação colada no fim é da frase, não do endereço: "veja https://x.org."
+    Parêntese de fechamento só fica se tiver o de abertura (links da Wikipédia)."""
+    while url and url[-1] in ".,;:!?)]'*_":
+        if url[-1] == ")" and url.count("(") >= url.count(")"):
+            break
+        url = url[:-1]
+    return url
+
+
+def _url_solta(state) -> None:
+    """https://exemplo.org escrito no meio do texto vira link, como no Obsidian.
+
+    Sem dependência nova: uma regra que só olha texto comum — fora de link
+    existente e de código, que não chegam aqui como texto. O link sai pelo
+    mesmo `link_open` dos outros, então ganha a mesma proteção."""
+    for bloco in state.tokens:
+        if bloco.type != "inline" or not bloco.children:
+            continue
+        novos, dentro_de_link = [], 0
+        for token in bloco.children:
+            if token.type == "link_open":
+                dentro_de_link += 1
+            elif token.type == "link_close":
+                dentro_de_link -= 1
+            if token.type != "text" or dentro_de_link or "://" not in token.content:
+                novos.append(token)
+                continue
+            texto, inicio = token.content, 0
+            for casado in URL_SOLTA.finditer(texto):
+                url = _aparar(casado.group(0))
+                href = state.md.normalizeLink(url)
+                if not url.split("://", 1)[1] or not state.md.validateLink(href):
+                    continue
+                if casado.start() > inicio:
+                    novos.append(_texto(texto[inicio:casado.start()]))
+                abre = Token("link_open", "a", 1)
+                abre.attrSet("href", href)
+                novos.extend([abre, _texto(url), Token("link_close", "a", -1)])
+                inicio = casado.start() + len(url)
+            if inicio < len(texto):
+                novos.append(_texto(texto[inicio:]))
+        bloco.children = novos
+
+
+def _texto(conteudo: str) -> Token:
+    token = Token("text", "", 0)
+    token.content = conteudo
+    return token
+
+
 def _motor() -> MarkdownIt:
     md = MarkdownIt("commonmark", {"html": False, "linkify": False, "typographer": False})
     md.enable(["table", "strikethrough"])
     md.inline.ruler.before("link", "wikilink", _wikilink)
     md.core.ruler.push("ancoras", _ancoras)
     md.core.ruler.push("tarefas", _tarefas)
+    md.core.ruler.push("url_solta", _url_solta)
     md.add_render_rule("wikilink", _render_wikilink)
     md.add_render_rule("link_open", _render_link_open)
     md.add_render_rule("image", _render_imagem)
