@@ -155,6 +155,11 @@ nav a svg { flex-shrink: 0; }
                padding: 8px 8px 2px; border-top: 1px solid var(--line-soft); margin-top: 2px; }
 .arvore-topo .eyebrow { margin: 0; }
 .arvore-ferramentas { display: flex; gap: 2px; }
+.filtro-arvore { font: inherit; font-size: 12.5px; margin: 4px 2px 4px; padding: 6px 10px;
+  border: 1px solid var(--line); border-radius: var(--r-inner); background: var(--surface);
+  color: var(--ink); }
+.filtro-arvore:focus { outline: none; border-color: var(--faint); }
+.filtro-vazio { padding: 2px 8px; }
 .arvore .arquivo[aria-current="page"] { background: var(--soft); color: var(--accent);
                                          font-weight: 600; }
 .arvore .achado { display: block; white-space: normal; }
