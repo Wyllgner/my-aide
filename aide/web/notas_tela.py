@@ -51,6 +51,9 @@ def _ramo(itens: list[dict], aberto: str) -> str:
             abre = " open" if aberto.startswith(item["caminho"] + "/") else ""
             html += (f'<details{abre} data-pasta="{caminho}"><summary>'
                      f'{icone("pasta", 14)}<span class="nome-pasta">{escape(item["nome"])}</span>'
+                     f'<button type="button" class="nova-na-pasta" data-pasta="{caminho}"'
+                     f' title="nova nota nesta pasta"'
+                     f' aria-label="nova nota em {escape(item["nome"])}">{icone("nova-nota", 14)}</button>'
                      f'<button type="button" class="renomear-pasta" data-pasta="{caminho}"'
                      f' title="renomear ou mover a pasta"'
                      f' aria-label="renomear {escape(item["nome"])}">{icone("renomear", 14)}</button>'
