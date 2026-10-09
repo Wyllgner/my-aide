@@ -113,7 +113,7 @@ def test_script_importa_so_o_que_o_bundle_exporta(cliente):
     from aide.web.desenho_script import JS
 
     importado = re.search(r"import \{([^}]*)\} from", JS).group(1)
-    nomes = {n.strip() for n in importado.split(",")}
+    nomes = {n.strip() for n in importado.split(",")} - {""}
     entrada = cliente.get("/vendor/excalidraw/excalidraw.js").text
     exportado = re.search(r"export\{([^}]*)\}", entrada).group(1)
     publicos = {parte.split(" as ")[-1].strip() for parte in exportado.split(",")}
