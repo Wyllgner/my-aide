@@ -474,3 +474,10 @@ def test_trecho_da_busca_nao_vira_html():
     from aide.web.notas_tela import _trecho
 
     assert _trecho("<img src=x> lt", ["img"]) == "&lt;<mark>img</mark> src=x&gt; lt"
+
+
+def test_a_lista_de_notas_vem_mesmo_sem_nota_aberta(cliente):
+    """O abrir rápido (Ctrl+O) precisa dela na página das pastas também."""
+    html = cliente.get("/notas?geral=1").text
+    assert '<div class="notas" data-notas="[' in html
+    assert 'id="abrir-rapido"' in html and "Ctrl+O" in html

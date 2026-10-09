@@ -398,6 +398,28 @@ nav a svg { flex-shrink: 0; }
 
 /* grafo */
 .atalhos { display: flex; flex-direction: column; gap: 1px; margin-bottom: 2px; }
+button.atalho-visao { width: 100%; border: 0; background: none; font: inherit; font-size: 13px;
+  text-align: left; cursor: pointer; }
+.atalho-visao kbd { margin-left: auto; font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 10.5px; color: var(--faint); }
+
+/* abrir nota rápido (Ctrl+O): a caixa no meio da tela, por cima de tudo */
+.seletor-fundo { position: fixed; inset: 0; z-index: 30; display: flex; justify-content: center;
+  align-items: flex-start; padding: 14vh 16px 0; background: rgba(21, 23, 28, .18); }
+.seletor { width: min(560px, 100%); background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-inner); box-shadow: 0 16px 48px rgba(21, 23, 28, .18); overflow: hidden; }
+.seletor input { width: 100%; box-sizing: border-box; border: 0; border-bottom: 1px solid var(--line);
+  padding: 14px 16px; font: inherit; font-size: 15px; color: var(--ink); background: transparent;
+  outline: none; }
+.seletor-lista { list-style: none; margin: 0; padding: 6px; max-height: 50vh; overflow-y: auto; }
+.seletor-lista li { display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+  padding: 7px 10px; border-radius: 7px; cursor: pointer; font-size: 14px; }
+.seletor-lista li[aria-selected="true"] { background: var(--soft); color: var(--accent); }
+.seletor-lista li.vazio { cursor: default; color: var(--faint); }
+.seletor-lista .onde { font-size: 11.5px; color: var(--faint); min-width: 0; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.seletor .dica { margin: 0; padding: 8px 16px; font-size: 11.5px; color: var(--faint);
+  border-top: 1px solid var(--line); }
 .grafo-topo { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
 .grafo-topo .onde { font-size: 11.5px; color: var(--faint); }
 .grafo { width: 100%; height: 66vh; background: var(--paper); border-radius: var(--r-inner);
