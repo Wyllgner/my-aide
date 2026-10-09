@@ -84,6 +84,57 @@ JS = r"""
     });
   });
 
+  // ---------- renomear e mover pasta ----------
+  document.querySelectorAll(".renomear-pasta").forEach(function (botao) {
+    botao.addEventListener("click", function (e) {
+      // o botão mora no <summary>: sem isto o clique abre e fecha a pasta
+      e.preventDefault();
+      e.stopPropagation();
+      var de = botao.dataset.pasta;
+      var resumo = botao.closest("summary");
+      if (resumo.querySelector("form")) { return; }
+      var form = document.createElement("form");
+      form.className = "renomear-pasta-form";
+      var campo = document.createElement("input");
+      campo.value = de;
+      campo.setAttribute("aria-label", "caminho da pasta");
+      campo.spellcheck = false;
+      var erro = document.createElement("span");
+      erro.className = "erro";
+      form.appendChild(campo);
+      form.appendChild(erro);
+      resumo.hidden = true;
+      resumo.parentNode.insertBefore(form, resumo.nextSibling);
+      campo.focus();
+      campo.setSelectionRange(de.lastIndexOf("/") + 1, de.length);
+      function fechar() { form.remove(); resumo.hidden = false; }
+      campo.addEventListener("keydown", function (ev) { if (ev.key === "Escape") { fechar(); } });
+      campo.addEventListener("click", function (ev) { ev.stopPropagation(); });
+      form.addEventListener("submit", function (ev) {
+        ev.preventDefault();
+        var para = campo.value.trim().replace(/^\/+|\/+$/g, "");
+        if (!para || para === de) { fechar(); return; }
+        var editorAberto = document.getElementById("editor");
+        var antes = editorAberto ? editorAberto.dataset.caminho : null;
+        var guardar = window.aideSalvar ? window.aideSalvar() : Promise.resolve();
+        guardar.then(function () {
+          return pedir("POST", "/api/notas/mover-pasta", { de: de, para: para });
+        }).then(function (r) {
+          if (!r.ok) { return erroDe(r).then(function (m) { erro.textContent = m; }); }
+          return r.json().then(function (d) {
+            var n = (d.links_atualizados || []).length;
+            try {
+              sessionStorage.setItem("aide.notas.aviso", n ? (n === 1 ? "1 nota teve o link atualizado"
+                : n + " notas tiveram o link atualizado") : "");
+            } catch (e2) { /* sem armazenamento: só não mostra o aviso */ }
+            var depois = antes && d.notas_movidas[antes];
+            if (depois) { abrir(depois); } else { location.reload(); }
+          });
+        });
+      });
+    });
+  });
+
   // ---------- editor ----------
   var editor = document.getElementById("editor");
   if (!editor) { return; }
@@ -140,6 +191,11 @@ JS = r"""
         if (editor.value !== salvo && conflito.hidden) { agendar(); }
       });
   }
+
+  // a pasta da nota aberta pode mudar de lugar: quem move salva antes
+  window.aideSalvar = function () {
+    return salvar().then(function () { salvo = editor.value; });
+  };
 
   function agendar() {
     clearTimeout(espera);
