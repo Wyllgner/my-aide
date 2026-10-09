@@ -145,10 +145,17 @@ def test_conflito_comeca_escondido(cliente):
     assert re.search(r'<div id="conflito"[^>]*\bhidden\b', _tela(cliente).text)
 
 
-def test_script_salva_com_a_marca_da_pagina_e_sem_mexer_no_privado():
-    """Sem X-Aide a fronteira recusa; e o privado só muda pela caixa (que
-    ainda não existe): o salvamento comum não manda `privada`."""
+def test_script_salva_com_a_marca_da_pagina_e_so_a_caixa_mexe_no_privado():
+    """Sem X-Aide a fronteira recusa. E `privada` só vai no pedido quando a
+    caixa mudou: no salvamento comum o servidor mantém o que está no disco."""
     from aide.web.desenho_script import JS
 
     assert '"X-Aide": "1"' in JS
-    assert "privada" not in JS
+    assert re.findall(r"corpo\.privada\s*=\s*\w+", JS) == ["corpo.privada = pedida"]
+    assert "if (pedida !== null) corpo.privada = pedida;" in JS
+    assert "privada:" not in JS
+
+
+def test_caixa_de_privado_comeca_desabilitada(cliente):
+    """Só depois de o desenho abrir dá para saber se ele é privado."""
+    assert re.search(r'<input type="checkbox" id="privada" disabled>', _tela(cliente).text)

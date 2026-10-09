@@ -49,6 +49,8 @@ def pagina(caminho: str, voltar: str) -> str:
     {f'<span class="desenho-pasta">{escape(pasta)}/</span>' if pasta != "." else ""}<strong>{escape(nome)}</strong>
   </div>
   <span id="desenho-estado" class="desenho-estado" role="status" aria-live="polite">abrindo…</span>
+  <label class="privada" title="privado: o texto do desenho não vai para o modelo nem para a OpenAI">
+    <input type="checkbox" id="privada" disabled>{icone("privada", 15)}<span>privado</span></label>
 </header>
 <div id="conflito" class="conflito desenho-conflito" hidden>
   <span>Este desenho mudou fora daqui desde que você abriu.</span>
