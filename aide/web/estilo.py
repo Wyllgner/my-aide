@@ -252,7 +252,9 @@ nav a svg { flex-shrink: 0; }
 /* ao vivo: clicar num bloco troca ele pelo markdown dele, no mesmo lugar e
    na mesma letra; o espaço vazio embaixo também aceita clique (escreve no fim) */
 .area[data-modo="vivo"] .previa { max-height: none; max-width: 760px; min-height: 58vh;
-                                  cursor: text; }
+                                  cursor: text; padding: 4px 10px; }
+/* o padding acima é onde cabem a sobra de 8px do bloco aberto e a sombra
+   do bloco sob o mouse: sem ele, abrir um bloco criava rolagem para o lado */
 .bloco-vivo { display: block; width: calc(100% + 16px); margin: -4px -8px .9em; padding: 4px 8px;
               border: 0; border-radius: var(--r-inner); background: var(--line-soft);
               font: inherit; line-height: inherit; color: var(--ink); resize: none;
