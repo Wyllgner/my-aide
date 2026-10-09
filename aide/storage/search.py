@@ -33,10 +33,15 @@ ja já nao não sim tambem também so só
 """.split())  # noqa: SIM905 - a string é mais legível de manter que 60 literais
 
 
+def termos_da_consulta(texto: str) -> list[str]:
+    """As palavras que a busca procura de fato: sem as curtas e as vazias."""
+    return [t for t in _TERMO.findall(texto.lower())
+            if len(t) > 2 and t not in STOPWORDS]
+
+
 def preparar_consulta(texto: str) -> str:
     """Transforma a frase do usuário numa consulta FTS5 segura."""
-    termos = [t for t in _TERMO.findall(texto.lower())
-              if len(t) > 2 and t not in STOPWORDS]
+    termos = termos_da_consulta(texto)
     if not termos:
         return ""
     # OR para não exigir todos os termos; o rank cuida da ordem

@@ -104,27 +104,54 @@ def _escolher(ctx, raiz: Path, arquivo: str | None, nota: int | None,
     return _mais_recente(raiz, indice)
 
 
+# o que é marcação no trecho que o índice devolve: [[alvo|apelido]] fica só
+# o apelido (ou o alvo), e #, *, _, `, o > da citação e [!tipo] somem; o
+# trecho pode vir cortado no meio de um link, e os [[ ou ]] soltos também saem
+_WIKI = re.compile(r"!?\[\[(?:[^\]|]*\|)?([^\]]*)\]\]")
+_MARCAS = re.compile(r"\[![\w-]+\][+-]?|(?<!\w)#{1,6}\s|(?<!\S)>+\s|[*_`]+|!?\[\[|\]\]")
+
+
+def _trecho(texto: str, termos: list[str]) -> str:
+    """O trecho do achado em texto corrido, com as palavras buscadas marcadas."""
+    limpo = " ".join(_MARCAS.sub(" ", _WIKI.sub(r"\1", texto)).split())[:140]
+    html = escape(limpo)
+    if termos:
+        padrao = re.compile("|".join(re.escape(escape(t)) for t in termos), re.IGNORECASE)
+        html = padrao.sub(lambda m: f"<mark>{m.group(0)}</mark>", html)
+    return html
+
+
 def _busca(ctx, raiz: Path, busca: str, aberto: str | None) -> str:
     """Direto no índice, e não pela tool do modelo: `notes.search` esconde as
     privadas de propósito, e aqui quem procura é o dono. Sem embedder, que é
     o que a página tem — a consulta também não sai da máquina."""
-    from aide.storage.search import buscar
+    from aide.storage.search import buscar, termos_da_consulta
 
-    itens = ""
-    for a in buscar(ctx.conn, busca, embedder=None, limite=20,
-                    incluir_privadas=ctx.ver_privado):
+    termos = termos_da_consulta(busca)
+    achados = buscar(ctx.conn, busca, embedder=None, limite=20,
+                     incluir_privadas=ctx.ver_privado)
+    # a nota cujo título tem o que você buscou vem antes: é ela que você quer
+    # quase sempre, e o rank do texto às vezes a põe por último
+    def no_titulo(achado) -> int:
+        titulo = (achado.get("title") or "").casefold()
+        return 0 if termos and all(t in titulo for t in termos) else 1
+
+    itens, quantos = "", 0
+    for a in sorted(achados, key=no_titulo):
         row = ctx.conn.execute("SELECT path FROM notes WHERE id = ?", (a["id"],)).fetchone()
         try:
             relativo = vault.relativo_de(raiz, Path(row["path"]))
         except (TypeError, ValueError):
             continue
         atual = ' aria-current="page"' if relativo == aberto else ""
-        trecho = (f'<span class="trecho">{escape(a["trecho"][:110])}</span>'
+        trecho = (f'<span class="trecho">{_trecho(a["trecho"], termos)}</span>'
                   if a.get("trecho") else "")
         itens += (f'<a class="arquivo achado" href="{escape(_href(relativo))}&amp;busca='
                   f'{escape(quote(busca))}"{atual}>{escape(a.get("title") or relativo)}'
                   f'<span class="onde">{escape(relativo)}</span>{trecho}</a>')
-    return itens or '<p class="vazio">Nada encontrado.</p>'
+        quantos += 1
+    topo = f'<p class="eyebrow">{formato.plural(quantos, "resultado")}</p>'
+    return topo + itens if itens else '<p class="vazio">Nada encontrado.</p>'
 
 
 # ao vivo: a nota formatada, e o bloco clicado vira markdown ali mesmo
