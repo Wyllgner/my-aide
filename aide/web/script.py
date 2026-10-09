@@ -473,6 +473,11 @@ JS = r"""
       e.preventDefault();
       salvar();
     }
+    // F2 renomeia, como no Obsidian
+    if (e.key === "F2" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      document.getElementById("botao-renomear").click();
+    }
     // Ctrl+E alterna entre escrever e ler, como no Obsidian
     if ((e.ctrlKey || e.metaKey) && e.key === "e") {
       e.preventDefault();
@@ -719,17 +724,22 @@ JS = r"""
   });
 
   // apagar pede um segundo clique em vez de uma caixa de diálogo
+  // só o rótulo muda, o ícone fica; Esc ou 4 s sem clicar desarmam
   var apagar = document.getElementById("apagar");
+  var rotuloApagar = apagar.querySelector(".rotulo");
   var armado = null;
+  function desarmar() {
+    clearTimeout(armado);
+    armado = null;
+    rotuloApagar.textContent = "apagar";
+    delete apagar.dataset.armado;
+  }
+  apagar.addEventListener("keydown", function (e) { if (e.key === "Escape") { desarmar(); } });
   apagar.addEventListener("click", function () {
     if (!armado) {
-      apagar.textContent = "clique de novo para apagar";
+      rotuloApagar.textContent = "confirmar";
       apagar.dataset.armado = "1";
-      armado = setTimeout(function () {
-        armado = null;
-        apagar.textContent = "apagar";
-        delete apagar.dataset.armado;
-      }, 4000);
+      armado = setTimeout(desarmar, 4000);
       return;
     }
     pedir("DELETE", "/api/notas/arquivo?caminho=" + encodeURIComponent(caminho)).then(function (r) {
