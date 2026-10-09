@@ -376,7 +376,7 @@ nav a svg { flex-shrink: 0; }
 /* renomear pasta: em tela de toque o lápis fica à vista, fraco — não há
    "passar o mouse" para fazê-lo aparecer */
 .arvore .nome-pasta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.renomear-pasta, .apagar-pasta { font: inherit; font-size: 11.5px; border: 0; background: none;
+.nova-na-pasta, .renomear-pasta, .apagar-pasta { font: inherit; font-size: 11.5px; border: 0; background: none;
                                  min-width: 24px; height: 24px; padding: 0 5px;
                                  display: inline-flex; align-items: center;
                                  justify-content: center; gap: 4px; color: var(--muted);
@@ -385,14 +385,15 @@ nav a svg { flex-shrink: 0; }
 /* com mouse, somem até você passar por cima da pasta: dez pastas com dois
    ícones cada viram ruído. O apagar esperando o segundo clique fica à vista */
 @media (hover: hover) {
-  .renomear-pasta, .apagar-pasta { opacity: 0; transition: opacity .12s; }
+  .nova-na-pasta, .renomear-pasta, .apagar-pasta { opacity: 0; transition: opacity .12s; }
 }
+.arvore summary:hover .nova-na-pasta, .nova-na-pasta:focus-visible,
 .arvore summary:hover .renomear-pasta, .renomear-pasta:focus-visible,
 .arvore summary:hover .apagar-pasta, .apagar-pasta:focus-visible,
 .apagar-pasta[data-armado] { opacity: 1; }
-.renomear-pasta:focus-visible, .apagar-pasta:focus-visible {
+.nova-na-pasta:focus-visible, .renomear-pasta:focus-visible, .apagar-pasta:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 1px; }
-.renomear-pasta:hover { color: var(--ink); background: var(--surface); }
+.nova-na-pasta:hover, .renomear-pasta:hover { color: var(--ink); background: var(--surface); }
 .apagar-pasta:hover { color: var(--accent); background: var(--surface); }
 /* armado: o segundo clique manda a pasta para a lixeira */
 .apagar-pasta[data-armado] { opacity: 1; color: #fff; background: var(--accent); font-weight: 600; }

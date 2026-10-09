@@ -138,11 +138,12 @@ JS = r"""
   var erro = document.getElementById("criar-erro");
   var criando = null;
 
-  function pedirNome(tipo) {
+  // `naPasta`: o "+" de uma pasta da árvore; sem ele, a pasta da nota aberta
+  function pedirNome(tipo, naPasta) {
     criando = tipo;
     form.hidden = false;
     erro.textContent = "";
-    var pasta = form.dataset.pasta;
+    var pasta = naPasta !== undefined ? naPasta : form.dataset.pasta;
     nome.placeholder = tipo === "nota" ? "nome da nota" : "nome da pasta";
     nome.setAttribute("aria-label", nome.placeholder);
     nome.value = pasta ? pasta + "/" : "";
@@ -152,6 +153,15 @@ JS = r"""
   if (form) {
     document.getElementById("nova-nota").addEventListener("click", function () { pedirNome("nota"); });
     document.getElementById("nova-pasta").addEventListener("click", function () { pedirNome("pasta"); });
+    document.querySelectorAll(".nova-na-pasta").forEach(function (botao) {
+      botao.addEventListener("click", function (e) {
+        // o clique é do botão, não da pasta: ela não abre nem fecha
+        e.preventDefault();
+        e.stopPropagation();
+        pedirNome("nota", botao.dataset.pasta);
+        form.scrollIntoView({ block: "nearest" });
+      });
+    });
     nome.addEventListener("keydown", function (e) {
       if (e.key === "Escape") { form.hidden = true; erro.textContent = ""; }
     });
