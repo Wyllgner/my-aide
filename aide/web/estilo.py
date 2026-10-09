@@ -207,6 +207,9 @@ nav a svg { flex-shrink: 0; }
 .previa .wikilink.quebrado:hover { color: var(--accent); border-color: var(--accent); }
 .previa .imagem-externa::before { content: "▧ "; color: var(--faint); }
 .previa .anexo { color: var(--muted); }
+.previa .anexo-imagem { max-width: 100%; height: auto; border-radius: var(--r-inner);
+                        display: block; margin: 6px 0; }
+.previa .anexo-midia { max-width: 100%; display: block; margin: 6px 0; }
 .previa .anexo::before { content: "⎘ "; color: var(--faint); }
 .propriedades { display: grid; grid-template-columns: max-content 1fr; gap: 3px 14px;
                 margin: 0 0 16px; padding: 10px 12px; border-radius: var(--r-inner);
