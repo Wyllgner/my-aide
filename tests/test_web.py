@@ -722,8 +722,9 @@ def test_a_web_so_pode_calar_a_trilha_porque_as_telas_nao_escrevem(app):
     assert app.state.contexto().auditar is False
     escrita = {rota.path for rota in app.routes
                if getattr(rota, "methods", set()) - {"GET", "HEAD"}}
+    # /api/notas/anexo audita também (test_anexos)
     assert escrita == {"/api/notas/arquivo", "/api/notas/pasta", "/api/notas/mover",
-                       "/api/notas/mover-pasta"}
+                       "/api/notas/mover-pasta", "/api/notas/anexo"}
 
 
 # ---------- a janela antiga ----------
