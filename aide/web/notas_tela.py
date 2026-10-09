@@ -163,14 +163,16 @@ def _quebrados(raiz: Path, quebrados: list[grafo.Ligacao]) -> str:
     primeiro — o mesmo que o clique no link quebrado faz na prévia."""
     por_alvo: dict[str, list[grafo.Ligacao]] = {}
     for lig in quebrados:
-        por_alvo.setdefault(markdown.chave_link(lig.citacao.alvo), []).append(lig)
+        nome = lig.citacao.caminho_pedido(lig.origem).rpartition("/")[2]
+        por_alvo.setdefault(markdown.chave_link(nome), []).append(lig)
     if not por_alvo:
         return '<p class="vazio">Nenhum link quebrado.</p>'
     itens = ""
-    for ligs in sorted(por_alvo.values(), key=lambda ls: (-len(ls), ls[0].citacao.alvo.casefold())):
-        alvo = ligs[0].citacao.alvo
+    for chave in sorted(por_alvo, key=lambda k: (-len(por_alvo[k]), k)):
+        ligs = por_alvo[chave]
         origens = list(dict.fromkeys(lig.origem for lig in ligs))
-        novo = _caminho_novo(raiz, alvo, origens[0])
+        novo = _caminho_novo(raiz, ligs[0].citacao.caminho_pedido(ligs[0].origem))
+        alvo = (novo or ligs[0].citacao.alvo).rpartition("/")[2].removesuffix(".md")
         citam = ", ".join(
             f'<a href="{escape(_href(o))}">{escape(o.rpartition("/")[2].removesuffix(".md"))}</a>'
             for o in origens)
@@ -182,12 +184,8 @@ def _quebrados(raiz: Path, quebrados: list[grafo.Ligacao]) -> str:
     return itens
 
 
-def _caminho_novo(raiz: Path, alvo: str, origem: str) -> str | None:
-    """Onde a nota que falta seria criada, ou None se o nome não serve."""
-    caminho = alvo.removesuffix(".md")
-    if "/" not in caminho and "/" in origem:
-        caminho = origem.rpartition("/")[0] + "/" + caminho
-    caminho += ".md"
+def _caminho_novo(raiz: Path, caminho: str) -> str | None:
+    """O caminho, se ele pode virar arquivo no vault; senão None."""
     try:
         vault.resolver(raiz, caminho)
     except vault.ForaDoVault:
@@ -278,7 +276,8 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
         lateral = _ramo(itens, aberto or "") or (
             '<p class="vazio">Nenhuma nota ainda. Crie a primeira com “+ nota”.</p>')
     if quebrados_todos and not quebrados:
-        alvos = len({markdown.chave_link(lig.citacao.alvo) for lig in quebrados_todos})
+        alvos = len({markdown.chave_link(lig.citacao.caminho_pedido(lig.origem)
+                                         .rpartition("/")[2]) for lig in quebrados_todos})
         lateral = (f'<a class="aviso-quebrados" href="/notas?quebrados=1'
                    f'{"&amp;arquivo=" + escape(quote(aberto, safe="/")) if aberto else ""}">'
                    f'{formato.plural(alvos, "link quebrado", "links quebrados")}</a>' + lateral)

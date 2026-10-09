@@ -264,3 +264,13 @@ def test_nome_que_nao_vira_arquivo_nao_ganha_botao(cliente, raiz):
 def test_alvo_quebrado_e_escapado(cliente, raiz):
     (raiz / "Inbox" / "Ideia.md").write_text('[[<img src=x onerror=alert(1)>]]')
     assert "<img src=x" not in cliente.get("/notas?quebrados=1").text
+
+
+def test_quebrado_por_link_markdown_mostra_o_nome_de_verdade(cliente, raiz):
+    (raiz / "Inbox" / "Ideia.md").write_text("[n](Nova%20nota.md) e [r](../Raiz.md) e [f](foto.png)")
+    html = cliente.get("/notas?quebrados=1").text
+    assert "<strong>Nova nota</strong>" in html
+    assert 'data-caminho="Inbox/Nova nota.md"' in html
+    assert 'data-caminho="Raiz.md"' in html
+    lista = html[html.index('<div class="arvore"'):html.index("voltar às pastas")]
+    assert "foto" not in lista
