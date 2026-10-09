@@ -323,6 +323,10 @@ def _editor(raiz: Path, aberto: str, agora: datetime, indice: links.Indice,
       {icone("privada", 15)}<span>privada</span></label>
     {_modos(modo)}
     <span class="separador" aria-hidden="true"></span>
+    <button type="button" id="botao-anexar" class="botao"
+      title="anexar imagem, PDF, áudio ou vídeo · também dá para colar (Ctrl+V) ou arrastar para o texto">
+      {icone("anexar", 15)}<span>anexar</span></button>
+    <input type="file" id="escolher-anexo" multiple hidden accept="{",".join(anexos.EXTENSOES)}">
     <button type="button" id="botao-renomear" class="botao" title="renomear ou mover · F2">
       {icone("renomear", 15)}<span>renomear</span></button>
     <button type="button" id="apagar" class="botao botao-perigo"

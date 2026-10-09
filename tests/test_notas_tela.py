@@ -423,3 +423,11 @@ def test_quem_cita_o_quebrado_leva_a_linha_do_link(cliente, raiz):
     assert 'href="/notas?arquivo=Inbox/Ideia.md&amp;linha=2&amp;alvo=Fornecedores">Ideia</a>' in html
     assert '<span class="vezes">2×</span>' in html
     assert '<span class="trecho">falar com [[Fornecedores]] amanhã</span>' in html
+
+
+def test_botao_de_anexar_aceita_so_os_tipos_da_lista(cliente):
+    html = _tela(cliente, "Inbox/Ideia.md")
+    assert 'id="botao-anexar" class="botao"' in html
+    escolher = html.split('id="escolher-anexo"')[1].split(">")[0]
+    assert ".png" in escolher and ".pdf" in escolher
+    assert ".svg" not in escolher and ".html" not in escolher
