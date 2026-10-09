@@ -310,10 +310,11 @@ def _editor(raiz: Path, aberto: str, agora: datetime, indice: links.Indice,
   <button type="button" id="usar-meu" class="botao-fraco">manter o que eu escrevi</button>
 </div>
 <div class="area" data-modo="{modo}">
+<div class="campo"><pre id="realce" class="realce" aria-hidden="true"></pre>
 <textarea id="editor" spellcheck="{"false" if privada else "true"}" data-caminho="{escape(aberto)}"
   data-versao="{escape(str(arquivo.stat().st_mtime_ns))}"
   data-notas="{escape(json.dumps(indice.caminhos, ensure_ascii=False))}">
-{escape(texto)}</textarea>
+{escape(texto)}</textarea></div>
 <article id="previa" class="previa">{markdown.renderizar(texto, aberto, indice, anexos.indice(raiz))}</article>
 </div>
 <div class="ao-redor">{_backlinks(entradas or [])}{local}</div>"""
