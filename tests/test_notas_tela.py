@@ -197,9 +197,9 @@ def test_o_editor_leva_a_lista_de_notas_para_o_autocompletar(cliente):
     assert json.loads(h.unescape(bruto)) == ["Inbox/Ideia.md", "Projetos/Casa/Telhado.md"]
 
 
-def test_os_tres_modos(cliente):
+def test_os_quatro_modos(cliente):
     html = _tela(cliente, "Inbox/Ideia.md")
-    for modo in ("editar", "dividido", "ler"):
+    for modo in ("editar", "dividido", "vivo", "ler"):
         assert f'data-modo="{modo}"' in html
 
 
@@ -209,6 +209,13 @@ def test_o_modo_lembrado_vem_do_cookie(cliente):
     html = _tela(cliente, "Inbox/Ideia.md")
     assert '<div class="area" data-modo="ler">' in html
     assert 'data-modo="ler" aria-pressed="true"' in html
+
+
+def test_o_modo_ao_vivo_tambem_fica_lembrado(cliente):
+    cliente.cookies.set("notas_modo", "vivo")
+    html = _tela(cliente, "Inbox/Ideia.md")
+    assert '<div class="area" data-modo="vivo">' in html
+    assert "data-bloco=" in html  # é por onde o script sabe que linhas abrir
 
 
 def test_cookie_de_modo_estranho_cai_no_padrao(cliente):
@@ -383,7 +390,7 @@ def test_os_botoes_da_nota_tem_icone_e_dica(cliente):
     assert 'title="renomear ou mover · F2"' in html
     assert 'class="botao botao-perigo"' in html
     assert '<span class="rotulo">apagar</span>' in html
-    assert "Ctrl+E alterna editar e ler" in html
+    assert "Ctrl+E alterna com ler" in html
 
 
 def test_a_lateral_diz_onde_a_nota_nova_vai(cliente):

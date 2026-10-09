@@ -214,7 +214,8 @@ nav a svg { flex-shrink: 0; }
 /* arrastando um arquivo por cima: a área inteira aceita */
 .area.soltando { outline: 2px dashed var(--accent); outline-offset: 4px; background: var(--soft); }
 .area[data-modo="dividido"] { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-.area[data-modo="editar"] .previa, .area[data-modo="ler"] .campo { display: none; }
+.area[data-modo="editar"] .previa, .area[data-modo="ler"] .campo,
+.area[data-modo="vivo"] .campo { display: none; }
 
 /* cores no editor: o campo fica transparente por cima de uma cópia colorida
    do mesmo texto (#realce). Os dois precisam quebrar linha no mesmo lugar:
@@ -240,13 +241,24 @@ nav a svg { flex-shrink: 0; }
 .realce .r-citacao { color: var(--muted); }
 .realce .r-front { color: var(--faint); }
 .realce .r-tag { color: #2B5FA8; }
-.area[data-modo="ler"] .previa { border-color: transparent; background: transparent; padding: 4px 2px; }
+.area[data-modo="ler"] .previa, .area[data-modo="vivo"] .previa {
+  border-color: transparent; background: transparent; padding: 4px 2px; }
 
 /* a prévia: leitura confortável, mesma família da página */
 .previa { min-width: 0; overflow: auto; max-height: 70vh; padding: 14px 18px;
           border: 1px solid var(--line-soft); border-radius: var(--r-inner);
           font-size: 14.5px; line-height: 1.7; color: var(--ink); overflow-wrap: anywhere; }
 .area[data-modo="ler"] .previa { max-height: none; max-width: 760px; }
+/* ao vivo: clicar num bloco troca ele pelo markdown dele, no mesmo lugar e
+   na mesma letra; o espaço vazio embaixo também aceita clique (escreve no fim) */
+.area[data-modo="vivo"] .previa { max-height: none; max-width: 760px; min-height: 58vh;
+                                  cursor: text; }
+.bloco-vivo { display: block; width: calc(100% + 16px); margin: -4px -8px .9em; padding: 4px 8px;
+              border: 0; border-radius: var(--r-inner); background: var(--line-soft);
+              font: inherit; line-height: inherit; color: var(--ink); resize: none;
+              overflow: hidden; tab-size: 2; }
+.bloco-vivo:focus { outline: none; box-shadow: inset 2px 0 0 var(--accent); }
+.bloco-pendente { white-space: pre-wrap; color: var(--muted); margin: 0 0 .9em; }
 .previa > :first-child { margin-top: 0; }
 .previa h1, .previa h2, .previa h3 { font-weight: 600; line-height: 1.3; margin: 1.3em 0 .5em; }
 .previa h1 { font-size: 22px; } .previa h2 { font-size: 18px; } .previa h3 { font-size: 15.5px; }

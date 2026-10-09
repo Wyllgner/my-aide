@@ -28,6 +28,8 @@ TRACOS = {
     # as ações da nota
     "editar": "M4 16l.8-3.6 8.4-8.4 2.8 2.8-8.4 8.4zM11.5 5.7l2.8 2.8",
     "dividido": "M3.5 4.5h13v11h-13zM10 4.5v11",
+    # linhas de texto com o cursor no meio delas
+    "vivo": "M3.5 5.5h13M3.5 10h7M3.5 14.5h5M13.5 8v8.5",
     "ler": ("M3.5 5c2.5-1 4.5-1 6.5.5 2-1.5 4-1.5 6.5-.5v10.5c-2.5-1-4.5-1-6.5.5"
             "-2-1.5-4-1.5-6.5-.5zM10 5.5V16"),
     "privada": "M5.5 9h9v7.5h-9zM7.5 9V6.5a2.5 2.5 0 0 1 5 0V9",

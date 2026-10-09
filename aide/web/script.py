@@ -268,9 +268,24 @@ JS = r"""
     estado.dataset.estado = tipo;
   }
 
+  // ao vivo (mais abaixo): o bloco aberto, a prévia que chegou enquanto ele
+  // estava aberto, e de que texto a prévia na tela veio. `mudancas` são os
+  // blocos já fechados que mudaram de tamanho depois dela: com eles, as
+  // linhas dos outros blocos continuam certas até a prévia nova chegar
+  var bloco = null;
+  var guardada = null;
+  var previaVale = editor.value;
+  var mudancas = [];
+
   // o HTML vem do renderizador do servidor, que é quem decide o que é seguro
-  function mostrarPrevia(html) {
-    if (typeof html === "string") { previa.innerHTML = html; }
+  function mostrarPrevia(html, texto) {
+    if (typeof html !== "string") { return; }
+    // trocar a prévia agora apagaria o bloco onde você está escrevendo
+    if (bloco) { guardada = { html: html, texto: texto }; return; }
+    guardada = null;
+    previa.innerHTML = html;
+    previaVale = texto;
+    mudancas = [];
   }
 
   function salvar() {
@@ -285,7 +300,7 @@ JS = r"""
           return r.json().then(function (d) {
             versao = d.versao;
             salvo = texto;
-            mostrarPrevia(d.html);
+            mostrarPrevia(d.html, texto);
             revelarAnexos();
             mostrar(editor.value === salvo ? "salvo" : "não salvo", editor.value === salvo ? "salvo" : "pendente");
           });
@@ -453,11 +468,16 @@ JS = r"""
   }
   window.aideRealcar = agendarRealce;
 
-  // ---------- modos: editar, lado a lado, ler ----------
-  var MODOS = ["editar", "dividido", "ler"];
+  // ---------- modos: editar, lado a lado, ao vivo, ler ----------
+  var MODOS = ["editar", "dividido", "vivo", "ler"];
+
+  // o Ctrl+E volta do ler para o modo de escrever que você usava
+  var escrita = area.dataset.modo === "ler" ? "editar" : area.dataset.modo;
 
   function aplicarModo(modo) {
     if (MODOS.indexOf(modo) < 0) { return; }
+    fecharBloco();
+    if (modo !== "ler") { escrita = modo; }
     area.dataset.modo = modo;
     document.querySelectorAll(".modo").forEach(function (b) {
       b.setAttribute("aria-pressed", String(b.dataset.modo === modo));
@@ -483,8 +503,163 @@ JS = r"""
     // Ctrl+E alterna entre escrever e ler, como no Obsidian
     if ((e.ctrlKey || e.metaKey) && e.key === "e") {
       e.preventDefault();
-      aplicarModo(area.dataset.modo === "ler" ? "editar" : "ler");
-      if (area.dataset.modo !== "ler") { editor.focus(); }
+      aplicarModo(area.dataset.modo === "ler" ? escrita : "ler");
+      if (campoVisivel()) { editor.focus(); }
+    }
+  });
+
+  // ---------- ao vivo: escrever na própria prévia ----------
+  // a nota aparece formatada; clicar num bloco troca só ele pelo markdown das
+  // linhas que o servidor marcou em data-bloco="início-fim". O campo da nota
+  // (escondido) continua sendo o texto de verdade: cada tecla no bloco
+  // remonta ele, e salvar, conflito e anexos seguem iguais. Ao sair do bloco,
+  // a prévia nova vem do servidor.
+  function campoVisivel() {
+    return area.dataset.modo === "editar" || area.dataset.modo === "dividido";
+  }
+
+  // as linhas do bloco no texto de agora, contando os blocos que mudaram de
+  // tamanho depois da prévia; null se ele mesmo já mudou
+  function faixaDe(el) {
+    var partes = el.dataset.bloco.split("-");
+    var ini = parseInt(partes[0], 10);
+    var fim = parseInt(partes[1], 10);
+    if (isNaN(ini) || isNaN(fim)) { return null; }
+    for (var i = 0; i < mudancas.length; i++) {
+      var m = mudancas[i];
+      if (ini >= m.fim) { ini += m.delta; fim += m.delta; } else if (fim > m.ini) { return null; }
+    }
+    return [ini, fim];
+  }
+
+  // o texto que aparece antes do clique, dentro do bloco: o cursor vai para
+  // o mesmo trecho no markdown (aproximado, mas cai no lugar quase sempre)
+  function textoAteOClique(el, e) {
+    var no = null;
+    var desloc = 0;
+    if (document.caretPositionFromPoint) {
+      var p = document.caretPositionFromPoint(e.clientX, e.clientY);
+      if (p) { no = p.offsetNode; desloc = p.offset; }
+    } else if (document.caretRangeFromPoint) {
+      var r = document.caretRangeFromPoint(e.clientX, e.clientY);
+      if (r) { no = r.startContainer; desloc = r.startOffset; }
+    }
+    if (!no || !el.contains(no)) { return null; }
+    var faixa = document.createRange();
+    faixa.setStart(el, 0);
+    faixa.setEnd(no, desloc);
+    return faixa.toString();
+  }
+
+  function ajustarAltura(campo) {
+    campo.style.height = "auto";
+    campo.style.height = campo.scrollHeight + "px";
+  }
+
+  // el: o bloco clicado; sem ele, um bloco novo no fim da nota
+  function abrirBloco(el, e) {
+    if (bloco) { return; }
+    var faixa = el ? faixaDe(el) : null;
+    if (editor.value !== previaVale || (el && !faixa)) {
+      // a prévia está atrás do texto: as linhas dela não valem mais
+      mostrar("atualizando a prévia…", "salvando");
+      salvar();
+      return;
+    }
+    var linhas = editor.value.split("\n");
+    var b = { el: el, original: editor.value };
+    var fonte;
+    if (faixa) {
+      b.ini = faixa[0];
+      b.fim = faixa[1];
+      b.cabeca = b.ini > 0 ? linhas.slice(0, b.ini).join("\n") + "\n" : "";
+      b.cauda = b.fim < linhas.length ? "\n" + linhas.slice(b.fim).join("\n") : "";
+      fonte = linhas.slice(b.ini, b.fim).join("\n");
+    } else {
+      // no fim, separado do último bloco por uma linha vazia: sem ela, o
+      // texto novo grudaria no parágrafo de cima
+      b.ini = b.fim = linhas.length;
+      b.cabeca = editor.value ? editor.value.replace(/\n*$/, "\n\n") : "";
+      b.cauda = "\n";
+      fonte = "";
+    }
+    var campo = document.createElement("textarea");
+    campo.className = "bloco-vivo";
+    campo.value = fonte;
+    campo.spellcheck = editor.spellcheck;
+    campo.setAttribute("aria-label", "markdown do bloco");
+    b.campo = campo;
+    bloco = b;
+    if (el) { el.replaceWith(campo); } else { previa.appendChild(campo); }
+    ajustarAltura(campo);
+
+    var cursor = fonte.length;
+    var antes = el && e ? textoAteOClique(el, e) : null;
+    if (antes !== null && antes !== undefined) {
+      var trecho = antes.slice(-16);
+      var achado = trecho ? fonte.indexOf(trecho) : -1;
+      cursor = !trecho ? 0 : achado >= 0 ? achado + trecho.length : cursor;
+    }
+    campo.focus({ preventScroll: true });
+    campo.setSelectionRange(cursor, cursor);
+
+    campo.addEventListener("input", function () {
+      // o bloco do fim, apagado de volta: a nota fica como estava
+      editor.value = !b.el && !campo.value ? b.original : b.cabeca + campo.value + b.cauda;
+      ajustarAltura(campo);
+      privada.checked = marcadaNoTexto();
+      corretor();
+      campo.spellcheck = editor.spellcheck;
+      agendarRealce();
+      agendar();
+    });
+    campo.addEventListener("keydown", function (ev) {
+      if (ev.key === "Escape") { ev.preventDefault(); campo.blur(); }
+    });
+    campo.addEventListener("blur", function () {
+      // trocou de janela: o bloco continua aberto e o foco volta para ele
+      if (!document.hasFocus()) { return; }
+      fecharBloco();
+    });
+  }
+
+  function fecharBloco() {
+    if (!bloco) { return; }
+    var b = bloco;
+    bloco = null;
+    if (editor.value === b.original) {
+      // nada mudou: o bloco de antes volta como estava
+      if (b.el) { b.campo.replaceWith(b.el); } else { b.campo.remove(); }
+    } else {
+      // até a prévia nova chegar, o texto cru do bloco fica no lugar dele
+      var pendente = document.createElement("div");
+      pendente.className = "bloco-pendente";
+      pendente.textContent = b.campo.value;
+      b.campo.replaceWith(pendente);
+      mudancas.push({ ini: b.ini, fim: b.fim, delta: b.campo.value.split("\n").length - (b.fim - b.ini) });
+      previaVale = editor.value;
+    }
+    if (guardada && guardada.texto === editor.value) {
+      mostrarPrevia(guardada.html, guardada.texto);
+      revelarAnexos();
+    } else if (editor.value !== b.original) {
+      salvar();
+    }
+  }
+
+  previa.addEventListener("click", function (e) {
+    if (area.dataset.modo !== "vivo" || bloco) { return; }
+    var alvo = e.target;
+    // link, caixa de tarefa e player fazem o que já faziam
+    if (alvo.closest("a, input, button, audio, video, textarea")) { return; }
+    // selecionando um trecho para copiar
+    if (String(window.getSelection() || "")) { return; }
+    var el = alvo.closest("[data-bloco]");
+    if (el && previa.contains(el)) { abrirBloco(el, e); return; }
+    // no espaço vazio embaixo do último bloco: escrever no fim da nota
+    var ultimo = previa.lastElementChild;
+    if (alvo === previa && (!ultimo || e.clientY > ultimo.getBoundingClientRect().bottom)) {
+      abrirBloco(null, e);
     }
   });
 
@@ -591,17 +766,20 @@ JS = r"""
   // o arquivo vai para o vault (POST /api/notas/anexo) e o ![[...]] entra
   // onde o cursor está, como no Obsidian
   function inserirNoCursor(texto) {
-    if (area.dataset.modo === "ler") {
+    // ao vivo, com um bloco aberto: entra no cursor do bloco
+    var alvo = bloco ? bloco.campo : editor;
+    if (!bloco && !campoVisivel()) {
       // o campo está escondido e o cursor dele pode estar no começo, antes
-      // do frontmatter: no modo ler o anexo vai para o fim da nota
+      // do frontmatter: no modo ler (e ao vivo sem bloco aberto) o anexo vai
+      // para o fim da nota
       editor.setSelectionRange(editor.value.length, editor.value.length);
       texto = (/\n$/.test(editor.value) || !editor.value ? "" : "\n") + texto + "\n";
     }
-    editor.focus({ preventScroll: true });
+    alvo.focus({ preventScroll: true });
     // execCommand mantém o Ctrl+Z; onde não houver, troca direto
     if (!document.execCommand || !document.execCommand("insertText", false, texto)) {
-      editor.setRangeText(texto, editor.selectionStart, editor.selectionEnd, "end");
-      editor.dispatchEvent(new Event("input"));
+      alvo.setRangeText(texto, alvo.selectionStart, alvo.selectionEnd, "end");
+      alvo.dispatchEvent(new Event("input"));
     }
   }
 
@@ -629,7 +807,8 @@ JS = r"""
   // no modo ler o link vai para o fim da nota, e sem isso nada apareceria
   var aRevelar = [];
   function revelarAnexos() {
-    if (!aRevelar.length) { return; }
+    // com um bloco aberto a prévia nova ainda não entrou: espera ela
+    if (!aRevelar.length || bloco) { return; }
     var achado = null;
     previa.querySelectorAll("[src], a.anexo[href]").forEach(function (el) {
       var url = el.getAttribute("src") || el.getAttribute("href") || "";
@@ -679,7 +858,8 @@ JS = r"""
   }
   document.addEventListener("paste", function (e) {
     var alvo = e.target;
-    if (alvo !== editor && alvo && alvo.matches && alvo.matches("input, textarea, [contenteditable]")) {
+    if (alvo !== editor && !(bloco && alvo === bloco.campo) && alvo && alvo.matches &&
+        alvo.matches("input, textarea, [contenteditable]")) {
       return;
     }
     var arquivos = arquivosColados(e);
@@ -713,9 +893,10 @@ JS = r"""
     soltando = 0;
     area.classList.remove("soltando");
     // solto no texto: o link entra onde o arquivo caiu
-    if (e.target === editor && document.caretPositionFromPoint) {
+    var solto = bloco && e.target === bloco.campo ? bloco.campo : e.target === editor ? editor : null;
+    if (solto && document.caretPositionFromPoint) {
       var ponto = document.caretPositionFromPoint(e.clientX, e.clientY);
-      if (ponto && ponto.offsetNode === editor) { editor.setSelectionRange(ponto.offset, ponto.offset); }
+      if (ponto && ponto.offsetNode === solto) { solto.setSelectionRange(ponto.offset, ponto.offset); }
     }
     anexar(Array.prototype.slice.call(e.dataTransfer.files), false);
   });
@@ -780,7 +961,7 @@ JS = r"""
 
     // campo: seleciona o link na linha (ou a linha inteira) e rola até ele
     var linhas = editor.value.split("\n");
-    if (area.dataset.modo === "ler" || linha >= linhas.length) { return; }
+    if (!campoVisivel() || linha >= linhas.length) { return; }
     var inicio = 0;
     for (var i = 0; i < linha; i++) { inicio += linhas[i].length + 1; }
     var texto = linhas[linha];
@@ -921,7 +1102,7 @@ JS = r"""
   document.getElementById("usar-disco").addEventListener("click", function () {
     editor.value = salvo = deDisco.texto;
     versao = deDisco.versao;
-    mostrarPrevia(deDisco.html);
+    mostrarPrevia(deDisco.html, deDisco.texto);
     agendarRealce();
     conflito.hidden = true;
     privada.checked = marcadaNoTexto();
