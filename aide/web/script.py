@@ -33,6 +33,20 @@ JS = r"""
       function () { return "erro " + resposta.status; });
   }
 
+  // o aviso que a página mostra depois de recarregar, num renomear ou mover
+  function guardarAviso(d) {
+    var n = (d.links_atualizados || []).length;
+    var pulou = d.links_nao_atualizados || [];
+    var partes = [];
+    if (n) { partes.push(n === 1 ? "1 nota teve o link atualizado" : n + " notas tiveram o link atualizado"); }
+    if (pulou.length) {
+      partes.push("não consegui atualizar o link em " + pulou.join(", ") + " (arquivo fora de UTF-8 ou sem permissão)");
+    }
+    try {
+      sessionStorage.setItem("aide.notas.aviso", partes.join(" · "));
+    } catch (e) { /* sem armazenamento: só não mostra o aviso */ }
+  }
+
   // ---------- criar nota e pasta ----------
   var form = document.getElementById("criar");
   var nome = document.getElementById("criar-nome");
@@ -122,11 +136,7 @@ JS = r"""
         }).then(function (r) {
           if (!r.ok) { return erroDe(r).then(function (m) { erro.textContent = m; }); }
           return r.json().then(function (d) {
-            var n = (d.links_atualizados || []).length;
-            try {
-              sessionStorage.setItem("aide.notas.aviso", n ? (n === 1 ? "1 nota teve o link atualizado"
-                : n + " notas tiveram o link atualizado") : "");
-            } catch (e2) { /* sem armazenamento: só não mostra o aviso */ }
+            guardarAviso(d);
             var depois = antes && d.notas_movidas[antes];
             if (depois) { abrir(depois); } else { location.reload(); }
           });
@@ -510,11 +520,7 @@ JS = r"""
     }).then(function (r) {
       if (r.ok) {
         return r.json().then(function (d) {
-          var n = (d.links_atualizados || []).length;
-          try {
-            sessionStorage.setItem("aide.notas.aviso", n ? (n === 1 ? "1 nota teve o link atualizado"
-              : n + " notas tiveram o link atualizado") : "");
-          } catch (e2) { /* sem armazenamento: só não mostra o aviso */ }
+          guardarAviso(d);
           salvo = editor.value;
           abrir(d.caminho);
         });

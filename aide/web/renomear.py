@@ -9,6 +9,7 @@ fica como você escreveu.
 
 from __future__ import annotations
 
+import logging
 import posixpath
 import re
 from pathlib import Path
@@ -17,6 +18,8 @@ from urllib.parse import quote, unquote
 from aide.storage import links, vault
 from aide.web import grafo
 from aide.web.markdown import Citacao
+
+log = logging.getLogger(__name__)
 
 CODIGO = re.compile(r"(`+)(.*?)\1")
 
@@ -59,9 +62,14 @@ def _trocar_na_linha(linha: str, citacao: Citacao, novo_wiki: str, novo_href: st
     return linha
 
 
-def _reescrever(raiz: Path, mudancas: dict[str, str], ligacoes: list[grafo.Ligacao]) -> list[str]:
+def _reescrever(raiz: Path, mudancas: dict[str, str], ligacoes: list[grafo.Ligacao],
+                puladas: list[str] | None = None) -> list[str]:
     """Conserta os links depois que as notas de `mudancas` (velho -> novo)
-    mudaram de lugar. `ligacoes` é o mapa de antes da mudança."""
+    mudaram de lugar. `ligacoes` é o mapa de antes da mudança.
+
+    Nunca falha no meio: o arquivo já mudou de lugar, e um erro aqui deixava
+    o banco no caminho velho. A nota que não dá para ler ou gravar (fora de
+    UTF-8, sem permissão) fica como está e vai para `puladas`."""
     depois = links.indice(raiz)
 
     def onde_esta(caminho: str) -> str:
@@ -87,34 +95,51 @@ def _reescrever(raiz: Path, mudancas: dict[str, str], ligacoes: list[grafo.Ligac
 
     mudadas = []
     for nota, lista in trocas.items():
-        arquivo = vault.resolver(raiz, nota)
-        texto = arquivo.read_text(encoding="utf-8")
-        linhas = texto.split("\n")
-        for citacao, destino in lista:
-            if citacao.linha >= len(linhas):
-                continue
-            linhas[citacao.linha] = _trocar_na_linha(
-                linhas[citacao.linha], citacao,
-                _como_wikilink(destino, nota, depois), _como_href(destino, nota))
-        novo = "\n".join(linhas)
-        if novo != texto:
-            vault.gravar(arquivo, novo)
+        try:
+            mudou = _reescrever_nota(raiz, nota, lista, depois)
+        except (OSError, UnicodeDecodeError, vault.ForaDoVault):
+            log.warning("não consegui atualizar os links de %s", nota, exc_info=True)
+            if puladas is not None:
+                puladas.append(nota)
+            continue
+        if mudou:
             mudadas.append(nota)
     return mudadas
 
 
-def mover(raiz: Path, de: str, para: str) -> list[str]:
+def _reescrever_nota(raiz: Path, nota: str, lista: list[tuple[Citacao, str]],
+                     depois: links.Indice) -> bool:
+    """Troca os links de uma nota; True se o texto mudou."""
+    arquivo = vault.resolver(raiz, nota)
+    texto = arquivo.read_text(encoding="utf-8")
+    linhas = texto.split("\n")
+    for citacao, destino in lista:
+        if citacao.linha >= len(linhas):
+            continue
+        linhas[citacao.linha] = _trocar_na_linha(
+            linhas[citacao.linha], citacao,
+            _como_wikilink(destino, nota, depois), _como_href(destino, nota))
+    novo = "\n".join(linhas)
+    if novo == texto:
+        return False
+    vault.gravar(arquivo, novo)
+    return True
+
+
+def mover(raiz: Path, de: str, para: str, puladas: list[str] | None = None) -> list[str]:
     """Move a nota `de` para `para` (caminhos no vault) e conserta os links.
 
-    Devolve os caminhos das notas cujo texto mudou. Quem chama já conferiu
-    os dois caminhos e cuida do índice e da auditoria.
+    Devolve os caminhos das notas cujo texto mudou; as que não deu para
+    atualizar vão para `puladas`. Quem chama já conferiu os dois caminhos e
+    cuida do índice e da auditoria.
     """
     ligacoes = grafo.mapa(raiz).ligacoes
     vault.mover(vault.resolver(raiz, de), vault.resolver(raiz, para))
-    return _reescrever(raiz, {de: para}, ligacoes)
+    return _reescrever(raiz, {de: para}, ligacoes, puladas)
 
 
-def mover_pasta(raiz: Path, de: str, para: str) -> tuple[dict[str, str], list[str]]:
+def mover_pasta(raiz: Path, de: str, para: str,
+                puladas: list[str] | None = None) -> tuple[dict[str, str], list[str]]:
     """Move a pasta `de` para `para` e conserta os links das notas de dentro.
 
     Devolve (velho -> novo de cada nota movida, notas cujo texto mudou). Link
@@ -131,4 +156,4 @@ def mover_pasta(raiz: Path, de: str, para: str) -> tuple[dict[str, str], list[st
                 for c in indice.caminhos if c.startswith(prefixo)}
     ligacoes = grafo.mapa(raiz, indice).ligacoes
     vault.mover_pasta(origem, destino)
-    return mudancas, _reescrever(raiz, mudancas, ligacoes)
+    return mudancas, _reescrever(raiz, mudancas, ligacoes, puladas)
