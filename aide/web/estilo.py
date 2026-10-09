@@ -238,6 +238,12 @@ nav a svg { flex-shrink: 0; }
 .grafo.focado a.no:not(.perto), .grafo.focado line:not(.perto) { opacity: .15; }
 .grafo.focado line.perto { stroke: var(--accent); stroke-width: 1.5; }
 .grafo text.so-perto { display: none; }
+.ao-redor { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px;
+            align-items: start; }
+.ao-redor > :only-child { grid-column: 1 / -1; }
+.local { border-top: 1px solid var(--line-soft); padding-top: 14px; margin-top: 6px; }
+.grafo.local { height: 300px; margin-top: 10px; }
+@media (max-width: 1100px) { .ao-redor { grid-template-columns: 1fr; } }
 .grafo.focado a.perto text.so-perto { display: inline; }
 
 /* links quebrados */
