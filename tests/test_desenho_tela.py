@@ -172,3 +172,10 @@ def test_desenho_privado_desliga_o_corretor_quando_o_campo_nasce():
     troca = JS[JS.index('caixaPrivada.addEventListener("change"'):]
     assert "corretor(raiz);" in troca[:troca.index("});")]
 
+
+def test_desenho_grande_demais_avisa_o_limite():
+    """O 413 vem da fronteira, antes da rota, e não é JSON."""
+    from aide.web.desenho_script import JS
+
+    assert "resposta.status === 413" in JS and "20 MB" in JS
+

@@ -100,6 +100,9 @@ async function salvar() {
       avisar(atual() === salvo ? "salvo" : "alterado");
     } else if (resposta.status === 409) {
       mostrarConflito(dados);
+    } else if (resposta.status === 413) {
+      // quem recusa é a fronteira, antes da rota: a resposta não é JSON
+      avisar("desenho grande demais para salvar (limite de 20 MB)", true);
     } else {
       avisar(dados.detail || "não consegui salvar", true);
     }
