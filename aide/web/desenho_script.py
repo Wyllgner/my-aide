@@ -93,10 +93,16 @@ async function salvar() {
       salvo = enviada;
       // a caixa pode ter mudado de novo enquanto este pedido ia
       if (privadaPedida === pedida) privadaPedida = null;
-      if (privadaPedida === null) caixaPrivada.checked = dados.privada;
+      if (privadaPedida === null) {
+        caixaPrivada.checked = dados.privada;
+        corretor(raiz);
+      }
       avisar(atual() === salvo ? "salvo" : "alterado");
     } else if (resposta.status === 409) {
       mostrarConflito(dados);
+    } else if (resposta.status === 413) {
+      // quem recusa é a fronteira, antes da rota: a resposta não é JSON
+      avisar("desenho grande demais para salvar (limite de 20 MB)", true);
     } else {
       avisar(dados.detail || "não consegui salvar", true);
     }
@@ -132,6 +138,7 @@ document.getElementById("usar-disco").addEventListener("click", () => {
   salvo = atual();
   privadaPedida = null;
   caixaPrivada.checked = conflito.privada;
+  corretor(raiz);
   conflito = null;
   faixaConflito.hidden = true;
   avisar("salvo");
@@ -139,8 +146,24 @@ document.getElementById("usar-disco").addEventListener("click", () => {
 
 caixaPrivada.addEventListener("change", () => {
   privadaPedida = caixaPrivada.checked;
+  corretor(raiz);
   salvar();
 });
+
+// O corretor do navegador pode mandar o texto para fora (o "corretor
+// avançado" do Chrome usa o Google). Em desenho privado, desligado em todo
+// campo de texto do editor, como nas notas privadas. O Excalidraw cria o
+// campo na hora de editar: vale quando ele entra na página, sem depender de
+// evento de foco (que o navegador nem dispara com a janela em segundo plano).
+function corretor(onde) {
+  const campos = onde.matches && onde.matches("textarea, input")
+    ? [onde] : onde.querySelectorAll ? onde.querySelectorAll("textarea, input") : [];
+  for (const campo of campos) campo.spellcheck = !caixaPrivada.checked;
+}
+
+new MutationObserver((mudancas) => {
+  for (const mudanca of mudancas) mudanca.addedNodes.forEach(corretor);
+}).observe(raiz, { childList: true, subtree: true });
 
 // em captura, antes do Excalidraw: o Ctrl+S dele abriria "salvar como"
 window.addEventListener("keydown", (evento) => {

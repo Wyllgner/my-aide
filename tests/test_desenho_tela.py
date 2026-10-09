@@ -159,3 +159,28 @@ def test_script_salva_com_a_marca_da_pagina_e_so_a_caixa_mexe_no_privado():
 def test_caixa_de_privado_comeca_desabilitada(cliente):
     """Só depois de o desenho abrir dá para saber se ele é privado."""
     assert re.search(r'<input type="checkbox" id="privada" disabled>', _tela(cliente).text)
+
+
+def test_desenho_privado_desliga_o_corretor_quando_o_campo_nasce():
+    """O corretor avançado do Chrome manda o texto para o Google. O campo de
+    texto do Excalidraw nasce na hora de editar, e evento de foco nem sempre
+    dispara: vale o MutationObserver, e a troca da caixa reaplica."""
+    from aide.web.desenho_script import JS
+
+    assert "campo.spellcheck = !caixaPrivada.checked" in JS
+    assert ".observe(raiz, { childList: true, subtree: true })" in JS
+    troca = JS[JS.index('caixaPrivada.addEventListener("change"'):]
+    assert "corretor(raiz);" in troca[:troca.index("});")]
+
+
+def test_desenho_grande_demais_avisa_o_limite():
+    """O 413 vem da fronteira, antes da rota, e não é JSON."""
+    from aide.web.desenho_script import JS
+
+    assert "resposta.status === 413" in JS and "20 MB" in JS
+
+
+def test_procurar_bibliotecas_escondido():
+    from aide.web.estilo import CSS
+
+    assert ".library-menu-browse-button {\n  display: none; }" in CSS
