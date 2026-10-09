@@ -1,10 +1,10 @@
 """A aplicação web.
 
-**Quase só leitura.** A única escrita é a das notas (`notas_api.py`), porque o
-vault virou o caderno que se escreve aqui. O resto — concluir tarefa, lançar
+**Quase só leitura.** A única escrita é a do vault: notas (`notas_api.py`) e
+desenhos (`desenhos_api.py`), porque ele virou o caderno que se escreve aqui. O resto — concluir tarefa, lançar
 gasto, conversar — continua sendo CLI, Telegram ou MCP. Escrita tem preço:
 CSRF, DNS rebinding e o clique errado numa aba esquecida. `seguranca.py` paga
-os dois primeiros para todas as rotas, e `test_so_as_notas_escrevem` impede
+os dois primeiros para todas as rotas, e `test_so_o_vault_escreve` impede
 que uma rota de escrita nova apareça sem passar por essa decisão.
 
 **Só nesta máquina.** A página mostra tudo, inclusive o que está marcado como
@@ -67,9 +67,10 @@ def criar_app(config=None, conn_factory=None):
 
     app.state.contexto = contexto
 
-    from aide.web import notas_api
+    from aide.web import desenhos_api, notas_api
 
     notas_api.instalar(app)
+    desenhos_api.instalar(app)
 
     def saldo_atual() -> dict | None:
         """O rodapé da lateral. Falhar aqui não pode derrubar a página inteira."""
