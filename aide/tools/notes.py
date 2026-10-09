@@ -56,6 +56,44 @@ def _nota(ctx: ToolContext, id_ou_titulo):
     return row
 
 
+def _privada_so_no_arquivo(ctx: ToolContext, note_id: int) -> bool:
+    """Para listagem e busca: a nota que o banco tem como normal mas o arquivo
+    marca como privada. Cada achado é conferido e some do resultado."""
+    row = ctx.conn.execute("SELECT id, path, private FROM notes WHERE id = ?",
+                           (note_id,)).fetchone()
+    if row is None:
+        return False
+    try:
+        _negar_se_privada(ctx, row)
+    except ValueError:
+        return True
+    return False
+
+
+def _negar_se_privada(ctx: ToolContext, row) -> None:
+    """Recusa a nota privada a quem não pode vê-la — pelo banco e pelo arquivo.
+
+    O arquivo conta porque marcar `private: true` no Obsidian só chega ao banco
+    na reindexação, até quinze minutos depois; nesse meio-tempo a nota já é
+    privada para você e não pode sair. Achando a marca só no arquivo, o banco é
+    posto em dia na hora (e o vetor some), como a reconciliação faria.
+    """
+    if ctx.ver_privado:
+        return
+    if row["private"]:
+        raise ValueError("essa nota é privada; ela não sai desta máquina")
+    try:
+        marcada = vault.privada(vault.ler(Path(row["path"]))[0])
+    except OSError:
+        return
+    if marcada:
+        from aide.storage.search import remover_vetor
+
+        ctx.conn.execute("UPDATE notes SET private = 1 WHERE id = ?", (row["id"],))
+        remover_vetor(ctx.conn, row["id"])
+        raise ValueError("essa nota é privada; ela não sai desta máquina")
+
+
 @registry.register(
     name="notes.create",
     description=(
@@ -133,8 +171,7 @@ def append(ctx: ToolContext, body: str, id: int | None = None,
         raise ValueError("informe id ou title")
 
     row = _nota(ctx, id if id is not None else title)
-    if row["private"] and not ctx.ver_privado:
-        raise ValueError("essa nota é privada; ela não sai desta máquina")
+    _negar_se_privada(ctx, row)
     caminho = Path(row["path"])
     if not caminho.exists():
         raise ValueError(f"o arquivo da nota sumiu: {caminho}")
@@ -223,8 +260,7 @@ def read(ctx: ToolContext, id: int | None = None, title: str | None = None) -> d
         raise ValueError("informe id ou title")
 
     row = _nota(ctx, id if id is not None else title)
-    if row["private"] and not ctx.ver_privado:
-        raise ValueError("essa nota é privada; ela não sai desta máquina")
+    _negar_se_privada(ctx, row)
     caminho = Path(row["path"])
     if not caminho.exists():
         raise ValueError(f"o arquivo da nota sumiu: {caminho}")
@@ -259,8 +295,7 @@ def note_links(ctx: ToolContext, id: int | None = None, title: str | None = None
     if id is None and title is None:
         raise ValueError("informe id ou title")
     row = _nota(ctx, id if id is not None else title)
-    if row["private"] and not ctx.ver_privado:
-        raise ValueError("essa nota é privada; ela não sai desta máquina")
+    _negar_se_privada(ctx, row)
     raiz = Path(ctx.config.vault_dir)
     try:
         aberta = vault.relativo_de(raiz, Path(row["path"]))
@@ -340,6 +375,8 @@ def list_notes(ctx: ToolContext, limit: int = 20, tag: str | None = None) -> lis
     agora = now_in(ctx.config.timezone)
     saida = []
     for r in ctx.conn.execute(sql, params).fetchall():
+        if not ctx.ver_privado and _privada_so_no_arquivo(ctx, r["id"]):
+            continue
         linha = dict(r)
         # o updated_at vem do datetime('now'): UTC, com espaço no lugar do T
         linha["quando"] = data_curta(linha["updated_at"].replace(" ", "T") + "+00:00", agora)
@@ -377,6 +414,7 @@ def search(ctx: ToolContext, query: str, limit: int = 5) -> list[dict]:
         {**{k: v for k, v in a.items() if k != "score"}, "tipo": "nota"}
         for a in buscar(ctx.conn, query, embedder=getattr(ctx, "embedder", None),
                         limite=limit, incluir_privadas=False)
+        if not _privada_so_no_arquivo(ctx, a["id"])
     ]
     achados.extend(buscar_episodios(ctx.conn, query, limite=limit))
     return achados[: limit * 2]
@@ -390,6 +428,8 @@ def search(ctx: ToolContext, query: str, limit: int = 5) -> list[dict]:
 )
 def delete(ctx: ToolContext, id: int) -> dict:
     row = _nota(ctx, id)
+    # apagar também revelaria a nota: o título volta na resposta
+    _negar_se_privada(ctx, row)
     ctx.conn.execute("UPDATE notes SET deleted_at = datetime('now') WHERE id = ?", (id,))
     remover_do_indice(ctx.conn, id)
     # o arquivo sai do vault junto com a linha: deixá-lo ali criava a nota que

@@ -194,3 +194,52 @@ def test_trilha_de_auditoria_continua_completa(com_segredos, registry):
     linhas = com_segredos.conn.execute(
         "SELECT tool, args_json FROM audit ORDER BY id").fetchall()
     assert any(SEGREDO in (r["args_json"] or "") for r in linhas)
+
+
+# ---------- privada marcada só no arquivo ----------
+
+@pytest.fixture
+def marcada_no_obsidian(dono, registry):
+    """`private: true` escrito no Obsidian; o banco ainda não reindexou."""
+    from pathlib import Path
+
+    nota = registry.call("notes.create", {"title": "Diário", "body": f"{SEGREDO} e [[Terapia]]"},
+                         dono).data
+    caminho = Path(nota["path"])
+    caminho.write_text(caminho.read_text().replace("---\n\n", "private: true\n---\n\n", 1))
+    return nota
+
+
+@pytest.mark.parametrize("tool, args", [
+    ("notes.read", {"title": "Diário"}),
+    ("notes.links", {"title": "Diário"}),
+    ("notes.append", {"title": "Diário", "body": "x"}),
+    ("notes.delete", {"id": 1}),
+])
+def test_privada_so_no_arquivo_ja_e_privada(marcada_no_obsidian, modelo, registry, tool, args):
+    resultado = registry.call(tool, args, modelo)
+    assert not resultado.ok
+    assert SEGREDO not in str(resultado.error) and "Terapia" not in str(resultado.error)
+
+
+def test_achar_a_marca_no_arquivo_poe_o_banco_em_dia(marcada_no_obsidian, modelo, registry, ctx):
+    registry.call("notes.read", {"title": "Diário"}, modelo)
+    assert ctx.conn.execute("SELECT private FROM notes").fetchone()[0] == 1
+    titulos = [n["title"] for n in registry.call("notes.list", {}, modelo).data]
+    assert "Diário" not in titulos
+
+
+def test_nota_privada_nao_pode_ser_apagada_pelo_modelo(com_segredos, modelo, registry):
+    resultado = registry.call("notes.delete", {"id": 1}, modelo)
+    assert not resultado.ok
+    assert SEGREDO not in resultado.error
+
+
+@pytest.mark.parametrize("tool, args", [
+    ("notes.list", {}), ("notes.search", {"query": "Diário"}), ("notes.search", {"query": "Terapia"}),
+])
+def test_privada_so_no_arquivo_some_da_lista_e_da_busca(marcada_no_obsidian, modelo, registry,
+                                                       tool, args):
+    resultado = registry.call(tool, args, modelo)
+    assert resultado.ok
+    assert "Diário" not in str(resultado.data) and SEGREDO not in str(resultado.data)
