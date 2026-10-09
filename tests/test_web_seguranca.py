@@ -235,6 +235,39 @@ def test_excalidraw_traz_as_proprias_fontes(cliente):
     assert resposta.status_code == 200
     assert resposta.headers["content-type"] == "font/woff2"
     assert resposta.content[:4] == b"wOF2"
+    # o nome não tem hash: uma versão nova com o mesmo nome não pode ficar
+    # um ano presa no cache
+    assert resposta.headers["cache-control"] == "no-cache"
+
+
+def test_excalidraw_sem_hash_no_nome_responde_304(cliente):
+    url = "/vendor/excalidraw/excalidraw.js"
+    etag = cliente.get(url).headers["etag"]
+    resposta = cliente.get(url, headers={"if-none-match": etag})
+    assert resposta.status_code == 304
+    assert resposta.content == b""
+    assert cliente.get(url, headers={"if-none-match": '"outro"'}).status_code == 200
+
+
+def test_excalidraw_todo_import_relativo_existe(cliente):
+    """Varre entrada e partes atrás de import estático e dinâmico, inclusive o
+    do worker de fontes: uma parte faltando só apareceria no navegador."""
+    import posixpath
+    import re
+
+    pendentes, vistos = ["excalidraw/excalidraw.js"], set()
+    while pendentes:
+        caminho = pendentes.pop()
+        if caminho in vistos:
+            continue
+        vistos.add(caminho)
+        resposta = cliente.get(f"/vendor/{caminho}")
+        assert resposta.status_code == 200, caminho
+        for alvo in re.findall(r"""(?:from|import)\s*\(?\s*["'](\.{1,2}/[^"']+\.js)["']""",
+                               resposta.text):
+            pendentes.append(posixpath.normpath(posixpath.join(posixpath.dirname(caminho), alvo)))
+    assert any("subset-worker" in v for v in vistos)
+    assert len(vistos) > 10
 
 
 def test_excalidraw_sem_cdn_nas_partes():
