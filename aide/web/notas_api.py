@@ -117,13 +117,18 @@ def instalar(app) -> None:
             raise HTTPException(404, "nota não encontrada")
         if destino.exists():
             raise HTTPException(409, "já existe uma nota com esse nome")
+        from aide.web import renomear
+
         try:
-            vault.mover(origem, destino)
+            mudadas = renomear.mover(raiz(), de, para)
         except FileExistsError:
             raise HTTPException(409, "já existe uma nota com esse nome") from None
-        mover_no_indice(app.state.conn_factory(), raiz() / de, raiz() / para)
+        conn = app.state.conn_factory()
+        mover_no_indice(conn, raiz() / de, raiz() / para)
+        for nota in mudadas:
+            sincronizar(conn, raiz() / nota)
         auditar("notas.mover", f"{de} → {para}")
-        return {"caminho": para, "versao": versao(destino)}
+        return {"caminho": para, "versao": versao(destino), "links_atualizados": mudadas}
 
     @app.post("/api/notas/pasta", status_code=201)
     def criar_pasta(caminho: str = Body(..., embed=True)) -> dict:
