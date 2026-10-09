@@ -50,7 +50,7 @@ def _ramo(itens: list[dict], aberto: str) -> str:
         if item["tipo"] == "pasta":
             abre = " open" if aberto.startswith(item["caminho"] + "/") else ""
             html += (f'<details{abre} data-pasta="{caminho}"><summary>'
-                     f'<span class="nome-pasta">{escape(item["nome"])}</span>'
+                     f'{icone("pasta", 14)}<span class="nome-pasta">{escape(item["nome"])}</span>'
                      f'<button type="button" class="renomear-pasta" data-pasta="{caminho}"'
                      f' title="renomear ou mover a pasta"'
                      f' aria-label="renomear {escape(item["nome"])}">{icone("renomear", 14)}</button>'
@@ -64,7 +64,7 @@ def _ramo(itens: list[dict], aberto: str) -> str:
         else:
             atual = ' aria-current="page"' if item["caminho"] == aberto else ""
             html += (f'<a class="arquivo" href="{escape(_href(item["caminho"]))}"{atual}'
-                     f' title="{caminho}">{escape(item["nome"])}</a>')
+                     f' title="{caminho}">{icone("nota", 14)}<span>{escape(item["nome"])}</span></a>')
     return html
 
 
@@ -449,8 +449,12 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
     elif quebrados:
         lateral = _quebrados(raiz, quebrados_todos) + voltar
     else:
-        lateral = _ramo(itens, "" if geral or grafo_todo else aberto or "") or (
-            '<p class="vazio">Nenhuma nota ainda. Crie a primeira com “+ nota”.</p>')
+        # o título separa a árvore dos atalhos de cima; as ferramentas dela
+        # (filtrar, recolher) entram ao lado
+        lateral = ('<div class="arvore-topo"><p class="eyebrow">Pastas</p>'
+                   '<span class="arvore-ferramentas"></span></div>'
+                   + (_ramo(itens, "" if geral or grafo_todo else aberto or "") or (
+                       '<p class="vazio">Nenhuma nota ainda. Crie a primeira com “+ nota”.</p>')))
     volta = "&amp;arquivo=" + escape(quote(aberto, safe="/")) if aberto else ""
     de_volta = escape(_href(aberto)) if aberto else "/notas"
 

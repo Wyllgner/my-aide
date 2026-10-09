@@ -47,6 +47,18 @@ JS = r"""
     } catch (e) { /* sem armazenamento: só não mostra o aviso */ }
   }
 
+  // ---------- árvore: a nota aberta à vista ----------
+  // num vault grande, a nota aberta pode estar lá embaixo na lateral
+  (function mostrarAberta() {
+    var lateral = document.querySelector(".notas-lateral");
+    var aberta = lateral && lateral.querySelector('.arvore .arquivo[aria-current="page"]');
+    if (!aberta) { return; }
+    var topo = aberta.offsetTop;
+    if (topo < lateral.scrollTop || topo > lateral.scrollTop + lateral.clientHeight - 40) {
+      lateral.scrollTop = topo - lateral.clientHeight / 2;
+    }
+  })();
+
   // ---------- criar nota e pasta ----------
   var form = document.getElementById("criar");
   var nome = document.getElementById("criar-nome");
