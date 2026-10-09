@@ -334,7 +334,9 @@ def etiquetas(texto: str) -> list[str]:
     """As tags da nota: as do frontmatter e as #tags do texto, sem as de
     dentro de código. Cada uma uma vez, na grafia em que apareceu primeiro."""
     meta, _ = vault.separar(texto)
-    achadas = [t.strip().lstrip("#") for t in meta.get("tags", "").strip("[]").split(",")]
+    # "tag" é o nome antigo da mesma propriedade, e o Obsidian ainda aceita
+    declaradas = ",".join(meta.get(chave, "").strip("[]") for chave in ("tags", "tag"))
+    achadas = [t.strip().lstrip("#") for t in declaradas.split(",")]
     inicio = vault.inicio_do_corpo(texto)
     corpo = "\n".join(texto.split("\n")[inicio:])
     for bloco in MOTOR.parse(corpo, {}):
