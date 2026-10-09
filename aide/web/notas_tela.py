@@ -272,8 +272,16 @@ def _editor(raiz: Path, aberto: str, agora: datetime, indice: links.Indice,
                 f'<p class="vazio">Esta nota tem '
                 f'{arquivo.stat().st_size / 1024 / 1024:.1f} MB, grande demais para abrir'
                 f' aqui. Abra no Obsidian ou num editor de texto.</p>')
-    texto = arquivo.read_text(encoding="utf-8")
-    meta, corpo = vault.ler(arquivo)
+    try:
+        texto = arquivo.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        # um .md antigo do Windows (Latin-1). Abrir trocando o que não se lê
+        # por "�" e salvar estragaria cada acento; melhor não abrir
+        return (f'<h2 style="margin:0;font-size:20px;font-weight:600">{escape(arquivo.stem)}</h2>'
+                f'<p class="vazio">Esta nota não está em UTF-8 e não abre aqui sem'
+                f' estragar os acentos. Abra no Obsidian ou num editor de texto e'
+                f' salve como UTF-8.</p>')
+    meta, corpo = vault.separar(texto)
     privada = vault.privada(meta)
     modificada = datetime.fromtimestamp(arquivo.stat().st_mtime, tz=agora.tzinfo)
     pasta, _, nome = aberto.rpartition("/")

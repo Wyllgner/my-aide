@@ -365,3 +365,11 @@ def test_a_lixeira_conta_as_notas_de_pasta_apagada(cliente, raiz):
     (raiz / ".trash" / "Velha" / "Sub" / "a.md").write_text("x")
     (raiz / ".trash" / "Velha" / "b.md").write_text("x")
     assert "2 arquivos na lixeira" in _tela(cliente)
+
+
+def test_nota_fora_de_utf8_nao_derruba_a_tela(cliente, raiz):
+    """Um .md antigo do Windows: a tela abre com um aviso, em vez de 500."""
+    (raiz / "Inbox" / "Velha.md").write_bytes("acentua\xe7\xe3o".encode("latin-1"))
+    html = _tela(cliente, "Inbox/Velha.md")
+    assert "não está em UTF-8" in html
+    assert 'id="editor"' not in html

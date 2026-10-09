@@ -111,8 +111,11 @@ def instalar(app) -> None:
             raise HTTPException(404, "nota não encontrada")
         if arquivo.stat().st_size > TAMANHO_MAXIMO:
             raise HTTPException(413, "nota grande demais para abrir aqui")
-        return {"caminho": caminho, "texto": arquivo.read_text(encoding="utf-8"),
-                "versao": versao(arquivo)}
+        try:
+            texto = arquivo.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            raise HTTPException(415, "a nota não está em UTF-8") from None
+        return {"caminho": caminho, "texto": texto, "versao": versao(arquivo)}
 
     @app.put("/api/notas/arquivo")
     def salvar(caminho: str = Body(...), texto: str = Body(...),
