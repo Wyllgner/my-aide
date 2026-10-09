@@ -90,9 +90,12 @@ def test_link_markdown_para_outra_nota(indice):
 
 def test_lista_de_tarefas(indice):
     html = _html("- [ ] comprar telha\n- [x] medir o telhado\n- item comum", indice)
-    assert '<input type="checkbox" data-linha="0"> comprar telha' in html
-    assert '<input type="checkbox" data-linha="1" checked> medir o telhado' in html
+    assert '<input type="checkbox" data-linha="0"> <span class="tarefa-texto">comprar telha' in html
+    assert '<input type="checkbox" data-linha="1" checked> <span class="tarefa-texto">medir' in html
     assert '<li data-fonte="2">item comum</li>' in html
+    # a feita é marcada no item, para sair riscada; a de baixo dela não
+    assert '<li class="tarefa feita" data-fonte="1">' in html
+    assert '<li class="tarefa" data-fonte="0">' in html
 
 
 def test_a_linha_da_tarefa_e_a_do_arquivo(indice):

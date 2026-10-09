@@ -243,8 +243,12 @@ def _tarefas(state) -> None:
         caixa.meta = {"feita": casado.group(1) != " ",
                       "linha": state.env.get("deslocamento", 0) + item.map[0]
                       if item.map else None}
-        token.children.insert(0, caixa)
-        tokens[i - 2].attrSet("class", "tarefa")
+        # o texto da tarefa num span: a feita sai riscada sem riscar junto as
+        # subtarefas que estão embaixo dela
+        abre = Token("tarefa_texto_open", "span", 1)
+        abre.attrSet("class", "tarefa-texto")
+        token.children = [caixa, abre] + token.children + [Token("tarefa_texto_close", "span", -1)]
+        tokens[i - 2].attrSet("class", "tarefa feita" if caixa.meta["feita"] else "tarefa")
 
 
 def _render_tarefa(self, tokens, idx, options, env) -> str:
