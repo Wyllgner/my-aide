@@ -452,7 +452,10 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
         # o título separa a árvore dos atalhos de cima; as ferramentas dela
         # (filtrar, recolher) entram ao lado
         lateral = ('<div class="arvore-topo"><p class="eyebrow">Pastas</p>'
-                   '<span class="arvore-ferramentas"></span></div>'
+                   '<span class="arvore-ferramentas">'
+                   '<button type="button" class="ferramenta" id="recolher-pastas"'
+                   ' title="recolher todas as pastas" aria-label="recolher todas as pastas">'
+                   f'{icone("recolher", 14)}</button></span></div>'
                    '<input type="search" class="filtro-arvore" placeholder="filtrar por nome…"'
                    ' aria-label="filtrar a árvore por nome" autocomplete="off" spellcheck="false">'
                    '<p class="vazio-curto filtro-vazio" hidden>Nenhuma nota com esse nome.</p>'
