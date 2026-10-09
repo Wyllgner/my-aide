@@ -394,3 +394,26 @@ def test_outro_erro_de_disco_nao_e_engolido(raiz, monkeypatch):
     with pytest.raises(OSError):
         vault.mover(raiz / "Inbox" / "Nota.md", raiz / "Nova.md")
     assert (raiz / "Inbox" / "Nota.md").exists()
+
+
+# ---------- frontmatter do Obsidian ----------
+
+def test_lista_em_varias_linhas_vira_lista_separada_por_virgula():
+    meta, corpo = vault.separar("---\ntags:\n  - casa\n  - \"projeto/telhado\"\naliases:\n"
+                                "- outro nome\ntitle: Telhado\n---\n\ncorpo")
+    assert meta == {"tags": "casa, projeto/telhado", "aliases": "outro nome", "title": "Telhado"}
+    assert corpo == "corpo"
+
+
+def test_valor_entre_aspas_perde_as_aspas():
+    assert vault.separar('---\ntitle: "Reunião: pauta"\nx: \'y\'\n---\n')[0] == \
+        {"title": "Reunião: pauta", "x": "y"}
+
+
+def test_chave_vazia_sem_lista_continua_vazia():
+    assert vault.separar("---\ntags:\ntitle: x\n---\n")[0] == {"tags": "", "title": "x"}
+
+
+def test_privada_em_yaml_continua_valendo():
+    meta, _ = vault.separar("---\nprivate: true\ntags:\n  - x\n---\n")
+    assert vault.privada(meta)
