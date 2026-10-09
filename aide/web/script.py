@@ -603,6 +603,7 @@ JS = r"""
     campo.focus({ preventScroll: true });
     campo.setSelectionRange(cursor, cursor);
 
+    ligarSugestoes(campo);
     campo.addEventListener("input", function () {
       // o bloco do fim, apagado de volta: a nota fica como estava
       editor.value = !b.el && !campo.value ? b.original : b.cabeca + campo.value + b.cauda;
@@ -993,6 +994,8 @@ JS = r"""
   var achados = [];
   var escolhido = 0;
   var ABERTO = /\[\[([^\[\]\n|#]*)$/;
+  // o campo onde se está digitando: o editor, ou o bloco aberto no ao vivo
+  var campoSugestao = editor;
 
   function comoLink(n) {
     var nome = n.replace(/^.*\//, "").replace(/\.md$/i, "");
@@ -1005,20 +1008,20 @@ JS = r"""
   function posicionar() {
     // um espelho do campo, com o mesmo estilo, mede onde está o cursor
     var espelho = document.createElement("div");
-    var estilo = getComputedStyle(editor);
+    var estilo = getComputedStyle(campoSugestao);
     ["fontFamily", "fontSize", "lineHeight", "padding", "border", "letterSpacing",
      "tabSize", "boxSizing", "width"].forEach(function (p) { espelho.style[p] = estilo[p]; });
     espelho.style.position = "absolute";
     espelho.style.visibility = "hidden";
     espelho.style.whiteSpace = "pre-wrap";
     espelho.style.wordWrap = "break-word";
-    espelho.textContent = editor.value.slice(0, editor.selectionStart);
+    espelho.textContent = campoSugestao.value.slice(0, campoSugestao.selectionStart);
     var marca = document.createElement("span");
     marca.textContent = "\u200b";
     espelho.appendChild(marca);
     document.body.appendChild(espelho);
-    var caixaCampo = editor.getBoundingClientRect();
-    var topo = caixaCampo.top + marca.offsetTop - editor.scrollTop + parseFloat(estilo.lineHeight);
+    var caixaCampo = campoSugestao.getBoundingClientRect();
+    var topo = caixaCampo.top + marca.offsetTop - campoSugestao.scrollTop + parseFloat(estilo.lineHeight);
     var esquerda = caixaCampo.left + marca.offsetLeft;
     document.body.removeChild(espelho);
     caixa.style.top = Math.min(topo, window.innerHeight - 40) + window.scrollY + "px";
@@ -1044,9 +1047,9 @@ JS = r"""
   }
 
   function sugerir() {
-    var antes = editor.value.slice(0, editor.selectionStart);
+    var antes = campoSugestao.value.slice(0, campoSugestao.selectionStart);
     var aberto = antes.match(ABERTO);
-    if (!aberto || editor.selectionStart !== editor.selectionEnd) { fecharSugestoes(); return; }
+    if (!aberto || campoSugestao.selectionStart !== campoSugestao.selectionEnd) { fecharSugestoes(); return; }
     var busca = aberto[1].toLowerCase();
     achados = notas.filter(function (n) {
       return n !== caminho && n.toLowerCase().indexOf(busca) >= 0;
@@ -1063,37 +1066,44 @@ JS = r"""
   }
 
   function inserir(n) {
-    var fim = editor.selectionStart;
-    var antes = editor.value.slice(0, fim);
+    var fim = campoSugestao.selectionStart;
+    var antes = campoSugestao.value.slice(0, fim);
     var aberto = antes.match(ABERTO);
     if (!aberto) { return; }
-    var depois = editor.value.slice(fim);
+    var depois = campoSugestao.value.slice(fim);
     var fecha = depois.indexOf("]]") === 0 ? "" : "]]";
     var link = comoLink(n);
-    editor.value = antes.slice(0, antes.length - aberto[1].length) + link + fecha + depois;
+    campoSugestao.value = antes.slice(0, antes.length - aberto[1].length) + link + fecha + depois;
     var cursor = fim - aberto[1].length + link.length + 2;
-    editor.setSelectionRange(cursor, cursor);
+    campoSugestao.setSelectionRange(cursor, cursor);
     fecharSugestoes();
-    agendarRealce();
-    agendar();
+    // o input faz o resto: cores, salvar e, no bloco, remontar a nota
+    campoSugestao.dispatchEvent(new Event("input"));
   }
 
-  editor.addEventListener("keydown", function (e) {
-    if (caixa.hidden) { return; }
-    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-      e.preventDefault();
-      escolhido = (escolhido + (e.key === "ArrowDown" ? 1 : achados.length - 1)) % achados.length;
-      desenhar();
-    } else if (e.key === "Enter" || e.key === "Tab") {
-      e.preventDefault();
-      inserir(achados[escolhido]);
-    } else if (e.key === "Escape") {
-      fecharSugestoes();
-    }
-  });
-  editor.addEventListener("input", sugerir);
-  editor.addEventListener("blur", fecharSugestoes);
-  editor.addEventListener("scroll", fecharSugestoes);
+  function ligarSugestoes(campo) {
+    campo.addEventListener("keydown", function (e) {
+      if (caixa.hidden || campoSugestao !== campo) { return; }
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        escolhido = (escolhido + (e.key === "ArrowDown" ? 1 : achados.length - 1)) % achados.length;
+        desenhar();
+      } else if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        inserir(achados[escolhido]);
+      } else if (e.key === "Escape") {
+        fecharSugestoes();
+      } else {
+        return;
+      }
+      // a tecla era das sugestões: o bloco não fecha nem troca de bloco
+      e.stopImmediatePropagation();
+    });
+    campo.addEventListener("input", function () { campoSugestao = campo; sugerir(); });
+    campo.addEventListener("blur", fecharSugestoes);
+    campo.addEventListener("scroll", fecharSugestoes);
+  }
+  ligarSugestoes(editor);
 
   window.addEventListener("beforeunload", function (e) {
     if (editor.value !== salvo) { e.preventDefault(); e.returnValue = ""; }
