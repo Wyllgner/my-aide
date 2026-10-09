@@ -152,6 +152,80 @@ def read(ctx: ToolContext, id: int | None = None, title: str | None = None) -> d
 
 
 @registry.register(
+    name="notes.links",
+    description=(
+        "As ligações de uma nota: as notas para as quais ela aponta com [[link]] e as "
+        "que apontam para ela, com a linha em volta de cada citação. É a tool para "
+        "seguir o assunto: depois de achar uma nota com notes.search ou notes.read, "
+        "use esta para ver o que está ligado a ela."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {"id": {"type": "integer"},
+                       "title": {"type": "string", "description": "Alternativa ao id."}},
+        "required": [],
+    },
+)
+def note_links(ctx: ToolContext, id: int | None = None, title: str | None = None) -> dict:
+    """Lê o mapa de links dos arquivos (o mesmo da página de notas).
+
+    Sem `ver_privado`, nota privada some dos dois lados: não aparece como
+    destino nem como quem cita — nem a linha em volta, que é texto dela.
+    """
+    from aide.storage import links
+    from aide.web import grafo
+
+    if id is None and title is None:
+        raise ValueError("informe id ou title")
+    row = _nota(ctx, id if id is not None else title)
+    if row["private"] and not ctx.ver_privado:
+        raise ValueError("essa nota é privada; ela não sai desta máquina")
+    raiz = Path(ctx.config.vault_dir)
+    try:
+        aberta = vault.relativo_de(raiz, Path(row["path"]))
+    except ValueError:
+        raise ValueError("essa nota está fora do vault") from None
+
+    indice = links.indice(raiz)
+    mapa = grafo.mapa(raiz, indice)
+    privadas = _privadas(ctx, raiz, grafo.leituras(raiz, indice))
+
+    def descrever(caminho: str) -> dict:
+        nota = ctx.conn.execute("SELECT id, title FROM notes WHERE path = ? AND deleted_at IS NULL",
+                                (str(raiz / caminho),)).fetchone()
+        return {"id": nota["id"] if nota else None,
+                "title": nota["title"] if nota else Path(caminho).stem, "caminho": caminho}
+
+    aponta, citada = {}, {}
+    for lig in mapa.saidas(aberta):
+        if lig.destino and lig.destino != aberta and lig.destino not in privadas:
+            aponta.setdefault(lig.destino, descrever(lig.destino))
+    for lig in mapa.entradas(aberta):
+        if lig.origem not in privadas:
+            item = citada.setdefault(lig.origem, {**descrever(lig.origem), "trechos": []})
+            if lig.citacao.trecho not in item["trechos"]:
+                item["trechos"].append(lig.citacao.trecho[:200])
+    quebrados = sorted({lig.citacao.alvo for lig in mapa.saidas(aberta) if lig.destino is None})
+    return {"id": row["id"], "title": row["title"],
+            "aponta_para": list(aponta.values()), "citada_por": list(citada.values()),
+            "links_quebrados": quebrados}
+
+
+def _privadas(ctx: ToolContext, raiz: Path, leituras: dict) -> set[str]:
+    """Caminhos (no vault) das notas privadas, pelo banco e pelo arquivo: uma
+    nota marcada no Obsidian e ainda não reindexada também conta."""
+    if ctx.ver_privado:
+        return set()
+    privadas = {caminho for caminho, leitura in leituras.items() if leitura.privada}
+    for r in ctx.conn.execute("SELECT path FROM notes WHERE private = 1 AND deleted_at IS NULL"):
+        try:
+            privadas.add(vault.relativo_de(raiz, Path(r["path"])))
+        except ValueError:
+            continue
+    return privadas
+
+
+@registry.register(
     name="notes.list",
     description="Lista as notas mais recentes.",
     parameters={

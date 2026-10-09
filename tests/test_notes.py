@@ -350,3 +350,58 @@ def test_tirar_a_linha_por_fora_nao_desmarca(ctx, registry, tmp_path):
     reconciliar(ctx.conn, Path(ctx.config.vault_dir), embedder=espiao)
     assert ctx.conn.execute("SELECT private FROM notes").fetchone()[0] == 1
     assert espiao.enviado == []
+
+
+# ---------- notes.links ----------
+
+@pytest.fixture
+def ligadas(ctx, registry, tmp_path):
+    from aide.tools.registry import ToolContext
+
+    _config_vault(ctx, tmp_path)
+    dono = ToolContext(config=ctx.config, conn=ctx.conn, actor="cli", ver_privado=True)
+    registry.call("notes.create", {"title": "Telhado", "body": "trocar as telhas; ver [[Fornecedores]]"}, dono)
+    registry.call("notes.create", {"title": "Fornecedores", "body": "lista"}, dono)
+    registry.call("notes.create", {"title": "Reunião", "body": "decidimos o [[Telhado]] hoje"}, dono)
+    registry.call("notes.create", {"title": "Diário", "body": "SEGREDO sobre o [[Telhado]]",
+                                   "private": True}, dono)
+    registry.call("notes.create", {"title": "Orçamento", "body": "[[Telhado]] e [[Nada]]"}, dono)
+    return dono
+
+
+def test_links_de_uma_nota(ligadas, ctx, registry):
+    dados = registry.call("notes.links", {"title": "Telhado"}, ctx).data
+    assert [n["title"] for n in dados["aponta_para"]] == ["Fornecedores"]
+    citada = {n["title"]: n["trechos"] for n in dados["citada_por"]}
+    assert citada == {"Reunião": ["decidimos o [[Telhado]] hoje"],
+                      "Orçamento": ["[[Telhado]] e [[Nada]]"]}
+    assert all(n["id"] for n in dados["citada_por"])
+
+
+def test_links_quebrados_da_nota(ligadas, ctx, registry):
+    assert registry.call("notes.links", {"title": "Orçamento"}, ctx).data["links_quebrados"] == ["Nada"]
+
+
+def test_nota_privada_nao_aparece_nem_o_trecho(ligadas, ctx, registry):
+    resultado = registry.call("notes.links", {"title": "Telhado"}, ctx)
+    assert "SEGREDO" not in str(resultado.data)
+    assert "Diário" not in str(resultado.data)
+
+
+def test_o_dono_ve_a_privada_citando(ligadas, registry):
+    dados = registry.call("notes.links", {"title": "Telhado"}, ligadas).data
+    assert "Diário" in [n["title"] for n in dados["citada_por"]]
+
+
+def test_links_de_nota_privada_sao_recusados(ligadas, ctx, registry):
+    resultado = registry.call("notes.links", {"title": "Diário"}, ctx)
+    assert not resultado.ok
+    assert "SEGREDO" not in resultado.error
+
+
+def test_privada_marcada_so_no_arquivo_tambem_some(ligadas, ctx, registry):
+    """Marcada no Obsidian e ainda não reindexada: o banco diz normal, o arquivo não."""
+    reuniao = Path(ctx.config.vault_dir) / "Inbox" / "Reunião.md"
+    reuniao.write_text(reuniao.read_text().replace("---\n\n", "private: true\n---\n\n", 1))
+    dados = registry.call("notes.links", {"title": "Telhado"}, ctx).data
+    assert "Reunião" not in str(dados)
