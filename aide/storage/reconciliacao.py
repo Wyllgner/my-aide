@@ -135,6 +135,28 @@ def sincronizar(conn, caminho: Path) -> int:
     return note_id
 
 
+def mover_no_indice(conn, de: Path, para: Path) -> int:
+    """Acompanha no banco uma nota renomeada ou movida; devolve o id.
+
+    A linha é a mesma — busca, histórico e vetor continuam valendo, porque o
+    texto não mudou. Só o caminho e, se o título vinha do nome do arquivo, o
+    título. Linha apagada que tinha o caminho novo sai do caminho: ele é
+    único no banco, e o arquivo que ela marcava já está na lixeira.
+    """
+    conn.execute("UPDATE notes SET path = path || '#apagada-' || id"
+                 " WHERE path = ? AND deleted_at IS NOT NULL", (str(para),))
+    row = conn.execute("SELECT id FROM notes WHERE path = ? AND deleted_at IS NULL",
+                       (str(de),)).fetchone()
+    if row is None:
+        return sincronizar(conn, para)
+    meta, corpo = vault.ler(para)
+    titulo = meta.get("title") or para.stem
+    conn.execute("UPDATE notes SET path = ?, title = ?, updated_at = datetime('now')"
+                 " WHERE id = ?", (str(para), titulo, row["id"]))
+    indexar(conn, row["id"], titulo, corpo)
+    return row["id"]
+
+
 def esquecer(conn, caminho: Path) -> int | None:
     """O lado do banco de mandar um arquivo para a lixeira pela página."""
     row = conn.execute("SELECT id FROM notes WHERE path = ? AND deleted_at IS NULL",
