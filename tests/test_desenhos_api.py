@@ -140,6 +140,25 @@ def test_arquivo_torto_posto_por_fora_e_422_ao_abrir(cliente, vault_dir):
         assert "não abre como desenho" in resposta.json()["detail"]
 
 
+def test_desenho_grande_passa_pela_fronteira(cliente, vault_dir, monkeypatch):
+    """O limite geral de corpo é o da nota (3 MB); o do desenho é maior."""
+    imagem = "data:image/png;base64," + "A" * (5 * 1024 * 1024)
+    cena = json.loads(_cena())
+    cena["files"] = {"x": {"id": "x", "mimeType": "image/png", "dataURL": imagem}}
+    resposta = _salvar(cliente, json.dumps(cena), _abrir(cliente)["versao"])
+    assert resposta.status_code == 200, resposta.text[:200]
+
+
+def test_corpo_acima_do_limite_do_desenho_e_413(cliente):
+    from aide.web import seguranca
+
+    tamanho = str(2 * desenhos.TAMANHO_MAXIMO + 1)
+    assert seguranca.corpo_grande_demais(tamanho, seguranca.limite_do_corpo("PUT", URL))
+    # o limite maior vale só para salvar desenho
+    assert seguranca.limite_do_corpo("POST", URL) == seguranca.CORPO_MAXIMO
+    assert seguranca.limite_do_corpo("PUT", "/api/notas/arquivo") == seguranca.CORPO_MAXIMO
+
+
 # ---------- criar e apagar ----------
 
 def test_criar_desenho_vazio_numa_pasta_nova(cliente, vault_dir, app):

@@ -93,10 +93,19 @@ def corpo_grande_demais(tamanho: str | None, limite: int = CORPO_MAXIMO) -> bool
         return True
 
 
-def limite_do_corpo(metodo: str, caminho: str) -> int:
-    from aide.storage.anexos import TAMANHO_MAXIMO
+# a rota que salva desenho: o texto vai dentro de um JSON, e cada aspa do
+# desenho ganha uma barra; o dobro do maior desenho cobre o pior caso
+ROTA_DE_DESENHO = "/api/desenhos/arquivo"
 
-    return TAMANHO_MAXIMO if metodo == "POST" and caminho == ROTA_DE_ANEXO else CORPO_MAXIMO
+
+def limite_do_corpo(metodo: str, caminho: str) -> int:
+    from aide.storage import anexos, desenhos
+
+    if metodo == "POST" and caminho == ROTA_DE_ANEXO:
+        return anexos.TAMANHO_MAXIMO
+    if metodo == "PUT" and caminho == ROTA_DE_DESENHO:
+        return 2 * desenhos.TAMANHO_MAXIMO
+    return CORPO_MAXIMO
 
 
 def instalar(app) -> None:
