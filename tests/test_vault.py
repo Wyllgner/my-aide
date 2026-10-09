@@ -279,6 +279,28 @@ def test_o_daemon_relê_o_privado_antes_de_mandar(raiz, banco):
     assert banco.execute("SELECT private FROM notes").fetchone()[0] == 1
 
 
+def test_privada_so_no_banco_ganha_a_marca_no_arquivo(raiz, banco):
+    """As de antes de o privado ir para o arquivo: a página lê o frontmatter
+    e, sem a linha, a primeira edição tornaria a nota normal."""
+    from aide.storage.reconciliacao import reconciliar
+
+    caminho = raiz / "Inbox" / "Nota.md"
+    vault.gravar(caminho, "---\ntitle: Terapia\n---\n\nSEGREDO")
+    banco.execute("INSERT INTO notes (title, path, private) VALUES ('Terapia', ?, 1)",
+                  (str(caminho),))
+    espiao = Espiao()
+    reconciliar(banco, raiz, embedder=espiao)
+    assert caminho.read_text() == "---\ntitle: Terapia\nprivate: true\n---\n\nSEGREDO"
+    assert espiao.enviado == []
+
+
+def test_marca_de_privado_no_frontmatter():
+    assert vault.com_privado("x") == "---\nprivate: true\n---\nx"
+    assert vault.com_privado("---\ntitle: a\n---\n\nx") == "---\ntitle: a\nprivate: true\n---\n\nx"
+    assert vault.com_privado("---\nprivate: false\n---\nx") == "---\nprivate: true\n---\nx"
+    assert vault.privada(vault.separar(vault.com_privado("---\n---\nx"))[0])
+
+
 # ---------- frontmatter ----------
 
 def test_frontmatter_vai_ate_a_linha_que_fecha():

@@ -51,6 +51,7 @@ def reconciliar(conn, vault_dir: Path, embedder=None, forcar: bool = False) -> R
     rodar a cada quinze minutos sem trabalho inútil.
     """
     relatorio = Relatorio()
+    privado_para_o_arquivo(conn)
     vivas = {Path(r["path"]).resolve(): r for r in conn.execute(
         "SELECT id, title, path, updated_at, private FROM notes WHERE deleted_at IS NULL")}
     apagadas = {Path(r["path"]).resolve() for r in conn.execute(
@@ -102,6 +103,34 @@ def reconciliar(conn, vault_dir: Path, embedder=None, forcar: bool = False) -> R
     if embedder is not None:
         _sem_vetor(conn, embedder, relatorio)
     return relatorio
+
+
+def privado_para_o_arquivo(conn, caminho: Path | None = None) -> list[Path]:
+    """Escreve `private: true` no arquivo das notas que só o banco tem como
+    privadas; devolve as que mudaram. Com `caminho`, só essa nota.
+
+    São as de antes de o privado ir para o arquivo. A página lê o privado do
+    frontmatter e, ao salvar, grava no banco o que ele diz: sem a linha, a
+    caixa aparecia desmarcada, a primeira edição tornava a nota normal e a
+    reconciliação seguinte mandava o texto para fora.
+    """
+    sql = "SELECT path FROM notes WHERE private = 1 AND deleted_at IS NULL"
+    params: tuple = ()
+    if caminho is not None:
+        sql += " AND path = ?"
+        params = (str(caminho),)
+    marcadas = []
+    for row in conn.execute(sql, params).fetchall():
+        arquivo = Path(row["path"])
+        try:
+            texto = arquivo.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        if vault.privada(vault.separar(texto)[0]):
+            continue
+        vault.gravar(arquivo, vault.com_privado(texto))
+        marcadas.append(arquivo)
+    return marcadas
 
 
 def sincronizar(conn, caminho: Path) -> int:
