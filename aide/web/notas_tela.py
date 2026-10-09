@@ -47,7 +47,11 @@ def _ramo(itens: list[dict], aberto: str) -> str:
         caminho = escape(item["caminho"])
         if item["tipo"] == "pasta":
             abre = " open" if aberto.startswith(item["caminho"] + "/") else ""
-            html += (f'<details{abre} data-pasta="{caminho}"><summary>{escape(item["nome"])}'
+            html += (f'<details{abre} data-pasta="{caminho}"><summary>'
+                     f'<span class="nome-pasta">{escape(item["nome"])}</span>'
+                     f'<button type="button" class="renomear-pasta" data-pasta="{caminho}"'
+                     f' title="renomear ou mover a pasta"'
+                     f' aria-label="renomear {escape(item["nome"])}">✎</button>'
                      f'<span class="conta">{_contar(item["filhos"])[0]}</span></summary>'
                      f'<div class="filhos">{_ramo(item["filhos"], aberto) or _vazia()}</div>'
                      f'</details>')

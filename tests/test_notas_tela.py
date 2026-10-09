@@ -293,3 +293,9 @@ def test_titulo_abre_o_renomear_com_o_caminho(cliente):
     assert '<h2 id="titulo" class="titulo-nota"' in html
     assert 'id="renomear-caminho" autocomplete="off" spellcheck="false"\n        value="Projetos/Casa/Telhado"' in html
     assert 'id="botao-renomear"' in html
+
+
+def test_cada_pasta_tem_o_botao_de_renomear(cliente):
+    html = _tela(cliente)
+    for pasta in ("Inbox", "Projetos", "Projetos/Casa"):
+        assert f'class="renomear-pasta" data-pasta="{pasta}"' in html
