@@ -30,12 +30,12 @@ def test_markdown_basico(indice):
 
 
 def test_tabela(indice):
-    assert '<table data-fonte="0">' in _html("| a | b |\n|---|---|\n| 1 | 2 |", indice)
+    assert '<table data-fonte="0" data-bloco="0-3">' in _html("| a | b |\n|---|---|\n| 1 | 2 |", indice)
 
 
 def test_frontmatter_vira_propriedades_e_nao_texto(indice):
     html = _html("---\ntitle: Telhado\ntags: [casa]\n---\n\ncorpo", indice)
-    assert '<dl class="propriedades">' in html
+    assert '<dl class="propriedades" data-bloco="0-4">' in html
     assert "<dt>tags</dt><dd>[casa]</dd>" in html
     assert "<hr" not in html
 
@@ -57,7 +57,7 @@ def test_wikilink_com_apelido_e_secao(indice):
 def test_wikilink_so_com_secao_aponta_para_a_propria_nota(indice):
     html = _html("[[#Fim]]\n\n# Fim", indice)
     assert 'href="/notas?arquivo=Projetos/Casa/Telhado.md#s-fim"' in html
-    assert '<h1 id="s-fim" data-fonte="2">' in html
+    assert '<h1 id="s-fim" data-fonte="2" data-bloco="2-3">' in html
 
 
 def test_wikilink_quebrado_nao_leva_a_lugar_nenhum(indice):
@@ -257,6 +257,19 @@ def test_cada_bloco_diz_a_linha_do_arquivo_onde_comeca(indice):
     from aide.web import markdown
 
     html = markdown.renderizar("---\ntitle: x\n---\n\n# Um\n\ntexto\n\n> citação", "a.md", indice)
-    assert '<h1 id="s-um" data-fonte="4">' in html
-    assert '<p data-fonte="6">texto</p>' in html
-    assert '<blockquote data-fonte="8">' in html
+    assert '<h1 id="s-um" data-fonte="4" data-bloco="4-5">' in html
+    assert '<p data-fonte="6" data-bloco="6-7">texto</p>' in html
+    assert '<blockquote data-fonte="8" data-bloco="8-9">' in html
+
+
+def test_cada_bloco_de_fora_diz_onde_comeca_e_termina(indice):
+    """O modo ao vivo abre só as linhas do bloco clicado: a lista vai inteira,
+    o código conta as cercas, e a linha vazia depois do bloco fica de fora."""
+    html = markdown.renderizar(
+        "---\ntitle: x\n---\n\ntexto\nmais\n\n- a\n  - b\n- c\n\n```py\nx\n```\n",
+        "a.md", indice)
+    assert '<dl class="propriedades" data-bloco="0-3">' in html
+    assert '<p data-fonte="4" data-bloco="4-6">' in html
+    assert '<ul data-bloco="7-10">' in html
+    assert html.count("data-bloco") == 4  # o item de dentro da lista não
+    assert 'data-bloco="11-14"' in html
