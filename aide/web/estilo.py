@@ -230,7 +230,13 @@ nav a svg { flex-shrink: 0; }
 .arvore .nome-pasta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .renomear-pasta { font: inherit; font-size: 12px; border: 0; background: none; padding: 0 3px;
                   color: var(--faint); cursor: pointer; opacity: .35; border-radius: 5px; }
-.arvore summary:hover .renomear-pasta, .renomear-pasta:focus { opacity: 1; }
+.apagar-pasta { font: inherit; font-size: 13px; line-height: 1; border: 0; background: none;
+                padding: 0 4px; color: var(--faint); cursor: pointer; opacity: .35;
+                border-radius: 5px; }
+.arvore summary:hover .renomear-pasta, .renomear-pasta:focus,
+.arvore summary:hover .apagar-pasta, .apagar-pasta:focus { opacity: 1; }
+.apagar-pasta:hover, .apagar-pasta[data-armado] { color: var(--accent); background: var(--surface); }
+.apagar-pasta[data-armado] { opacity: 1; font-size: 11.5px; }
 .renomear-pasta:hover { color: var(--accent); background: var(--surface); }
 .renomear-pasta-form { display: flex; flex-direction: column; gap: 3px; padding: 4px 6px; }
 .renomear-pasta-form input { font: inherit; font-size: 13px; padding: 5px 8px; width: 100%;

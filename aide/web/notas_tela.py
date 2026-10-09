@@ -52,6 +52,9 @@ def _ramo(itens: list[dict], aberto: str) -> str:
                      f'<button type="button" class="renomear-pasta" data-pasta="{caminho}"'
                      f' title="renomear ou mover a pasta"'
                      f' aria-label="renomear {escape(item["nome"])}">✎</button>'
+                     f'<button type="button" class="apagar-pasta" data-pasta="{caminho}"'
+                     f' title="mandar a pasta para a lixeira"'
+                     f' aria-label="apagar {escape(item["nome"])}">×</button>'
                      f'<span class="conta">{_contar(item["filhos"])[0]}</span></summary>'
                      f'<div class="filhos">{_ramo(item["filhos"], aberto) or _vazia()}</div>'
                      f'</details>')
