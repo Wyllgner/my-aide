@@ -71,12 +71,20 @@ def _nota(ctx: ToolContext, id_ou_titulo):
             "tags": {"type": "string", "description": "Separadas por vírgula."},
             "private": {"type": "boolean",
                         "description": "Se verdadeiro, nunca entra no contexto enviado ao modelo."},
+            "relacionadas": {
+                "type": "array", "items": {"type": "string"},
+                "description": (
+                    "Títulos de notas que já existem e têm a ver com esta (achadas com "
+                    "notes.search). Viram [[links]] no fim do texto; as que não existem "
+                    "voltam em nao_encontradas, e nada é criado para elas."
+                ),
+            },
         },
         "required": ["title", "body"],
     },
 )
 def create(ctx: ToolContext, title: str, body: str, tags: str | None = None,
-           private: bool = False) -> dict:
+           private: bool = False, relacionadas: list[str] | None = None) -> dict:
     title = title.strip()
     if not title:
         raise ValueError("título vazio")
@@ -85,6 +93,8 @@ def create(ctx: ToolContext, title: str, body: str, tags: str | None = None,
 
     agora = now_in(ctx.config.timezone)
     caminho = vault.caminho_para(Path(ctx.config.vault_dir), title)
+    ligadas, faltando = _ligar(ctx, relacionadas or [], origem=caminho)
+    body = _com_links(body, ligadas)
     vault.escrever(caminho, title, body, tags, agora, privada=private)
 
     cur = ctx.conn.execute(
@@ -92,7 +102,8 @@ def create(ctx: ToolContext, title: str, body: str, tags: str | None = None,
         (title, str(caminho), tags, int(private)),
     )
     _indexar_tudo(ctx, cur.lastrowid, title, body, privada=private)
-    return {"id": cur.lastrowid, "title": title, "path": str(caminho)}
+    return _com_relatorio({"id": cur.lastrowid, "title": title, "path": str(caminho)},
+                          ligadas, faltando)
 
 
 @registry.register(
@@ -104,12 +115,20 @@ def create(ctx: ToolContext, title: str, body: str, tags: str | None = None,
             "id": {"type": "integer"},
             "title": {"type": "string", "description": "Alternativa ao id."},
             "body": {"type": "string"},
+            "relacionadas": {
+                "type": "array", "items": {"type": "string"},
+                "description": (
+                    "Títulos de notas que já existem e têm a ver com esta (achadas com "
+                    "notes.search). Viram [[links]] no fim do texto; as que não existem "
+                    "voltam em nao_encontradas, e nada é criado para elas."
+                ),
+            },
         },
         "required": ["body"],
     },
 )
 def append(ctx: ToolContext, body: str, id: int | None = None,
-           title: str | None = None) -> dict:
+           title: str | None = None, relacionadas: list[str] | None = None) -> dict:
     if id is None and title is None:
         raise ValueError("informe id ou title")
 
@@ -121,11 +140,73 @@ def append(ctx: ToolContext, body: str, id: int | None = None,
         raise ValueError(f"o arquivo da nota sumiu: {caminho}")
 
     agora = now_in(ctx.config.timezone)
-    vault.acrescentar(caminho, body, agora)
+    ligadas, faltando = _ligar(ctx, relacionadas or [], origem=caminho)
+    vault.acrescentar(caminho, _com_links(body, ligadas), agora)
     ctx.conn.execute("UPDATE notes SET updated_at = datetime('now') WHERE id = ?", (row["id"],))
     _indexar_tudo(ctx, row["id"], row["title"], vault.corpo_de(caminho),
                   privada=bool(row["private"]))
-    return {"id": row["id"], "title": row["title"]}
+    return _com_relatorio({"id": row["id"], "title": row["title"]}, ligadas, faltando)
+
+
+def _ligar(ctx: ToolContext, pedidas: list[str], origem: Path) -> tuple[list[str], list[str]]:
+    """O texto de [[link]] de cada nota pedida que existe, e as que não existem.
+
+    Acha pelo nome do arquivo (a regra do Obsidian) e, se não der, pelo título
+    no banco. Nota privada, para quem não pode vê-la, é como se não existisse:
+    responder "liguei" revelaria que ela está lá.
+    """
+    from aide.storage import links
+
+    raiz = Path(ctx.config.vault_dir)
+    indice = links.indice(raiz)
+    try:
+        # vale também para a nota que ainda vai ser criada: resolve() não
+        # exige que o arquivo exista
+        de = vault.relativo_de(raiz, origem)
+    except ValueError:
+        de = None
+    ligadas, faltando = [], []
+    for pedida in dict.fromkeys(p.strip() for p in pedidas if p and p.strip()):
+        destino = indice.resolver(pedida, de)
+        if destino is None:
+            row = ctx.conn.execute("SELECT path FROM notes WHERE title = ? AND deleted_at IS NULL"
+                                   " ORDER BY updated_at DESC LIMIT 1", (pedida,)).fetchone()
+            if row:
+                try:
+                    destino = vault.relativo_de(raiz, Path(row["path"]))
+                except ValueError:
+                    destino = None
+        if destino is None or destino == de or (not ctx.ver_privado and _e_privada(ctx, raiz, destino)):
+            faltando.append(pedida)
+            continue
+        curto = Path(destino).stem
+        ligadas.append(curto if indice.resolver(curto, de) == destino else destino.removesuffix(".md"))
+    return ligadas, faltando
+
+
+def _e_privada(ctx: ToolContext, raiz: Path, caminho: str) -> bool:
+    row = ctx.conn.execute("SELECT private FROM notes WHERE path = ? AND deleted_at IS NULL",
+                           (str(raiz / caminho),)).fetchone()
+    if row and row["private"]:
+        return True
+    try:
+        return vault.privada(vault.ler(vault.resolver(raiz, caminho))[0])
+    except (vault.ForaDoVault, OSError):
+        return True
+
+
+def _com_links(texto: str, ligadas: list[str]) -> str:
+    if not ligadas:
+        return texto
+    return texto.rstrip() + "\n\nRelacionadas: " + " · ".join(f"[[{n}]]" for n in ligadas)
+
+
+def _com_relatorio(resposta: dict, ligadas: list[str], faltando: list[str]) -> dict:
+    if ligadas:
+        resposta["relacionadas"] = ligadas
+    if faltando:
+        resposta["nao_encontradas"] = faltando
+    return resposta
 
 
 @registry.register(
