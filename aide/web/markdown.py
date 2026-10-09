@@ -206,9 +206,18 @@ BLOCOS_COM_FONTE = frozenset({"paragraph_open", "heading_open", "list_item_open"
 
 def _fontes(state) -> None:
     deslocamento = state.env.get("deslocamento", 0)
+    linhas = state.src.split("\n")
     for token in state.tokens:
         if token.type in BLOCOS_COM_FONTE and token.map and not token.hidden:
             token.attrSet("data-fonte", str(deslocamento + token.map[0]))
+        # os blocos de fora (parágrafo, lista inteira, código...) levam também
+        # onde terminam: no modo ao vivo, clicar num deles abre só essas linhas.
+        # A lista conta a linha vazia que vem depois dela; essa fica de fora
+        if token.level == 0 and token.nesting >= 0 and token.map and not token.hidden:
+            inicio, fim = token.map
+            while fim > inicio + 1 and not linhas[fim - 1].strip():
+                fim -= 1
+            token.attrSet("data-bloco", f"{deslocamento + inicio}-{deslocamento + fim}")
 
 
 TAREFA = re.compile(r"\[([ xX])\] ")
@@ -318,12 +327,14 @@ def _motor() -> MarkdownIt:
 MOTOR = _motor()
 
 
-def _propriedades(meta: dict[str, str]) -> str:
+def _propriedades(meta: dict[str, str], fim: int) -> str:
+    """O frontmatter em lista; `fim` é a linha onde o corpo começa, e o
+    bloco vai da primeira linha do arquivo até ela."""
     if not meta:
         return ""
     linhas = "".join(f"<dt>{escape(chave)}</dt><dd>{escape(valor)}</dd>"
                      for chave, valor in meta.items())
-    return f'<dl class="propriedades">{linhas}</dl>'
+    return f'<dl class="propriedades" data-bloco="0-{fim}">{linhas}</dl>'
 
 
 def renderizar(texto: str, origem: str | None, indice: Indice, anexos=None) -> str:
@@ -334,7 +345,7 @@ def renderizar(texto: str, origem: str | None, indice: Indice, anexos=None) -> s
     # prévia precisa bater com a do arquivo
     corpo = "\n".join(texto.split("\n")[inicio:])
     env = {"origem": origem, "indice": indice, "deslocamento": inicio, "anexos": anexos}
-    return _propriedades(meta) + MOTOR.render(corpo, env)
+    return _propriedades(meta, inicio) + MOTOR.render(corpo, env)
 
 
 # ---------- links de uma nota, para o mapa ----------
