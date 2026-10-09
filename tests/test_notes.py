@@ -405,3 +405,55 @@ def test_privada_marcada_so_no_arquivo_tambem_some(ligadas, ctx, registry):
     reuniao.write_text(reuniao.read_text().replace("---\n\n", "private: true\n---\n\n", 1))
     dados = registry.call("notes.links", {"title": "Telhado"}, ctx).data
     assert "Reunião" not in str(dados)
+
+
+# ---------- relacionadas ----------
+
+def test_criar_com_relacionadas_escreve_os_links(ligadas, ctx, registry):
+    dados = registry.call("notes.create", {"title": "Obra", "body": "começa segunda",
+                                           "relacionadas": ["Telhado", "fornecedores"]}, ctx).data
+    assert dados["relacionadas"] == ["Telhado", "Fornecedores"]
+    texto = Path(dados["path"]).read_text()
+    assert texto.rstrip().endswith("Relacionadas: [[Telhado]] · [[Fornecedores]]")
+    # e o mapa já vê a ligação
+    citada = registry.call("notes.links", {"title": "Telhado"}, ctx).data["citada_por"]
+    assert "Obra" in [n["title"] for n in citada]
+
+
+def test_relacionada_que_nao_existe_volta_sem_criar_nada(ligadas, ctx, registry):
+    dados = registry.call("notes.create", {"title": "Obra", "body": "x",
+                                           "relacionadas": ["Inexistente"]}, ctx).data
+    assert dados["nao_encontradas"] == ["Inexistente"]
+    assert "Relacionadas" not in Path(dados["path"]).read_text()
+    assert not (Path(ctx.config.vault_dir) / "Inbox" / "Inexistente.md").exists()
+
+
+def test_relacionada_privada_e_como_se_nao_existisse(ligadas, ctx, registry):
+    """Dizer "liguei" revelaria que a nota existe."""
+    dados = registry.call("notes.create", {"title": "Obra", "body": "x",
+                                           "relacionadas": ["Diário"]}, ctx).data
+    assert dados["nao_encontradas"] == ["Diário"]
+    assert "Diário" not in Path(dados["path"]).read_text()
+
+
+def test_o_dono_liga_a_privada(ligadas, registry):
+    dados = registry.call("notes.create", {"title": "Obra", "body": "x",
+                                           "relacionadas": ["Diário"]}, ligadas).data
+    assert dados["relacionadas"] == ["Diário"]
+
+
+def test_acrescentar_com_relacionadas(ligadas, ctx, registry):
+    dados = registry.call("notes.append", {"title": "Fornecedores", "body": "orçamento novo",
+                                           "relacionadas": ["Reunião"]}, ctx).data
+    assert dados["relacionadas"] == ["Reunião"]
+    citada = registry.call("notes.links", {"title": "Reunião"}, ctx).data["citada_por"]
+    assert "Fornecedores" in [n["title"] for n in citada]
+
+
+def test_nome_repetido_em_outra_pasta_leva_o_caminho(ligadas, ctx, registry):
+    outra = Path(ctx.config.vault_dir) / "Arquivo" / "Telhado.md"
+    outra.parent.mkdir()
+    outra.write_text("homônima")
+    dados = registry.call("notes.create", {"title": "Obra", "body": "x",
+                                           "relacionadas": ["Arquivo/Telhado"]}, ctx).data
+    assert dados["relacionadas"] == ["Arquivo/Telhado"]
