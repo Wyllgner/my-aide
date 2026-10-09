@@ -157,6 +157,44 @@ def _backlinks(entradas: list[grafo.Ligacao]) -> str:
             f'{formato.plural(len(por_origem), "nota")}</p><ul>{itens}</ul></section>')
 
 
+def _quebrados(raiz: Path, quebrados: list[grafo.Ligacao]) -> str:
+    """Os links para notas que não existem, um item por nota que falta, com
+    quem cita e o botão de criar. Criar vai para a pasta de quem citou
+    primeiro — o mesmo que o clique no link quebrado faz na prévia."""
+    por_alvo: dict[str, list[grafo.Ligacao]] = {}
+    for lig in quebrados:
+        por_alvo.setdefault(markdown.chave_link(lig.citacao.alvo), []).append(lig)
+    if not por_alvo:
+        return '<p class="vazio">Nenhum link quebrado.</p>'
+    itens = ""
+    for ligs in sorted(por_alvo.values(), key=lambda ls: (-len(ls), ls[0].citacao.alvo.casefold())):
+        alvo = ligs[0].citacao.alvo
+        origens = list(dict.fromkeys(lig.origem for lig in ligs))
+        novo = _caminho_novo(raiz, alvo, origens[0])
+        citam = ", ".join(
+            f'<a href="{escape(_href(o))}">{escape(o.rpartition("/")[2].removesuffix(".md"))}</a>'
+            for o in origens)
+        botao = (f'<button type="button" class="botao-fraco criar-quebrado"'
+                 f' data-caminho="{escape(novo)}">criar</button>' if novo else
+                 '<span class="onde">nome que não pode virar arquivo</span>')
+        itens += (f'<div class="quebrado-item"><div><strong>{escape(alvo)}</strong>'
+                  f'<span class="onde">citada em {citam}</span></div>{botao}</div>')
+    return itens
+
+
+def _caminho_novo(raiz: Path, alvo: str, origem: str) -> str | None:
+    """Onde a nota que falta seria criada, ou None se o nome não serve."""
+    caminho = alvo.removesuffix(".md")
+    if "/" not in caminho and "/" in origem:
+        caminho = origem.rpartition("/")[0] + "/" + caminho
+    caminho += ".md"
+    try:
+        vault.resolver(raiz, caminho)
+    except vault.ForaDoVault:
+        return None
+    return caminho
+
+
 def _editor(raiz: Path, aberto: str, agora: datetime, indice: links.Indice,
             modo: str = "dividido", entradas: list | None = None) -> str:
     """O editor da nota aberta.
@@ -208,7 +246,7 @@ def _editor(raiz: Path, aberto: str, agora: datetime, indice: links.Indice,
 
 def tela(ctx, registry, agora: datetime, nota: int | None = None,
          busca: str | None = None, arquivo: str | None = None,
-         modo: str | None = None) -> str:
+         modo: str | None = None, quebrados: bool = False) -> str:
     raiz = Path(ctx.config.vault_dir)
     itens = vault.arvore(raiz)
     aberto = _escolher(ctx, raiz, arquivo, nota)
@@ -225,17 +263,27 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
     if busca:
         resumo += f' · busca: "{busca}"'
 
+    indice = links.indice(raiz)
+    mapa = grafo.mapa(raiz, indice)
+    entradas = mapa.entradas(aberto) if aberto else []
+    quebrados_todos = mapa.quebrados()
+    voltar = (f'<a class="limpar" href="{escape(_href(aberto)) if aberto else "/notas"}">'
+              f'voltar às pastas</a>')
+
     if busca:
-        lateral = (_busca(ctx, raiz, busca, aberto)
-                   + f'<a class="limpar" href="{escape(_href(aberto)) if aberto else "/notas"}">'
-                     f'voltar às pastas</a>')
+        lateral = _busca(ctx, raiz, busca, aberto) + voltar
+    elif quebrados:
+        lateral = _quebrados(raiz, quebrados_todos) + voltar
     else:
         lateral = _ramo(itens, aberto or "") or (
             '<p class="vazio">Nenhuma nota ainda. Crie a primeira com “+ nota”.</p>')
+    if quebrados_todos and not quebrados:
+        alvos = len({markdown.chave_link(lig.citacao.alvo) for lig in quebrados_todos})
+        lateral = (f'<a class="aviso-quebrados" href="/notas?quebrados=1'
+                   f'{"&amp;arquivo=" + escape(quote(aberto, safe="/")) if aberto else ""}">'
+                   f'{formato.plural(alvos, "link quebrado", "links quebrados")}</a>' + lateral)
 
     pasta_atual = aberto.rpartition("/")[0] if aberto else ""
-    indice = links.indice(raiz)
-    entradas = grafo.mapa(raiz, indice).entradas(aberto) if aberto else []
     corpo = (_editor(raiz, aberto, agora, indice, _modo(modo), entradas) if aberto else
              '<p class="vazio">Escolha uma nota à esquerda ou crie uma nova.</p>')
 

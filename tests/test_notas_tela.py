@@ -229,3 +229,38 @@ def test_contexto_do_backlink_e_escapado(cliente, raiz):
     (raiz / "Inbox" / "Ideia.md").write_text("<img src=x onerror=alert(1)> [[Telhado]]")
     html = _tela(cliente, "Projetos/Casa/Telhado.md")
     assert "<img src=x" not in html
+
+
+# ---------- links quebrados ----------
+
+def test_aviso_de_links_quebrados_na_lateral(cliente, raiz):
+    (raiz / "Inbox" / "Ideia.md").write_text("[[Fornecedores]] e [[fornecedores]] e [[Orçamento]]")
+    html = _tela(cliente, "Inbox/Ideia.md")
+    assert "2 links quebrados</a>" in html
+    assert 'href="/notas?quebrados=1&amp;arquivo=Inbox/Ideia.md"' in html
+
+
+def test_sem_links_quebrados_sem_aviso(cliente):
+    assert "aviso-quebrados" not in _tela(cliente)
+
+
+def test_lista_de_quebrados_com_quem_cita_e_onde_criar(cliente, raiz):
+    (raiz / "Inbox" / "Ideia.md").write_text("[[Fornecedores]]")
+    (raiz / "Projetos" / "Casa" / "Telhado.md").write_text("[[Fornecedores]] [[Base/Nova]]")
+    html = cliente.get("/notas?quebrados=1").text
+    assert "<strong>Fornecedores</strong>" in html
+    assert 'data-caminho="Inbox/Fornecedores.md"' in html
+    assert 'data-caminho="Base/Nova.md"' in html
+    assert "voltar às pastas" in html
+
+
+def test_nome_que_nao_vira_arquivo_nao_ganha_botao(cliente, raiz):
+    (raiz / "Inbox" / "Ideia.md").write_text("[[O que é?]] e [[../../fora]]")
+    html = cliente.get("/notas?quebrados=1").text
+    assert "criar-quebrado" not in html
+    assert html.count("nome que não pode virar arquivo") == 2
+
+
+def test_alvo_quebrado_e_escapado(cliente, raiz):
+    (raiz / "Inbox" / "Ideia.md").write_text('[[<img src=x onerror=alert(1)>]]')
+    assert "<img src=x" not in cliente.get("/notas?quebrados=1").text
