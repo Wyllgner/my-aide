@@ -571,6 +571,7 @@ button.atalho-visao { width: 100%; border: 0; background: none; font: inherit; f
 .desenho-estado { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
 .desenho-estado.erro { color: var(--accent); }
 .desenho-editor { flex: 1; min-height: 0; position: relative; }
+.desenho-conflito { border-radius: 0; }
 /* "Web Embed" e "Mermaid to Excalidraw" não funcionam aqui (a CSP barra
    iframe de fora; o mermaid ficou fora do pacote). O Excalidraw dá o mesmo
    data-testid aos dois. Quatro seletores: o excalidraw.css vem depois com
