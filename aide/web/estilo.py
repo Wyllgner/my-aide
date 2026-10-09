@@ -270,7 +270,7 @@ nav a svg { flex-shrink: 0; }
 .area[data-modo="vivo"] .previa:empty::after { margin-top: 0; font-size: 14.5px;
   content: "Nota vazia. Clique aqui para começar a escrever."; }
 .area[data-modo="vivo"] .previa:has(.bloco-vivo)::after {
-  content: "Esc sai · ↑ ↓ nas pontas muda de bloco · Ctrl+B negrito · Ctrl+I itálico · Ctrl+K link · [[ liga a outra nota"; }
+  content: "Esc sai · Shift+Enter bloco novo embaixo · ↑ ↓ nas pontas muda de bloco · Ctrl+B negrito · Ctrl+I itálico · Ctrl+K link · [[ liga a outra nota"; }
 .previa > :first-child { margin-top: 0; }
 .previa h1, .previa h2, .previa h3 { font-weight: 600; line-height: 1.3; margin: 1.3em 0 .5em; }
 .previa h1 { font-size: 22px; } .previa h2 { font-size: 18px; } .previa h3 { font-size: 15.5px; }

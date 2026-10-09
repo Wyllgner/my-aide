@@ -519,13 +519,15 @@ JS = r"""
   }
 
   // as linhas do bloco no texto de agora, contando os blocos que mudaram de
-  // tamanho depois da prévia; null se ele mesmo já mudou
+  // tamanho depois da prévia; null se ele mesmo já mudou. Um bloco pendente
+  // (fechado, esperando a prévia nova) traz as linhas já contando as mudanças
+  // até a dele: `data-desde` diz de qual em diante ainda falta contar
   function faixaDe(el) {
     var partes = el.dataset.bloco.split("-");
     var ini = parseInt(partes[0], 10);
     var fim = parseInt(partes[1], 10);
     if (isNaN(ini) || isNaN(fim)) { return null; }
-    for (var i = 0; i < mudancas.length; i++) {
+    for (var i = parseInt(el.dataset.desde || "0", 10); i < mudancas.length; i++) {
       var m = mudancas[i];
       if (ini >= m.fim) { ini += m.delta; fim += m.delta; } else if (fim > m.ini) { return null; }
     }
@@ -556,9 +558,10 @@ JS = r"""
     campo.style.height = campo.scrollHeight + "px";
   }
 
-  // el: o bloco clicado; sem ele, um bloco novo no fim da nota. `onde`
+  // el: o bloco clicado; sem ele, um bloco novo — no fim da nota, ou antes
+  // da linha `novo.apos` e já com `novo.texto` (o Shift+Enter). `onde`
   // ("inicio" ou "fim") põe o cursor numa ponta, para quem chega pelas setas
-  function abrirBloco(el, e, onde) {
+  function abrirBloco(el, e, onde, novo) {
     if (bloco) { return; }
     var faixa = el ? faixaDe(el) : null;
     if (editor.value !== previaVale || (el && !faixa)) {
@@ -577,13 +580,25 @@ JS = r"""
       b.cauda = b.fim < linhas.length ? "\n" + linhas.slice(b.fim).join("\n") : "";
       fonte = linhas.slice(b.ini, b.fim).join("\n");
     } else {
-      // no fim, separado do último bloco por uma linha vazia: sem ela, o
-      // texto novo grudaria no parágrafo de cima
-      b.ini = b.fim = linhas.length;
-      b.cabeca = editor.value ? editor.value.replace(/\n*$/, "\n\n") : "";
-      b.cauda = "\n";
-      fonte = "";
+      // separado dos vizinhos por uma linha vazia: sem ela, o texto novo
+      // grudaria no parágrafo de cima (ou o de baixo grudaria nele)
+      var apos = novo ? Math.min(novo.apos, linhas.length) : linhas.length;
+      var acima = linhas.slice(0, apos).join("\n").replace(/\n*$/, "");
+      var abaixo = linhas.slice(apos).join("\n").replace(/^\n+/, "");
+      b.ini = b.fim = apos;
+      b.cabeca = acima ? acima + "\n\n" : "";
+      b.cauda = abaixo ? "\n\n" + abaixo : "\n";
+      b.noFim = !abaixo;
+      fonte = (novo && novo.texto) || "";
+      // o lugar na página: antes do primeiro bloco que vem depois dele
+      var depoisDele = null;
+      previa.querySelectorAll("[data-bloco]").forEach(function (outro) {
+        var f = faixaDe(outro);
+        if (!depoisDele && f && f[0] >= apos) { depoisDele = outro; }
+      });
     }
+    // a linha onde o texto do bloco começa no texto de agora
+    b.inicioReal = b.cabeca ? b.cabeca.split("\n").length - 1 : 0;
     var campo = document.createElement("textarea");
     campo.className = "bloco-vivo";
     campo.value = fonte;
@@ -591,7 +606,17 @@ JS = r"""
     campo.setAttribute("aria-label", "markdown do bloco");
     b.campo = campo;
     bloco = b;
-    if (el) { el.replaceWith(campo); } else { previa.appendChild(campo); }
+    if (el) {
+      el.replaceWith(campo);
+    } else {
+      previa.insertBefore(campo, depoisDele);
+      // veio com texto (o que estava depois do cursor): ele já sai do bloco
+      // de cima e entra aqui
+      if (fonte) {
+        editor.value = b.cabeca + fonte + b.cauda;
+        agendar();
+      }
+    }
     ajustarAltura(campo);
 
     var cursor = onde === "inicio" ? 0 : fonte.length;
@@ -618,6 +643,12 @@ JS = r"""
     });
     campo.addEventListener("keydown", function (ev) {
       if (ev.key === "Escape") { ev.preventDefault(); campo.blur(); return; }
+      // Shift+Enter: um bloco novo embaixo, e não mais uma linha neste
+      if (ev.key === "Enter" && ev.shiftKey && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
+        ev.preventDefault();
+        dividirBloco();
+        return;
+      }
       // seta para cima na primeira linha, ou para baixo na última: segue para
       // o bloco vizinho, como se a nota fosse um texto só
       var semMod = !ev.shiftKey && !ev.ctrlKey && !ev.metaKey && !ev.altKey &&
@@ -647,9 +678,9 @@ JS = r"""
   function irAoVizinho(direcao) {
     var b = bloco;
     // o bloco novo já é o fim da nota: para baixo não há nada
-    if (direcao > 0 && !b.el) { return; }
+    if (direcao > 0 && b.noFim) { return; }
     var ini = b.ini;
-    var fim = b.ini + b.campo.value.split("\n").length;
+    var fim = b.inicioReal + b.campo.value.split("\n").length;
     fecharBloco();
     var escolhido = null;
     previa.querySelectorAll("[data-bloco]").forEach(function (el) {
@@ -665,6 +696,25 @@ JS = r"""
     }
   }
 
+  // o que vem depois do cursor vai para um bloco novo logo abaixo, aberto e
+  // com o cursor no começo; com o cursor no fim, o bloco novo nasce vazio
+  function dividirBloco() {
+    var b = bloco;
+    var campo = b.campo;
+    // o espaço em volta do corte fica para trás ("frase. Outra" → "Outra")
+    var antes = campo.value.slice(0, campo.selectionStart).replace(/[ \t]*\n*$/, "");
+    var depois = campo.value.slice(campo.selectionEnd).replace(/^[ \t]*\n+/, "");
+    if (!/\n$/.test(campo.value.slice(0, campo.selectionStart))) { depois = depois.replace(/^[ \t]+/, ""); }
+    if (antes !== campo.value) {
+      campo.value = antes;
+      campo.dispatchEvent(new Event("input"));
+    }
+    // a linha logo depois do bloco de cima, já encurtado
+    var apos = b.inicioReal + (antes ? antes.split("\n").length : 0);
+    fecharBloco();
+    abrirBloco(null, null, "inicio", { apos: apos, texto: depois });
+  }
+
   function fecharBloco() {
     if (!bloco) { return; }
     var b = bloco;
@@ -678,7 +728,15 @@ JS = r"""
       pendente.className = "bloco-pendente";
       pendente.textContent = b.campo.value;
       b.campo.replaceWith(pendente);
-      mudancas.push({ ini: b.ini, fim: b.fim, delta: b.campo.value.split("\n").length - (b.fim - b.ini) });
+      // o quanto a nota cresceu ou encolheu: tudo o que vem depois do bloco anda junto
+      mudancas.push({ ini: b.ini, fim: b.fim,
+        delta: editor.value.split("\n").length - b.original.split("\n").length });
+      // o pendente também se abre e é alcançado pelas setas, com as linhas
+      // dele no texto de agora
+      if (b.campo.value && editor.value !== b.original) {
+        pendente.dataset.bloco = b.inicioReal + "-" + (b.inicioReal + b.campo.value.split("\n").length);
+        pendente.dataset.desde = String(mudancas.length);
+      }
       previaVale = editor.value;
     }
     if (guardada && guardada.texto === editor.value) {
