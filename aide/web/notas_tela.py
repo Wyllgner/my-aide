@@ -453,6 +453,9 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
         # (filtrar, recolher) entram ao lado
         lateral = ('<div class="arvore-topo"><p class="eyebrow">Pastas</p>'
                    '<span class="arvore-ferramentas"></span></div>'
+                   '<input type="search" class="filtro-arvore" placeholder="filtrar por nome…"'
+                   ' aria-label="filtrar a árvore por nome" autocomplete="off" spellcheck="false">'
+                   '<p class="vazio-curto filtro-vazio" hidden>Nenhuma nota com esse nome.</p>'
                    + (_ramo(itens, "" if geral or grafo_todo else aberto or "") or (
                        '<p class="vazio">Nenhuma nota ainda. Crie a primeira com “+ nota”.</p>')))
     volta = "&amp;arquivo=" + escape(quote(aberto, safe="/")) if aberto else ""

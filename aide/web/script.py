@@ -59,6 +59,52 @@ JS = r"""
     }
   })();
 
+  // ---------- árvore: filtrar por nome ----------
+  // esconde o que não bate (nome ou caminho, sem acento) e abre as pastas onde
+  // há resultado; limpo, as pastas voltam como estavam. Enter abre a primeira
+  // nota que sobrou, Esc limpa
+  var filtro = document.querySelector(".filtro-arvore");
+  if (filtro) {
+    var arvore = filtro.closest(".arvore");
+    var semResultado = arvore.querySelector(".filtro-vazio");
+    var abertasAntes = null;
+    var filtrarArvore = function () {
+      var busca = normal(filtro.value.trim());
+      var pastas = arvore.querySelectorAll("details");
+      if (busca && abertasAntes === null) {
+        abertasAntes = Array.prototype.filter.call(pastas, function (d) { return d.open; });
+      }
+      var algum = false;
+      arvore.querySelectorAll(".arquivo").forEach(function (a) {
+        var bate = !busca || normal(a.getAttribute("title") || a.textContent).indexOf(busca) >= 0;
+        a.hidden = !bate;
+        algum = algum || bate;
+      });
+      // de dentro para fora: a pasta aparece se tem nota que bate lá dentro
+      Array.prototype.slice.call(pastas).reverse().forEach(function (d) {
+        if (!busca) { d.hidden = false; return; }
+        var tem = d.querySelector(".arquivo:not([hidden])") !== null;
+        d.hidden = !tem;
+        d.open = tem;
+      });
+      if (!busca && abertasAntes !== null) {
+        pastas.forEach(function (d) { d.open = abertasAntes.indexOf(d) >= 0; });
+        abertasAntes = null;
+      }
+      semResultado.hidden = !busca || algum;
+    };
+    filtro.addEventListener("input", filtrarArvore);
+    filtro.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") {
+        filtro.value = "";
+        filtrarArvore();
+      } else if (e.key === "Enter") {
+        var primeira = arvore.querySelector(".arquivo:not([hidden])");
+        if (primeira && filtro.value.trim()) { e.preventDefault(); primeira.click(); }
+      }
+    });
+  }
+
   // ---------- criar nota e pasta ----------
   var form = document.getElementById("criar");
   var nome = document.getElementById("criar-nome");
