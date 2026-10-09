@@ -126,7 +126,8 @@ def _busca(ctx, raiz: Path, busca: str, aberto: str | None) -> str:
     return itens or '<p class="vazio">Nada encontrado.</p>'
 
 
-MODOS = (("editar", "editar"), ("dividido", "lado a lado"), ("ler", "ler"))
+# ao vivo: a nota formatada, e o bloco clicado vira markdown ali mesmo
+MODOS = (("editar", "editar"), ("dividido", "lado a lado"), ("vivo", "ao vivo"), ("ler", "ler"))
 
 
 def _modo(pedido: str | None) -> str:
@@ -141,7 +142,7 @@ def _modos(atual: str) -> str:
     for modo, rotulo in MODOS:
         apertado = "true" if modo == atual else "false"
         botoes += (f'<button type="button" class="modo" data-modo="{modo}"'
-                   f' aria-pressed="{apertado}" title="{rotulo} · Ctrl+E alterna editar e ler">'
+                   f' aria-pressed="{apertado}" title="{rotulo} · Ctrl+E alterna com ler">'
                    f'{icone(modo, 15)}<span>{rotulo}</span></button>')
     return f'<div class="modos" role="group" aria-label="modo de visualização">{botoes}</div>'
 
