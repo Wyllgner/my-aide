@@ -135,12 +135,14 @@ JS = r"""
   }
 
   // o frontmatter é a verdade: a caixa só escreve ou tira a linha nele
-  var FRONT = /^---\n([\s\S]*?)\n---\n?/;
+  // igual a vault.separar: abre com uma linha "---" e fecha na próxima linha
+  // que seja só "---"; pode vir vazio
+  var FRONT = /^---\n(?:([\s\S]*?)\n)?---(?:\n|$)/;
   var LINHA = /^private:\s*(true|yes|sim|1)\s*$/im;
 
   function marcadaNoTexto() {
     var m = editor.value.match(FRONT);
-    return !!(m && LINHA.test(m[1]));
+    return !!(m && LINHA.test(m[1] || ""));
   }
 
   // o corretor avançado do Chrome manda o texto para o Google
@@ -149,7 +151,7 @@ JS = r"""
   privada.addEventListener("change", function () {
     var texto = editor.value;
     var m = texto.match(FRONT);
-    var resto = m ? m[1].split("\n").filter(function (l) { return !/^private:/i.test(l); }) : [];
+    var resto = m ? (m[1] || "").split("\n").filter(function (l) { return !/^private:/i.test(l); }) : [];
     var depois = m ? texto.slice(m[0].length) : "\n" + texto;
     if (privada.checked) { resto.push("private: true"); }
     editor.value = resto.join("").trim()
