@@ -155,3 +155,13 @@ def test_link_sem_ambiguidade_nao_e_tocado(raiz):
     antes = _ler(raiz, "Inbox/Reunião.md")
     renomear.mover(raiz, "Solta.md", "Arquivo/Solta.md")
     assert _ler(raiz, "Inbox/Reunião.md") == antes
+
+
+def test_nota_que_nao_da_para_ler_fica_de_fora_sem_parar_o_resto(raiz):
+    (raiz / "Velha.md").write_bytes("[[Telhado]] cita\xe7\xe3o".encode("latin-1"))
+    puladas = []
+    mudadas = renomear.mover(raiz, "Projetos/Casa/Telhado.md", "Projetos/Casa/Cobertura.md",
+                             puladas)
+    assert puladas == ["Velha.md"]
+    assert "Inbox/Reunião.md" in mudadas
+    assert (raiz / "Velha.md").read_bytes().endswith(b"cita\xe7\xe3o")
