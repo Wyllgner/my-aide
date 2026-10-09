@@ -148,7 +148,11 @@ JS = r"""
                y: vb.y + (evento.clientY - caixa.top) / caixa.height * vb.height };
     }
 
+    // o grafo local fica no meio da página: a roda sozinha rola a página,
+    // e o zoom pede Ctrl — senão quem rola passando por cima fica preso nele
+    var local = svg.classList.contains("local");
     svg.addEventListener("wheel", function (e) {
+      if (local && !e.ctrlKey && !e.metaKey) { return; }
       e.preventDefault();
       var ponto = paraSvg(e);
       var fator = e.deltaY < 0 ? 0.85 : 1 / 0.85;
@@ -183,7 +187,7 @@ JS = r"""
     });
 
     svg.querySelectorAll("a.no").forEach(function (no) {
-      no.addEventListener("mouseenter", function () {
+      function destacar() {
         var perto = (no.dataset.vizinhos || "").split(" ");
         perto.push(no.dataset.id);
         svg.classList.add("focado");
@@ -193,8 +197,13 @@ JS = r"""
         svg.querySelectorAll("line").forEach(function (l) {
           l.classList.toggle("perto", l.dataset.a === no.dataset.id || l.dataset.b === no.dataset.id);
         });
-      });
-      no.addEventListener("mouseleave", function () { svg.classList.remove("focado"); });
+      }
+      function apagar() { svg.classList.remove("focado"); }
+      // mouse e teclado: quem navega com Tab vê as mesmas vizinhas
+      no.addEventListener("mouseenter", destacar);
+      no.addEventListener("focus", destacar);
+      no.addEventListener("mouseleave", apagar);
+      no.addEventListener("blur", apagar);
     });
   });
 
