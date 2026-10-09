@@ -560,4 +560,23 @@ button.atalho-visao { width: 100%; border: 0; background: none; font: inherit; f
   .notas { grid-template-columns: 1fr; }
   .notas-lateral { max-height: 40vh; }
 }
+
+/* a tela de desenho: barra fina em cima, o Excalidraw no resto */
+.desenho-corpo { height: 100vh; margin: 0; display: flex; flex-direction: column; overflow: hidden; }
+.desenho-barra { display: flex; align-items: center; gap: 12px; padding: 8px 16px;
+  border-bottom: 1px solid var(--line); background: var(--surface); }
+.desenho-nome { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; font-size: 14px; }
+.desenho-pasta { color: var(--muted); }
+.desenho-estado { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.desenho-estado.erro { color: var(--accent); }
+.desenho-editor { flex: 1; min-height: 0; position: relative; }
+/* "Web Embed" e "Mermaid to Excalidraw" não funcionam aqui (a CSP barra
+   iframe de fora; o mermaid ficou fora do pacote). O Excalidraw dá o mesmo
+   data-testid aos dois. Quatro seletores: o excalidraw.css vem depois com
+   três (.excalidraw .dropdown-menu .dropdown-menu-item-base). A div antes do
+   mermaid é o título "Generate", que ficaria sozinho */
+.desenho-editor .excalidraw .dropdown-menu [data-testid="toolbar-embeddable"],
+.desenho-editor .excalidraw .dropdown-menu div:has(+ [data-testid="toolbar-embeddable"]) {
+  display: none; }
 """

@@ -67,10 +67,11 @@ def criar_app(config=None, conn_factory=None):
 
     app.state.contexto = contexto
 
-    from aide.web import desenhos_api, notas_api
+    from aide.web import desenho_tela, desenhos_api, notas_api
 
     notas_api.instalar(app)
     desenhos_api.instalar(app)
+    desenho_tela.instalar(app)
 
     def saldo_atual() -> dict | None:
         """O rodapé da lateral. Falhar aqui não pode derrubar a página inteira."""
