@@ -327,3 +327,11 @@ def test_visao_geral_escapa_nome_e_tag(cliente, raiz):
 def test_na_visao_geral_nenhuma_nota_fica_marcada_como_aberta(cliente):
     html = cliente.get("/notas?geral=1&arquivo=Inbox/Ideia.md").text
     assert 'aria-current="page" title' not in html.split('<div class="arvore"')[1].split("</div>")[0]
+
+
+def test_tela_do_grafo(cliente, raiz):
+    (raiz / "Inbox" / "Ideia.md").write_text("[[Telhado]]")
+    html = cliente.get("/notas?grafo=1").text
+    assert '<svg class="grafo"' in html
+    assert "2 notas · 1 ligação" in html
+    assert 'id="editor"' not in html

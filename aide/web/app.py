@@ -128,6 +128,7 @@ def criar_app(config=None, conn_factory=None):
         def ver(periodo: str = "mes", sessao: str | None = None,
                 ator: str | None = None, nota: int | None = None,
                 arquivo: str | None = None, quebrados: bool = False, geral: bool = False,
+                grafo: bool = False,
                 busca: str | None = None, ano: int | None = None,
                 mes: int | None = None, dia: int | None = None,
                 # filtros da busca de gastos
@@ -156,7 +157,7 @@ def criar_app(config=None, conn_factory=None):
                 extra = {"ator": ator}
             elif tela.slug == "notas":
                 extra = {"nota": nota, "busca": busca, "arquivo": arquivo, "modo": notas_modo,
-                         "quebrados": quebrados, "geral": geral}
+                         "quebrados": quebrados, "geral": geral, "grafo_todo": grafo}
             elif tela.slug == "calendario":
                 extra = {"ano": ano, "mes": mes, "dia": dia}
             return render(montar(ctx, toolbelt, agora, **extra), tela.slug)
