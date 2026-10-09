@@ -102,3 +102,34 @@ def test_a_lixeira_nao_aponta_para_ninguem(raiz):
 def test_cada_citacao_traz_a_linha_em_volta():
     achadas = citacoes("# T\n\n  ver o [[Telhado]] amanhã  \n")
     assert achadas[0].trecho == "ver o [[Telhado]] amanhã"
+
+
+# ---------- revisão ----------
+
+def test_contexto_e_a_linha_do_link_no_paragrafo():
+    achadas = citacoes("Primeira linha do parágrafo\ne o [[Telhado]] na segunda\ne [x](B.md) na terceira")
+    assert [(c.linha, c.trecho) for c in achadas] == [
+        (1, "e o [[Telhado]] na segunda"), (2, "e [x](B.md) na terceira")]
+
+
+@pytest.mark.parametrize("texto", ["[foto](foto.png)", "[pasta](Projetos/)", "[api](/api/x)",
+                                   "[x](mailto:a@b.c)", "[x](https://a.b/c.md)"])
+def test_link_que_nao_e_para_nota_nao_entra_no_mapa(texto):
+    """Como link quebrado, o "criar" faria foto.png.md."""
+    assert citacoes(texto) == []
+
+
+def test_link_markdown_para_secao_da_propria_nota_entra():
+    assert [c.alvo for c in citacoes("[topo](#Fim)")] == ["#Fim"]
+
+
+@pytest.mark.parametrize("texto, origem, pedido", [
+    ("[[Fornecedores]]", "Inbox/A.md", "Inbox/Fornecedores.md"),
+    ("[[Base/Nova]]", "Inbox/A.md", "Base/Nova.md"),
+    ("[[Nova.md]]", "A.md", "Nova.md"),
+    ("[n](Nova%20nota.md)", "Inbox/A.md", "Inbox/Nova nota.md"),
+    ("[n](../Raiz.md)", "Inbox/A.md", "Raiz.md"),
+    ("[n](../../fora.md)", "Inbox/A.md", "../fora.md"),
+])
+def test_caminho_que_o_link_pede(texto, origem, pedido):
+    assert citacoes(texto)[0].caminho_pedido(origem) == pedido
