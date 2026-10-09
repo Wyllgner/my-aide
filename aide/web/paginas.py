@@ -87,8 +87,6 @@ def pagina(corpo: str, ativo: str = "painel", titulo: str | None = None,
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{escape(nome)} · my-aide</title>
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Public+Sans:wght@400;450;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="/app.css">
 <script src="/app.js" defer></script>
 </head>

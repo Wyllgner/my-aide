@@ -99,6 +99,21 @@ def criar_app(config=None, conn_factory=None):
         return Response(JS, media_type="text/javascript",
                         headers={"cache-control": "no-cache"})
 
+    from pathlib import Path
+
+    pasta_fontes = Path(__file__).parent / "fontes"
+    # lista fechada, montada ao subir: o nome na URL nunca vira caminho
+    fontes = {p.name: p for p in pasta_fontes.glob("*.woff2")}
+
+    @app.get("/fontes/{nome}")
+    def fonte(nome: str) -> Response:
+        arquivo = fontes.get(nome)
+        if arquivo is None:
+            return Response("fonte não encontrada", status_code=404, media_type="text/plain")
+        # o nome não muda sem o arquivo mudar de nome junto: cache longo
+        return Response(arquivo.read_bytes(), media_type="font/woff2",
+                        headers={"cache-control": "max-age=31536000, immutable"})
+
     @app.get("/app.css")
     def folha_de_estilo() -> Response:
         from aide.web.estilo import CSS

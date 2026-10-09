@@ -181,3 +181,29 @@ def test_corpo_enorme_e_recusado_antes_de_ser_lido(cliente):
 def test_tamanho_que_nao_e_numero_e_recusado():
     assert seguranca.corpo_grande_demais("abc")
     assert not seguranca.corpo_grande_demais(None)
+
+
+# ---------- fontes ----------
+
+def test_a_pagina_nao_chama_nada_de_fora(cliente):
+    """As fontes vinham do Google: cada página aberta avisava a ele."""
+    html = cliente.get("/").text
+    assert "googleapis" not in html and "gstatic" not in html
+    assert "http" not in seguranca.CSP
+
+
+def test_fontes_servidas_pelo_proprio_site(cliente):
+    from aide.web.estilo import CSS
+
+    nomes = __import__("re").findall(r"url\(/fontes/([^)]+)\)", CSS)
+    assert len(nomes) == 8
+    for nome in nomes:
+        resposta = cliente.get(f"/fontes/{nome}")
+        assert resposta.status_code == 200, nome
+        assert resposta.headers["content-type"] == "font/woff2"
+        assert resposta.content[:4] == b"wOF2"
+
+
+@pytest.mark.parametrize("nome", ["../app.py", "..%2Fapp.py", "OFL-publicsans.txt", "x.woff2"])
+def test_rota_de_fontes_so_entrega_as_fontes(cliente, nome):
+    assert cliente.get(f"/fontes/{nome}").status_code == 404
