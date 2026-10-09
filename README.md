@@ -237,11 +237,28 @@ Sobe junto com o daemon em **http://127.0.0.1:8787**, com doze telas: painel com
 gráficos, hoje, calendário do mês, conversas, notas, gastos, custo e saldo,
 memória, pessoas, fila, ferramentas e auditoria.
 
-**Notas** é um editor no jeito do Obsidian: árvore de pastas, o arquivo inteiro
-editável, salvamento automático, prévia ao lado (Ctrl+E alterna entre escrever
-e ler), `[[links]]` com autocompletar ao digitar `[[`, e link para nota que não
-existe que cria a nota com um clique. Se o assessor ou o Obsidian mexerem na
-nota aberta, a página pergunta qual versão fica em vez de sobrescrever.
+**Notas** é um editor no jeito do Obsidian, sobre o mesmo `vault/`:
+
+* **Escrever:** árvore de pastas, o arquivo inteiro editável com cores de
+  markdown, salvamento automático e prévia ao lado (Ctrl+E alterna entre
+  escrever e ler). Se o assessor ou o Obsidian mexerem na nota aberta, a página
+  pergunta qual versão fica em vez de sobrescrever.
+* **Ligar:** `[[links]]`, `[[nota#seção]]` e `[[nota|apelido]]`, com
+  autocompletar ao digitar `[[`. Link para nota que não existe cria a nota com
+  um clique. Endereços soltos viram link; imagens, áudio, vídeo e PDF do vault
+  aparecem na prévia.
+* **Navegar:** embaixo de cada nota, quem aponta para ela e o grafo das
+  vizinhas; na lateral, os links quebrados, a visão geral do vault (órfãs, mais
+  citadas, tags, atividade por dia) e o grafo inteiro.
+* **Organizar:** clicar no título renomeia ou move a nota; o lápis da pasta
+  renomeia ou move a pasta; o × manda a pasta para a lixeira. Os links que
+  apontavam para elas são reescritos.
+* **Privado:** a caixa "privada" grava `private: true` no frontmatter. Nota
+  privada nunca vai para o modelo nem vira embedding.
+
+O assessor usa as mesmas ligações: "o que eu anotei ligado à obra?" segue os
+links da nota central, e ao anotar sobre algo que já tem nota ele escreve
+`Relacionadas: [[...]]`.
 
 > **Só nesta máquina.** A página mostra tudo, inclusive o que está marcado como
 > privado, e não pede senha. Ela escuta só em 127.0.0.1 (constante no código,
