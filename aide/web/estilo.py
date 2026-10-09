@@ -155,6 +155,11 @@ nav a svg { flex-shrink: 0; }
                padding: 8px 8px 2px; border-top: 1px solid var(--line-soft); margin-top: 2px; }
 .arvore-topo .eyebrow { margin: 0; }
 .arvore-ferramentas { display: flex; gap: 2px; }
+.ferramenta { display: inline-flex; align-items: center; justify-content: center; width: 26px;
+  height: 26px; border: 0; border-radius: 6px; background: none; color: var(--faint);
+  cursor: pointer; }
+.ferramenta:hover { background: var(--line-soft); color: var(--ink); }
+.ferramenta:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .filtro-arvore { font: inherit; font-size: 12.5px; margin: 4px 2px 4px; padding: 6px 10px;
   border: 1px solid var(--line); border-radius: var(--r-inner); background: var(--surface);
   color: var(--ink); }

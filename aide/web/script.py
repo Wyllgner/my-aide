@@ -105,6 +105,33 @@ JS = r"""
     });
   }
 
+  // ---------- árvore: as pastas abertas ficam abertas ----------
+  // trocar de nota recarrega a página, e as pastas que você abriu fechavam.
+  // Ficam lembradas neste navegador (comodidade: sem isso, só fecham)
+  var PASTAS = "aide.notas.pastas";
+  var arvorePastas = document.querySelector(".arvore");
+  if (arvorePastas && arvorePastas.querySelector(".arvore-topo")) {
+    var lembradas = [];
+    try { lembradas = JSON.parse(localStorage.getItem(PASTAS) || "[]"); } catch (e) { lembradas = []; }
+    arvorePastas.querySelectorAll("details[data-pasta]").forEach(function (d) {
+      if (lembradas.indexOf(d.dataset.pasta) >= 0) { d.open = true; }
+    });
+    var guardarPastas = function () {
+      // o filtro abre e fecha pastas sozinho: isso não é escolha sua
+      if (filtro && filtro.value.trim()) { return; }
+      var abertas = Array.prototype.filter.call(arvorePastas.querySelectorAll("details[data-pasta]"),
+        function (d) { return d.open; }).map(function (d) { return d.dataset.pasta; });
+      try { localStorage.setItem(PASTAS, JSON.stringify(abertas)); } catch (e) { /* sem armazenamento */ }
+    };
+    // toggle não sobe pela árvore: escuta na fase de captura
+    arvorePastas.addEventListener("toggle", guardarPastas, true);
+    document.getElementById("recolher-pastas").addEventListener("click", function () {
+      if (filtro && filtro.value.trim()) { filtro.value = ""; filtrarArvore(); }
+      arvorePastas.querySelectorAll("details[data-pasta]").forEach(function (d) { d.open = false; });
+      guardarPastas();
+    });
+  }
+
   // ---------- criar nota e pasta ----------
   var form = document.getElementById("criar");
   var nome = document.getElementById("criar-nome");
