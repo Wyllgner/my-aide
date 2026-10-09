@@ -266,3 +266,12 @@ def mover(origem: Path, destino: Path) -> None:
     destino.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.link(origem, destino)
     os.unlink(origem)
+
+
+def mover_pasta(origem: Path, destino: Path) -> None:
+    """Move uma pasta inteira. Destino que já existe é recusado antes: renomear
+    pasta por cima de pasta vazia seria aceito pelo sistema calado."""
+    if destino.exists():
+        raise FileExistsError(destino)
+    destino.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    origem.rename(destino)

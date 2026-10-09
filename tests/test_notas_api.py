@@ -319,3 +319,39 @@ def test_mover_atualiza_os_links_e_o_indice_de_quem_apontava(cliente, app, vault
     assert resposta.json()["links_atualizados"] == ["Quem aponta.md"]
     assert (vault_dir / "Quem aponta.md").read_text() == "ver a [[Renomeada]]"
     assert buscar_texto(app.state.conn_factory(), "Renomeada")
+
+
+# ---------- mover pasta ----------
+
+def _mover_pasta(cliente, de, para):
+    return cliente.post("/api/notas/mover-pasta", json={"de": de, "para": para})
+
+
+def test_mover_pasta_leva_as_notas_e_o_indice(cliente, app, vault_dir):
+    _salvar(cliente, "conteúdo", _abrir(cliente)["versao"])  # põe a nota no banco
+    resposta = _mover_pasta(cliente, "Inbox", "Entrada")
+    assert resposta.status_code == 200
+    assert resposta.json()["notas_movidas"] == {"Inbox/Nota.md": "Entrada/Nota.md"}
+    caminhos = [r[0] for r in app.state.conn_factory().execute("SELECT path FROM notes")]
+    assert caminhos == [str(vault_dir / "Entrada" / "Nota.md")]
+    assert (vault_dir / "Entrada" / "Nota.md").exists()
+
+
+@pytest.mark.parametrize("de, para, codigo", [
+    ("Inbox", "../fora", 400), (".trash", "Lixo", 400), ("Inbox", ".obsidian", 400),
+    ("Nada", "Outra", 404), ("Inbox", "Inbox/Dentro", 400),
+])
+def test_mover_pasta_recusa(cliente, tmp_path, de, para, codigo):
+    assert _mover_pasta(cliente, de, para).status_code == codigo
+    assert not (tmp_path / "fora").exists()
+
+
+def test_mover_pasta_por_cima_de_outra_e_conflito(cliente, vault_dir):
+    (vault_dir / "Outra").mkdir()
+    assert _mover_pasta(cliente, "Inbox", "Outra").status_code == 409
+    assert (vault_dir / "Inbox" / "Nota.md").exists()
+
+
+def test_mover_pasta_fica_na_trilha(cliente, app):
+    _mover_pasta(cliente, "Inbox", "Entrada")
+    assert _trilha(app)[-1]["tool"] == "notas.mover_pasta"

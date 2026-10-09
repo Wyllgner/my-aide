@@ -82,3 +82,41 @@ def test_texto_em_volta_fica_como_estava(raiz):
     (raiz / "Inbox" / "Reunião.md").write_text("  linha com [[Telhado]]   e espaços  \n\nfim\n")
     renomear.mover(raiz, "Projetos/Casa/Telhado.md", "Projetos/Casa/Cobertura.md")
     assert _ler(raiz, "Inbox/Reunião.md") == "  linha com [[Cobertura]]   e espaços  \n\nfim\n"
+
+
+# ---------- pastas ----------
+
+def test_mover_pasta_leva_as_notas_e_conserta_link_com_caminho(raiz):
+    movidas, mudadas = renomear.mover_pasta(raiz, "Projetos/Casa", "Obras/Casa nova")
+    assert movidas == {"Projetos/Casa/Obra.md": "Obras/Casa nova/Obra.md",
+                       "Projetos/Casa/Telhado.md": "Obras/Casa nova/Telhado.md"}
+    assert (raiz / "Obras" / "Casa nova" / "Telhado.md").exists()
+    assert not (raiz / "Projetos" / "Casa").exists()
+    # [[Telhado]] por nome continua valendo; [[Projetos/Casa/Telhado]] muda
+    assert "[[Telhado]]" in _ler(raiz, "Inbox/Reunião.md")
+    assert "[[Telhado]] com pasta" in _ler(raiz, "Solta.md")
+    assert "Solta.md" in mudadas
+
+
+def test_link_relativo_que_sai_da_pasta_e_refeito(raiz):
+    renomear.mover_pasta(raiz, "Projetos/Casa", "Casa")
+    assert "[volta](../Inbox/Reuni%C3%A3o.md)" in _ler(raiz, "Casa/Telhado.md")
+
+
+def test_link_relativo_dentro_da_pasta_fica_igual(raiz):
+    antes = _ler(raiz, "Projetos/Casa/Obra.md")
+    renomear.mover_pasta(raiz, "Projetos/Casa", "Outra/Casa")
+    assert _ler(raiz, "Outra/Casa/Obra.md") == antes
+
+
+def test_pasta_nao_vai_para_dentro_dela_mesma(raiz):
+    with pytest.raises(ValueError):
+        renomear.mover_pasta(raiz, "Projetos", "Projetos/Casa/Dentro")
+    assert (raiz / "Projetos" / "Casa" / "Telhado.md").exists()
+
+
+def test_pasta_nunca_passa_por_cima_de_outra(raiz):
+    (raiz / "Destino").mkdir()
+    with pytest.raises(FileExistsError):
+        renomear.mover_pasta(raiz, "Projetos/Casa", "Destino")
+    assert (raiz / "Projetos" / "Casa" / "Telhado.md").exists()

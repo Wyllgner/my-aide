@@ -130,6 +130,29 @@ def instalar(app) -> None:
         auditar("notas.mover", f"{de} → {para}")
         return {"caminho": para, "versao": versao(destino), "links_atualizados": mudadas}
 
+    @app.post("/api/notas/mover-pasta")
+    def mover_pasta(de: str = Body(...), para: str = Body(...)) -> dict:
+        from aide.web import renomear
+
+        origem, destino = local(de, pasta=True), local(para, pasta=True)
+        if not origem.is_dir():
+            raise HTTPException(404, "pasta não encontrada")
+        if destino.exists():
+            raise HTTPException(409, "já existe uma pasta ou nota com esse nome")
+        try:
+            movidas, mudadas = renomear.mover_pasta(raiz(), de, para)
+        except FileExistsError:
+            raise HTTPException(409, "já existe uma pasta ou nota com esse nome") from None
+        except ValueError as erro:
+            raise HTTPException(400, str(erro)) from None
+        conn = app.state.conn_factory()
+        for velho, novo in movidas.items():
+            mover_no_indice(conn, raiz() / velho, raiz() / novo)
+        for nota in mudadas:
+            sincronizar(conn, raiz() / nota)
+        auditar("notas.mover_pasta", f"{de} → {para}")
+        return {"caminho": para, "notas_movidas": movidas, "links_atualizados": mudadas}
+
     @app.post("/api/notas/pasta", status_code=201)
     def criar_pasta(caminho: str = Body(..., embed=True)) -> dict:
         pasta = local(caminho, pasta=True)
