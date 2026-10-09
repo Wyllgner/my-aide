@@ -279,6 +279,9 @@ nav a svg { flex-shrink: 0; }
 .previa p, .previa ul, .previa ol, .previa pre, .previa table, .previa blockquote { margin: 0 0 .9em; }
 .previa ul, .previa ol { padding-left: 1.4em; }
 .previa li.tarefa { list-style: none; margin-left: -1.3em; }
+/* a feita sai riscada e apagada; as subtarefas embaixo dela não */
+.previa li.feita > .tarefa-texto, .previa li.feita > p > .tarefa-texto {
+  color: var(--faint); text-decoration: line-through; text-decoration-color: var(--faint); }
 .previa li.tarefa input { margin: 0 6px 0 0; vertical-align: -1px; cursor: pointer;
                           accent-color: var(--accent); }
 .previa code { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 12.5px;
