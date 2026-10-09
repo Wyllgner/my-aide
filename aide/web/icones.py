@@ -33,6 +33,8 @@ TRACOS = {
     "privada": "M5.5 9h9v7.5h-9zM7.5 9V6.5a2.5 2.5 0 0 1 5 0V9",
     "renomear": "M3.5 6.5h13v7h-13zM7 8.5v3",
     "lixeira": "M4 6h12M8 6V4h4v2M5.5 6l.8 10.5h7.4L14.5 6M8.5 9v5M11.5 9v5",
+    "anexar": ("M14 8.5l-5.5 5.5a2 2 0 0 1-2.8-2.8l6-6a3.25 3.25 0 0 1 4.6 4.6l-6.2 6.2"
+               "a4.5 4.5 0 0 1-6.4-6.4l5.3-5.3"),
     # a lateral das notas
     "nova-nota": "M5 3h7l3 3v11H5zM12 3v3.5h3M10 9v5M7.5 11.5h5",
     "nova-pasta": "M3 5.5h5l1.5 2H17v8.5H3zM10 9.5v4.5M7.75 11.75h4.5",
