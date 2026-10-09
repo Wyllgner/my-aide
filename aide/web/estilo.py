@@ -176,7 +176,32 @@ nav a svg { flex-shrink: 0; }
 .modo[aria-pressed="true"] { background: var(--soft); color: var(--accent); font-weight: 600; }
 .area { flex: 1; display: grid; gap: 16px; min-height: 58vh; }
 .area[data-modo="dividido"] { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-.area[data-modo="editar"] .previa, .area[data-modo="ler"] #editor { display: none; }
+.area[data-modo="editar"] .previa, .area[data-modo="ler"] .campo { display: none; }
+
+/* cores no editor: o campo fica transparente por cima de uma cópia colorida
+   do mesmo texto (#realce). Os dois precisam quebrar linha no mesmo lugar:
+   mesma fonte, mesmo espaçamento e o mesmo espaço reservado para a barra */
+.campo { position: relative; min-width: 0; display: flex; }
+.realce { position: absolute; inset: 0; margin: 0; overflow: hidden; pointer-events: none;
+          padding: 14px 16px; border: 1px solid transparent; border-radius: var(--r-inner);
+          background: var(--paper); white-space: pre-wrap; overflow-wrap: break-word;
+          font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 13.5px;
+          line-height: 1.7; color: var(--ink); tab-size: 2; scrollbar-gutter: stable; }
+#editor.colorido { color: transparent; caret-color: var(--ink); background: transparent;
+                   position: relative; scrollbar-gutter: stable; }
+#editor.colorido::selection { background: rgba(196, 67, 43, .18); }
+#editor.colorido:focus { background: transparent; }
+.campo:focus-within .realce { background: var(--surface); }
+.realce .r-titulo { color: var(--accent); font-weight: 500; }
+.realce .r-marca { color: var(--faint); }
+.realce .r-forte { font-weight: 600; }
+.realce .r-italico { font-style: italic; }
+.realce .r-codigo { color: #3F7A54; }
+.realce .r-link { color: var(--accent); }
+.realce .r-url { color: var(--muted); }
+.realce .r-citacao { color: var(--muted); }
+.realce .r-front { color: var(--faint); }
+.realce .r-tag { color: #2B5FA8; }
 .area[data-modo="ler"] .previa { border-color: transparent; background: transparent; padding: 4px 2px; }
 
 /* a prévia: leitura confortável, mesma família da página */
