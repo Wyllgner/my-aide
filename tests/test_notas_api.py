@@ -300,7 +300,14 @@ def test_mover_fica_na_trilha(cliente, app):
     _mover(cliente, "Inbox/Nota.md", "Nova.md")
     trilha = _trilha(app)
     assert trilha[-1]["tool"] == "notas.mover"
-    assert json.loads(trilha[-1]["args_json"]) == {"caminho": "Inbox/Nota.md → Nova.md"}
+    assert json.loads(trilha[-1]["args_json"]) == {"caminho": "Inbox/Nota.md → Nova.md",
+                                                  "links_atualizados": []}
+
+
+def test_a_trilha_diz_quais_notas_o_mover_reescreveu(cliente, app, vault_dir):
+    (vault_dir / "Quem aponta.md").write_text("[[Nota]]")
+    _mover(cliente, "Inbox/Nota.md", "Nova.md")
+    assert json.loads(_trilha(app)[-1]["args_json"])["links_atualizados"] == ["Quem aponta.md"]
 
 
 def test_mover_de_outra_origem_e_recusado(app, vault_dir):

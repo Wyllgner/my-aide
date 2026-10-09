@@ -261,10 +261,26 @@ def mover(origem: Path, destino: Path) -> None:
     para o mesmo arquivo falha se ele já existe, e só então o velho sai. Os
     dois nomes nunca somem juntos: no pior caso sobra o arquivo com os dois.
     """
+    import errno
     import os
 
     destino.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    os.link(origem, destino)
+    try:
+        os.link(origem, destino)
+    except FileExistsError:
+        raise
+    except OSError as erro:
+        # disco sem link físico (exFAT, algumas pastas sincronizadas): confere
+        # e renomeia. Sobra uma janela mínima entre conferir e renomear, que
+        # só um segundo programa escrevendo o mesmo nome no mesmo instante
+        # alcançaria
+        if erro.errno not in (errno.EPERM, errno.ENOTSUP, errno.EOPNOTSUPP, errno.EXDEV,
+                              errno.EMLINK):
+            raise
+        if destino.exists():
+            raise FileExistsError(destino) from None
+        os.rename(origem, destino)
+        return
     os.unlink(origem)
 
 

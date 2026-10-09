@@ -364,3 +364,33 @@ def test_mover_arquivo_que_o_banco_nao_conhecia(raiz, banco):
     note_id = mover_no_indice(banco, de, para)
     assert banco.execute("SELECT path FROM notes WHERE id = ?", (note_id,)).fetchone()[0] \
         == str(para)
+
+
+def test_mover_em_disco_sem_link_fisico(raiz, monkeypatch):
+    """exFAT e algumas pastas sincronizadas não têm link físico."""
+    import errno
+    import os
+
+    def sem_link(*a):
+        raise OSError(errno.EPERM, "sem link")
+
+    monkeypatch.setattr(os, "link", sem_link)
+    vault.mover(raiz / "Inbox" / "Nota.md", raiz / "Nova.md")
+    assert (raiz / "Nova.md").read_text() == "x"
+    (raiz / "Outra.md").write_text("fica")
+    with pytest.raises(FileExistsError):
+        vault.mover(raiz / "Nova.md", raiz / "Outra.md")
+    assert (raiz / "Outra.md").read_text() == "fica"
+
+
+def test_outro_erro_de_disco_nao_e_engolido(raiz, monkeypatch):
+    import errno
+    import os
+
+    def cheio(*a):
+        raise OSError(errno.ENOSPC, "disco cheio")
+
+    monkeypatch.setattr(os, "link", cheio)
+    with pytest.raises(OSError):
+        vault.mover(raiz / "Inbox" / "Nota.md", raiz / "Nova.md")
+    assert (raiz / "Inbox" / "Nota.md").exists()
