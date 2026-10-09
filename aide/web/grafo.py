@@ -29,6 +29,7 @@ class Leitura:
     tags: list[str]
     palavras: int
     modificada: float  # mtime, para a atividade por dia
+    privada: bool = False  # `private: true` no frontmatter
 
 
 VAZIA = Leitura([], [], 0, 0.0)
@@ -66,15 +67,18 @@ def ler(arquivo: Path) -> Leitura:
     estado = arquivo.stat()
     if estado.st_size > TAMANHO_MAXIMO:
         # um export ou log de centenas de MB no vault não pode travar a tela
-        return Leitura([], [], 0, estado.st_mtime)
+        # sem ler, não dá para saber se é privada: para quem pergunta de fora,
+        # trate como se fosse
+        return Leitura([], [], 0, estado.st_mtime, privada=True)
     marca = (estado.st_mtime_ns, estado.st_size)
     with _TRAVA:
         guardado = _CACHE.get(arquivo)
     if guardado and guardado[:2] == marca:
         return guardado[2]
     texto = arquivo.read_text(encoding="utf-8", errors="replace")
-    leitura = Leitura(citacoes(texto), etiquetas(texto), len(vault.separar(texto)[1].split()),
-                      estado.st_mtime)
+    meta, corpo = vault.separar(texto)
+    leitura = Leitura(citacoes(texto), etiquetas(texto), len(corpo.split()),
+                      estado.st_mtime, vault.privada(meta))
     with _TRAVA:
         _CACHE[arquivo] = (*marca, leitura)
     return leitura
