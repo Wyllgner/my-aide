@@ -373,3 +373,12 @@ def test_nota_fora_de_utf8_nao_derruba_a_tela(cliente, raiz):
     html = _tela(cliente, "Inbox/Velha.md")
     assert "não está em UTF-8" in html
     assert 'id="editor"' not in html
+
+
+def test_os_botoes_da_nota_tem_icone_e_dica(cliente):
+    html = _tela(cliente, "Inbox/Ideia.md")
+    assert 'role="toolbar" aria-label="ações da nota"' in html
+    assert 'title="renomear ou mover · F2"' in html
+    assert 'class="botao botao-perigo"' in html
+    assert '<span class="rotulo">apagar</span>' in html
+    assert "Ctrl+E alterna editar e ler" in html
