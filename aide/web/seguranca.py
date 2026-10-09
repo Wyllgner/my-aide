@@ -34,6 +34,7 @@ DIRETIVAS = (
     "style-src 'self' 'unsafe-inline'",
     "font-src 'self'",
     "img-src 'self' data:",
+    "media-src 'self'",
     "connect-src 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
