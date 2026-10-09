@@ -165,6 +165,10 @@ nav a svg { flex-shrink: 0; }
   color: var(--ink); }
 .filtro-arvore:focus { outline: none; border-color: var(--faint); }
 .filtro-vazio { padding: 2px 8px; }
+/* arrastando uma nota: ela fica apagada, e a pasta sob ela é marcada */
+.arvore .arquivo.arrastando { opacity: .45; }
+.arvore summary.alvo-soltar, .arvore-topo.alvo-soltar { background: var(--soft);
+  outline: 2px dashed var(--accent); outline-offset: -2px; border-radius: var(--r-inner); }
 .arvore .arquivo[aria-current="page"] { background: var(--soft); color: var(--accent);
                                          font-weight: 600; }
 .arvore .achado { display: block; white-space: normal; }

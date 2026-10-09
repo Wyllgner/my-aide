@@ -132,6 +132,84 @@ JS = r"""
     });
   }
 
+  // ---------- árvore: arrastar nota para outra pasta ----------
+  // solta numa pasta (ou em "Pastas", a raiz do vault) e ela muda de lugar,
+  // com os links das outras notas atualizados, como no renomear. Parada em
+  // cima de uma pasta fechada, ela abre
+  var TIPO_NOTA = "application/x-aide-nota";
+  var arvoreArrasto = document.querySelector(".arvore");
+  if (arvoreArrasto && arvoreArrasto.querySelector(".arvore-topo")) {
+    var abrirAoParar = null;
+    var temNota = function (e) {
+      return e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], TIPO_NOTA) >= 0;
+    };
+    var alvoDe = function (e) {
+      var alvo = e.target.closest && e.target.closest("summary, .arvore-topo");
+      return alvo && arvoreArrasto.contains(alvo) ? alvo : null;
+    };
+    var limparAlvos = function () {
+      arvoreArrasto.querySelectorAll(".alvo-soltar").forEach(function (el) { el.classList.remove("alvo-soltar"); });
+    };
+    arvoreArrasto.querySelectorAll(".arquivo[title]").forEach(function (a) {
+      a.addEventListener("dragstart", function (e) {
+        e.dataTransfer.setData(TIPO_NOTA, a.getAttribute("title"));
+        e.dataTransfer.effectAllowed = "move";
+        a.classList.add("arrastando");
+      });
+      a.addEventListener("dragend", function () {
+        a.classList.remove("arrastando");
+        limparAlvos();
+        clearTimeout(abrirAoParar);
+      });
+    });
+    arvoreArrasto.addEventListener("dragover", function (e) {
+      var alvo = alvoDe(e);
+      if (!temNota(e) || !alvo) { return; }
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      if (alvo.classList.contains("alvo-soltar")) { return; }
+      limparAlvos();
+      alvo.classList.add("alvo-soltar");
+      clearTimeout(abrirAoParar);
+      var pasta = alvo.parentElement;
+      if (pasta.tagName === "DETAILS" && !pasta.open) {
+        abrirAoParar = setTimeout(function () { pasta.open = true; }, 700);
+      }
+    });
+    arvoreArrasto.addEventListener("dragleave", function (e) {
+      var alvo = alvoDe(e);
+      if (alvo && !alvo.contains(e.relatedTarget)) { alvo.classList.remove("alvo-soltar"); }
+    });
+    arvoreArrasto.addEventListener("drop", function (e) {
+      var alvo = alvoDe(e);
+      if (!temNota(e) || !alvo) { return; }
+      e.preventDefault();
+      limparAlvos();
+      clearTimeout(abrirAoParar);
+      var de = e.dataTransfer.getData(TIPO_NOTA);
+      var pasta = alvo.parentElement.tagName === "DETAILS" ? alvo.parentElement.dataset.pasta : "";
+      var para = (pasta ? pasta + "/" : "") + de.replace(/^.*\//, "");
+      if (!de || para === de) { return; }
+      var editorAberto = document.getElementById("editor");
+      var aberta = editorAberto ? editorAberto.dataset.caminho : "";
+      // a nota aberta pode ser a que muda, ou ter links nela reescritos: salva antes
+      var guardar = window.aideSalvar ? window.aideSalvar() : Promise.resolve();
+      guardar.then(function () {
+        return pedir("POST", "/api/notas/mover", { de: de, para: para });
+      }).then(function (r) {
+        if (!r.ok) { return erroDe(r).then(function (m) { throw new Error(m); }); }
+        return r.json().then(function (d) {
+          guardarAviso(d);
+          if (aberta === de) { abrir(d.caminho); } else { location.reload(); }
+        });
+      }).catch(function (e2) {
+        var aviso = arvoreArrasto.querySelector(".filtro-vazio");
+        aviso.textContent = "não deu para mover: " + e2.message;
+        aviso.hidden = false;
+      });
+    });
+  }
+
   // ---------- criar nota e pasta ----------
   var form = document.getElementById("criar");
   var nome = document.getElementById("criar-nome");
