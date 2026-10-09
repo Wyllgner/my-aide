@@ -18,7 +18,7 @@ from urllib.parse import quote
 
 from aide.channels import formato
 from aide.storage import links, vault
-from aide.web import consultas, markdown
+from aide.web import consultas, grafo, markdown
 from aide.web.paginas import cabecalho
 
 
@@ -136,8 +136,29 @@ def _modos(atual: str) -> str:
     return f'<div class="modos" role="group" aria-label="modo de visualização">{botoes}</div>'
 
 
+def _backlinks(entradas: list[grafo.Ligacao]) -> str:
+    """Quem aponta para a nota aberta, com a linha em volta de cada link —
+    é o contexto que diz por que a outra nota fala desta."""
+    por_origem: dict[str, list[str]] = {}
+    for lig in entradas:
+        por_origem.setdefault(lig.origem, []).append(lig.citacao.trecho)
+    if not por_origem:
+        return ('<section class="backlinks"><p class="eyebrow">Links para esta nota</p>'
+                '<p class="vazio-curto">Nenhuma nota aponta para esta ainda.</p></section>')
+    itens = ""
+    for origem in sorted(por_origem, key=str.casefold):
+        trechos = "".join(f'<li>{escape(t[:160])}{"…" if len(t) > 160 else ""}</li>'
+                          for t in dict.fromkeys(por_origem[origem]))
+        nome = origem.rpartition("/")[2].removesuffix(".md")
+        itens += (f'<li><a href="{escape(_href(origem))}">{escape(nome)}</a>'
+                  f'<span class="onde">{escape(origem)}</span><ul class="trechos">{trechos}'
+                  f'</ul></li>')
+    return (f'<section class="backlinks"><p class="eyebrow">Links para esta nota · '
+            f'{formato.plural(len(por_origem), "nota")}</p><ul>{itens}</ul></section>')
+
+
 def _editor(raiz: Path, aberto: str, agora: datetime, indice: links.Indice,
-            modo: str = "dividido") -> str:
+            modo: str = "dividido", entradas: list | None = None) -> str:
     """O editor da nota aberta.
 
     Corretor desligado em nota privada: o "corretor avançado" do Chrome manda
@@ -181,7 +202,8 @@ def _editor(raiz: Path, aberto: str, agora: datetime, indice: links.Indice,
   data-notas="{escape(json.dumps(indice.caminhos, ensure_ascii=False))}">
 {escape(texto)}</textarea>
 <article id="previa" class="previa">{markdown.renderizar(texto, aberto, indice)}</article>
-</div>"""
+</div>
+{_backlinks(entradas or [])}"""
 
 
 def tela(ctx, registry, agora: datetime, nota: int | None = None,
@@ -212,7 +234,9 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
             '<p class="vazio">Nenhuma nota ainda. Crie a primeira com “+ nota”.</p>')
 
     pasta_atual = aberto.rpartition("/")[0] if aberto else ""
-    corpo = (_editor(raiz, aberto, agora, links.indice(raiz), _modo(modo)) if aberto else
+    indice = links.indice(raiz)
+    entradas = grafo.mapa(raiz, indice).entradas(aberto) if aberto else []
+    corpo = (_editor(raiz, aberto, agora, indice, _modo(modo), entradas) if aberto else
              '<p class="vazio">Escolha uma nota à esquerda ou crie uma nova.</p>')
 
     busca_form = (

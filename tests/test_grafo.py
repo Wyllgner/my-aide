@@ -97,3 +97,8 @@ def test_a_lixeira_nao_aponta_para_ninguem(raiz):
     (raiz / ".trash" / "Velha.md").write_text("[[Telhado]]")
     origens = [lig.origem for lig in grafo.mapa(raiz).entradas("Projetos/Casa/Telhado.md")]
     assert not any(".trash" in o for o in origens)
+
+
+def test_cada_citacao_traz_a_linha_em_volta():
+    achadas = citacoes("# T\n\n  ver o [[Telhado]] amanhã  \n")
+    assert achadas[0].trecho == "ver o [[Telhado]] amanhã"

@@ -208,3 +208,24 @@ def test_cookie_de_modo_estranho_cai_no_padrao(cliente):
     html = _tela(cliente, "Inbox/Ideia.md")
     assert '<div class="area" data-modo="dividido">' in html
     assert "<script>" not in html.split("</head>")[1]
+
+
+# ---------- backlinks ----------
+
+def test_backlinks_mostram_quem_aponta_e_o_contexto(cliente, raiz):
+    (raiz / "Inbox" / "Ideia.md").write_text("pensar no [[Telhado]] antes da chuva")
+    html = _tela(cliente, "Projetos/Casa/Telhado.md")
+    painel = html[html.index('<section class="backlinks">'):]
+    assert "Links para esta nota · 1 nota" in painel
+    assert 'href="/notas?arquivo=Inbox/Ideia.md">Ideia</a>' in painel
+    assert "pensar no [[Telhado]] antes da chuva" in painel
+
+
+def test_sem_backlinks_diz_que_nao_ha(cliente):
+    assert "Nenhuma nota aponta para esta ainda." in _tela(cliente, "Inbox/Ideia.md")
+
+
+def test_contexto_do_backlink_e_escapado(cliente, raiz):
+    (raiz / "Inbox" / "Ideia.md").write_text("<img src=x onerror=alert(1)> [[Telhado]]")
+    html = _tela(cliente, "Projetos/Casa/Telhado.md")
+    assert "<img src=x" not in html

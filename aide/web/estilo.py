@@ -185,6 +185,20 @@ nav a svg { flex-shrink: 0; }
 .propriedades dt { color: var(--faint); font-family: 'IBM Plex Mono', ui-monospace, monospace; }
 .propriedades dd { margin: 0; color: var(--muted); overflow-wrap: anywhere; }
 
+/* backlinks */
+.backlinks { border-top: 1px solid var(--line-soft); padding-top: 14px; margin-top: 6px; }
+.backlinks > ul { list-style: none; margin: 10px 0 0; padding: 0; display: grid;
+                  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.backlinks > ul > li { padding: 10px 12px; border: 1px solid var(--line-soft);
+                       border-radius: var(--r-inner); font-size: 13.5px; min-width: 0; }
+.backlinks a { font-weight: 600; }
+.backlinks .onde { display: block; font-size: 11px; color: var(--faint); margin-top: 2px; }
+.backlinks .trechos { margin: 6px 0 0; padding: 0; list-style: none; font-size: 12.5px;
+                      color: var(--muted); line-height: 1.5; }
+.backlinks .trechos li { overflow-wrap: anywhere; }
+.backlinks .trechos li + li { margin-top: 4px; }
+.vazio-curto { margin: 6px 0 0; font-size: 13px; color: var(--faint); }
+
 /* autocompletar [[ */
 .sugestoes { position: absolute; z-index: 10; margin: 0; padding: 4px; list-style: none;
              min-width: 240px; max-width: 360px; background: var(--surface);

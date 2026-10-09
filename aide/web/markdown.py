@@ -243,6 +243,7 @@ class Citacao:
     alvo: str
     secao: str
     linha: int  # linha no arquivo, contando o frontmatter
+    trecho: str = ""  # o texto dessa linha, para mostrar o link no contexto
 
     def destino(self, origem: str, indice: Indice) -> str | None:
         """Para onde aponta hoje — muda quando notas são criadas ou apagadas."""
@@ -257,16 +258,19 @@ def citacoes(texto: str) -> list[Citacao]:
     código não conta, e o que a prévia mostra como link é o que vira ligação."""
     inicio = vault.inicio_do_corpo(texto)
     corpo = "\n".join(texto.split("\n")[inicio:])
+    linhas = texto.split("\n")
     achadas = []
     for bloco in MOTOR.parse(corpo, {"deslocamento": inicio}):
         if bloco.type != "inline" or not bloco.children:
             continue
         linha = inicio + (bloco.map[0] if bloco.map else 0)
+        trecho = linhas[linha].strip() if linha < len(linhas) else ""
         for token in bloco.children:
             if token.type == "wikilink" and not ANEXO.search(token.meta["nome"]):
-                achadas.append(Citacao("wiki", token.meta["nome"], token.meta["secao"], linha))
+                achadas.append(Citacao("wiki", token.meta["nome"], token.meta["secao"],
+                                       linha, trecho))
             elif token.type == "link_open":
                 href = token.attrGet("href") or ""
                 if not _seguro(href):
-                    achadas.append(Citacao("md", href, "", linha))
+                    achadas.append(Citacao("md", href, "", linha, trecho))
     return achadas
