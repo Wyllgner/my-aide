@@ -18,7 +18,7 @@ from urllib.parse import quote
 
 from aide.channels import formato
 from aide.storage import links, vault
-from aide.web import consultas, grafo, markdown
+from aide.web import consultas, grafo, markdown, visao
 from aide.web.notas_api import TAMANHO_MAXIMO
 from aide.web.paginas import cabecalho
 
@@ -161,6 +161,47 @@ def _backlinks(entradas: list[grafo.Ligacao]) -> str:
             f'{formato.plural(len(por_origem), "nota")}</p><ul>{itens}</ul></section>')
 
 
+def _visao_geral(raiz: Path, agora: datetime, indice: links.Indice) -> str:
+    """O painel do vault: números, atividade, as mais citadas, tags e órfãs."""
+    from aide.web import graficos
+    from aide.web.telas import _cartao, _indicador
+
+    v = visao.montar(raiz, agora, dias=30, indice=indice)
+
+    def nome(caminho: str) -> str:
+        return caminho.rpartition("/")[2].removesuffix(".md")
+
+    indicadores = "".join([
+        _indicador("Notas", str(v.notas), formato.plural(v.palavras, "palavra")),
+        _indicador("Ligações", str(v.ligacoes), "entre notas diferentes"),
+        _indicador("Órfãs", str(len(v.orfas)), "sem link para nem de ninguém"),
+        _indicador("Links quebrados", str(v.quebrados), "apontam para nota que não existe",
+                   alerta=bool(v.quebrados)),
+        _indicador("Tags", str(len(v.tags)), "do frontmatter e #do texto"),
+    ])
+    atividade = graficos.colunas([(dia[8:], n) for dia, n in v.atividade], 600, 96,
+                                 vazio="nenhuma nota ainda")
+    citadas = graficos.barras([(nome(c), n) for c, n in v.mais_citadas], rotulo_px=150,
+                              vazio="nenhuma nota é citada ainda")
+    tags = graficos.barras(v.tags[:12], rotulo_px=120, vazio="nenhuma tag ainda")
+    orfas = "".join(f'<a href="{escape(_href(c))}">{escape(nome(c))}</a>' for c in v.orfas[:40])
+    if len(v.orfas) > 40:
+        orfas += f'<span class="onde">e mais {len(v.orfas) - 40}</span>'
+    return f"""
+<div class="visao">
+  <div class="visao-numeros">{indicadores}</div>
+  {_cartao("Notas mexidas por dia · últimos 30 dias",
+           atividade + '<p class="nota-grafico">pela data da última modificação de cada '
+           'arquivo — uma nota mexida hoje sai do dia em que foi escrita</p>')}
+  <div class="visao-dupla">
+    {_cartao("Mais citadas", citadas)}
+    {_cartao("Tags", tags)}
+  </div>
+  {_cartao("Órfãs", f'<div class="orfas">{orfas}</div>' if orfas else
+           '<p class="vazio-curto">Nenhuma: toda nota aponta ou é apontada.</p>')}
+</div>"""
+
+
 def _quebrados(raiz: Path, quebrados: list[grafo.Ligacao]) -> str:
     """Os links para notas que não existem, um item por nota que falta, com
     quem cita e o botão de criar. Criar vai para a pasta de quem citou
@@ -262,7 +303,7 @@ def _editor(raiz: Path, aberto: str, agora: datetime, indice: links.Indice,
 
 def tela(ctx, registry, agora: datetime, nota: int | None = None,
          busca: str | None = None, arquivo: str | None = None,
-         modo: str | None = None, quebrados: bool = False) -> str:
+         modo: str | None = None, quebrados: bool = False, geral: bool = False) -> str:
     raiz = Path(ctx.config.vault_dir)
     itens = vault.arvore(raiz)
     indice = links.indice(raiz, itens)
@@ -291,8 +332,12 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
     elif quebrados:
         lateral = _quebrados(raiz, quebrados_todos) + voltar
     else:
-        lateral = _ramo(itens, aberto or "") or (
+        lateral = _ramo(itens, "" if geral else aberto or "") or (
             '<p class="vazio">Nenhuma nota ainda. Crie a primeira com “+ nota”.</p>')
+    if not geral:
+        lateral = (f'<a class="atalho-visao" href="/notas?geral=1'
+                   f'{"&amp;arquivo=" + escape(quote(aberto, safe="/")) if aberto else ""}">'
+                   f'visão geral do vault</a>' + lateral)
     if quebrados_todos and not quebrados:
         alvos = len({markdown.chave_link(lig.citacao.caminho_pedido(lig.origem)
                                          .rpartition("/")[2]) for lig in quebrados_todos})
@@ -301,8 +346,12 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
                    f'{formato.plural(alvos, "link quebrado", "links quebrados")}</a>' + lateral)
 
     pasta_atual = aberto.rpartition("/")[0] if aberto else ""
-    corpo = (_editor(raiz, aberto, agora, indice, _modo(modo), entradas) if aberto else
-             '<p class="vazio">Escolha uma nota à esquerda ou crie uma nova.</p>')
+    if geral:
+        corpo = _visao_geral(raiz, agora, indice)
+    elif aberto:
+        corpo = _editor(raiz, aberto, agora, indice, _modo(modo), entradas)
+    else:
+        corpo = '<p class="vazio">Escolha uma nota à esquerda ou crie uma nova.</p>'
 
     busca_form = (
         f'<form method="get" action="/notas" style="display:flex;gap:6px">'

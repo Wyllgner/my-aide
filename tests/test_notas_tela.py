@@ -299,3 +299,31 @@ def test_cada_pasta_tem_o_botao_de_renomear(cliente):
     html = _tela(cliente)
     for pasta in ("Inbox", "Projetos", "Projetos/Casa"):
         assert f'class="renomear-pasta" data-pasta="{pasta}"' in html
+
+
+# ---------- visão geral ----------
+
+def test_visao_geral_mostra_os_numeros_e_as_orfas(cliente, raiz):
+    (raiz / "Inbox" / "Ideia.md").write_text("ver [[Telhado]] #casa")
+    (raiz / "Solta.md").write_text("sozinha")
+    html = cliente.get("/notas?geral=1").text
+    painel = html[html.index('<div class="visao">'):]
+    assert "Notas mexidas por dia" in painel
+    assert "Mais citadas" in painel and ">Telhado</span>" in painel
+    assert 'href="/notas?arquivo=Solta.md">Solta</a>' in painel
+    assert 'id="editor"' not in html
+
+
+def test_atalho_para_a_visao_geral_na_lateral(cliente):
+    assert 'href="/notas?geral=1&amp;arquivo=Inbox/Ideia.md">visão geral do vault' in \
+        _tela(cliente, "Inbox/Ideia.md")
+
+
+def test_visao_geral_escapa_nome_e_tag(cliente, raiz):
+    (raiz / "Inbox" / "<b>x.md").write_text("#<i>tag")
+    assert "<b>x" not in cliente.get("/notas?geral=1").text
+
+
+def test_na_visao_geral_nenhuma_nota_fica_marcada_como_aberta(cliente):
+    html = cliente.get("/notas?geral=1&arquivo=Inbox/Ideia.md").text
+    assert 'aria-current="page" title' not in html.split('<div class="arvore"')[1].split("</div>")[0]
