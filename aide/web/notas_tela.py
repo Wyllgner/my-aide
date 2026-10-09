@@ -303,7 +303,8 @@ def _editor(raiz: Path, aberto: str, agora: datetime, indice: links.Indice,
 
 def tela(ctx, registry, agora: datetime, nota: int | None = None,
          busca: str | None = None, arquivo: str | None = None,
-         modo: str | None = None, quebrados: bool = False, geral: bool = False) -> str:
+         modo: str | None = None, quebrados: bool = False, geral: bool = False,
+         grafo_todo: bool = False) -> str:
     raiz = Path(ctx.config.vault_dir)
     itens = vault.arvore(raiz)
     indice = links.indice(raiz, itens)
@@ -332,12 +333,14 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
     elif quebrados:
         lateral = _quebrados(raiz, quebrados_todos) + voltar
     else:
-        lateral = _ramo(itens, "" if geral else aberto or "") or (
+        lateral = _ramo(itens, "" if geral or grafo_todo else aberto or "") or (
             '<p class="vazio">Nenhuma nota ainda. Crie a primeira com “+ nota”.</p>')
-    if not geral:
-        lateral = (f'<a class="atalho-visao" href="/notas?geral=1'
-                   f'{"&amp;arquivo=" + escape(quote(aberto, safe="/")) if aberto else ""}">'
-                   f'visão geral do vault</a>' + lateral)
+    volta = "&amp;arquivo=" + escape(quote(aberto, safe="/")) if aberto else ""
+    atalhos = "".join(
+        f'<a class="atalho-visao" href="/notas?{param}=1{volta}">{rotulo}</a>'
+        for param, rotulo, ativo in (("geral", "visão geral do vault", geral),
+                                     ("grafo", "grafo", grafo_todo)) if not ativo)
+    lateral = f'<div class="atalhos">{atalhos}</div>' + lateral
     if quebrados_todos and not quebrados:
         alvos = len({markdown.chave_link(lig.citacao.caminho_pedido(lig.origem)
                                          .rpartition("/")[2]) for lig in quebrados_todos})
@@ -346,7 +349,18 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
                    f'{formato.plural(alvos, "link quebrado", "links quebrados")}</a>' + lateral)
 
     pasta_atual = aberto.rpartition("/")[0] if aberto else ""
-    if geral:
+    if grafo_todo:
+        from aide.web import grafo_svg
+
+        nos = indice.caminhos
+        arestas = grafo_svg.do_mapa(mapa, nos)
+        corpo = (f'<div class="grafo-topo"><p class="eyebrow">Grafo · '
+                 f'{formato.plural(len(nos), "nota")} · '
+                 f'{formato.plural(len(arestas), "ligação", "ligações")}</p>'
+                 f'<span class="onde">arraste para mover · roda do mouse para zoom ·'
+                 f' clique numa nota para abrir</span></div>'
+                 + grafo_svg.desenhar(nos, arestas, aberto))
+    elif geral:
         corpo = _visao_geral(raiz, agora, indice)
     elif aberto:
         corpo = _editor(raiz, aberto, agora, indice, _modo(modo), entradas)
