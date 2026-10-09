@@ -37,7 +37,7 @@ def versao(caminho: Path) -> str:
 
 
 def instalar(app) -> None:
-    from fastapi import Body, HTTPException, Query
+    from fastapi import Body, HTTPException, Query, Request
     from fastapi.responses import JSONResponse
 
     config = app.state.config
@@ -103,6 +103,52 @@ def instalar(app) -> None:
                                        " object-src 'self'; sandbox",
             "cache-control": "no-cache",
         })
+
+    async def anexar(request, nota: str = Query(...), nome: str = Query("")):
+        """Guarda no vault o arquivo do corpo do pedido — a captura colada com
+        Ctrl+V, o arquivo arrastado ou escolhido — e devolve o `![[...]]` para
+        a nota. Só os tipos da lista de anexos, nunca por cima de outro arquivo,
+        e os bytes são contados enquanto chegam: o limite vale mesmo sem
+        Content-Length."""
+        from aide.storage import anexos
+
+        if not local(nota).is_file():
+            raise HTTPException(404, "nota não encontrada")
+        try:
+            nome_final = anexos.nome_para(nome, request.headers.get("content-type", ""), agora())
+            relativo_pasta = anexos.pasta_para(raiz(), nota)
+            pasta = (vault.resolver(raiz(), relativo_pasta, pasta=True)
+                     if relativo_pasta else raiz().resolve())
+            # o nome também passa pela trava de caminho, antes de existir
+            anexos.resolver(raiz(), f"{relativo_pasta}/{nome_final}".lstrip("/"))
+        except vault.ForaDoVault as erro:
+            raise HTTPException(400, str(erro)) from None
+        except ValueError as erro:
+            raise HTTPException(415, str(erro)) from None
+
+        caminho, arquivo = anexos.reservar(pasta, nome_final)
+        total = 0
+        try:
+            with arquivo:
+                async for pedaco in request.stream():
+                    total += len(pedaco)
+                    if total > anexos.TAMANHO_MAXIMO:
+                        raise HTTPException(413, "anexo grande demais")
+                    arquivo.write(pedaco)
+            if not total:
+                raise HTTPException(400, "arquivo vazio")
+        except BaseException:
+            caminho.unlink(missing_ok=True)
+            raise
+        relativo = vault.relativo_de(raiz(), caminho)
+        auditar("notas.anexar", relativo, nota=nota, bytes=total)
+        return {"caminho": relativo, "link": anexos.link_para(raiz(), nota, relativo)}
+
+    # o módulo tem `from __future__ import annotations`, e o FastAPI resolveria
+    # o nome "Request" nos globais, onde ele não está (fastapi é opcional e só
+    # se importa aqui dentro): a anotação vai como objeto
+    anexar.__annotations__["request"] = Request
+    app.post("/api/notas/anexo", status_code=201)(anexar)
 
     @app.get("/api/notas/arquivo")
     def abrir(caminho: str = Query(...)) -> dict:

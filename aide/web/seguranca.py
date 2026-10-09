@@ -79,15 +79,24 @@ def escrita_permitida(metodo: str, host: str, origin: str | None,
 
 # a maior nota aceita (notas_api.TAMANHO_MAXIMO) mais folga para o JSON em volta
 CORPO_MAXIMO = 3 * 1024 * 1024
+# a rota que recebe anexo: o corpo é o arquivo, até o limite de anexos.
+# Ela mesma conta os bytes enquanto grava, para o pedido sem Content-Length
+ROTA_DE_ANEXO = "/api/notas/anexo"
 
 
-def corpo_grande_demais(tamanho: str | None) -> bool:
+def corpo_grande_demais(tamanho: str | None, limite: int = CORPO_MAXIMO) -> bool:
     """Recusado antes de ser lido: a checagem da rota só vem depois que o
     corpo inteiro já está na memória."""
     try:
-        return int(tamanho or 0) > CORPO_MAXIMO
+        return int(tamanho or 0) > limite
     except ValueError:
         return True
+
+
+def limite_do_corpo(metodo: str, caminho: str) -> int:
+    from aide.storage.anexos import TAMANHO_MAXIMO
+
+    return TAMANHO_MAXIMO if metodo == "POST" and caminho == ROTA_DE_ANEXO else CORPO_MAXIMO
 
 
 def instalar(app) -> None:
@@ -105,7 +114,8 @@ def instalar(app) -> None:
                 request.headers.get("sec-fetch-site"))
             if motivo:
                 resposta = PlainTextResponse(motivo, status_code=403)
-            elif corpo_grande_demais(request.headers.get("content-length")):
+            elif corpo_grande_demais(request.headers.get("content-length"),
+                                     limite_do_corpo(request.method, request.url.path)):
                 resposta = PlainTextResponse("pedido grande demais", status_code=413)
             else:
                 resposta = await call_next(request)
