@@ -261,3 +261,51 @@ def test_abrir_nota_enorme_e_recusado(cliente, vault_dir):
     (vault_dir / "Inbox" / "Export.md").write_text("x" * (2 * 1024 * 1024 + 1))
     resposta = cliente.get("/api/notas/arquivo", params={"caminho": "Inbox/Export.md"})
     assert resposta.status_code == 413
+
+
+# ---------- mover ----------
+
+def _mover(cliente, de, para):
+    return cliente.post("/api/notas/mover", json={"de": de, "para": para})
+
+
+def test_mover_nota(cliente, vault_dir):
+    resposta = _mover(cliente, "Inbox/Nota.md", "Projetos/Renomeada.md")
+    assert resposta.status_code == 200
+    assert resposta.json()["caminho"] == "Projetos/Renomeada.md"
+    assert (vault_dir / "Projetos" / "Renomeada.md").exists()
+    assert not (vault_dir / "Inbox" / "Nota.md").exists()
+
+
+def test_mover_para_nome_que_existe_e_conflito(cliente, vault_dir):
+    (vault_dir / "Outra.md").write_text("fica")
+    assert _mover(cliente, "Inbox/Nota.md", "Outra.md").status_code == 409
+    assert (vault_dir / "Outra.md").read_text() == "fica"
+
+
+def test_mover_o_que_nao_existe(cliente):
+    assert _mover(cliente, "Inbox/Nada.md", "X.md").status_code == 404
+
+
+@pytest.mark.parametrize("de, para", [
+    ("Inbox/Nota.md", "../fora.md"), ("Inbox/Nota.md", ".trash/x.md"),
+    ("../../etc/passwd", "x.md"), ("Inbox/Nota.md", "x.sh"),
+])
+def test_mover_nao_sai_do_vault(cliente, tmp_path, de, para):
+    assert _mover(cliente, de, para).status_code == 400
+    assert not (tmp_path / "fora.md").exists()
+
+
+def test_mover_fica_na_trilha(cliente, app):
+    _mover(cliente, "Inbox/Nota.md", "Nova.md")
+    trilha = _trilha(app)
+    assert trilha[-1]["tool"] == "notas.mover"
+    assert json.loads(trilha[-1]["args_json"]) == {"caminho": "Inbox/Nota.md → Nova.md"}
+
+
+def test_mover_de_outra_origem_e_recusado(app, vault_dir):
+    resposta = TestClient(app, base_url=LOCAL).post(
+        "/api/notas/mover", json={"de": "Inbox/Nota.md", "para": "X.md"},
+        headers={"origin": "http://evil.example", "x-aide": "1"})
+    assert resposta.status_code == 403
+    assert (vault_dir / "Inbox" / "Nota.md").exists()

@@ -18,7 +18,7 @@ import json
 from pathlib import Path
 
 from aide.storage import vault
-from aide.storage.reconciliacao import esquecer, sincronizar
+from aide.storage.reconciliacao import esquecer, mover_no_indice, sincronizar
 
 # uma nota de 2 MB já é um livro; acima disso é engano, não anotação
 TAMANHO_MAXIMO = 2 * 1024 * 1024
@@ -109,6 +109,21 @@ def instalar(app) -> None:
         sincronizar(app.state.conn_factory(), raiz() / caminho)
         auditar("notas.criar", caminho)
         return {"caminho": caminho, "versao": versao(arquivo)}
+
+    @app.post("/api/notas/mover")
+    def mover(de: str = Body(...), para: str = Body(...)) -> dict:
+        origem, destino = local(de), local(para)
+        if not origem.is_file():
+            raise HTTPException(404, "nota não encontrada")
+        if destino.exists():
+            raise HTTPException(409, "já existe uma nota com esse nome")
+        try:
+            vault.mover(origem, destino)
+        except FileExistsError:
+            raise HTTPException(409, "já existe uma nota com esse nome") from None
+        mover_no_indice(app.state.conn_factory(), raiz() / de, raiz() / para)
+        auditar("notas.mover", f"{de} → {para}")
+        return {"caminho": para, "versao": versao(destino)}
 
     @app.post("/api/notas/pasta", status_code=201)
     def criar_pasta(caminho: str = Body(..., embed=True)) -> dict:
