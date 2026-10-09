@@ -309,3 +309,13 @@ def test_mover_de_outra_origem_e_recusado(app, vault_dir):
         headers={"origin": "http://evil.example", "x-aide": "1"})
     assert resposta.status_code == 403
     assert (vault_dir / "Inbox" / "Nota.md").exists()
+
+
+def test_mover_atualiza_os_links_e_o_indice_de_quem_apontava(cliente, app, vault_dir):
+    from aide.storage.search import buscar_texto
+
+    (vault_dir / "Quem aponta.md").write_text("ver a [[Nota]]")
+    resposta = _mover(cliente, "Inbox/Nota.md", "Inbox/Renomeada.md")
+    assert resposta.json()["links_atualizados"] == ["Quem aponta.md"]
+    assert (vault_dir / "Quem aponta.md").read_text() == "ver a [[Renomeada]]"
+    assert buscar_texto(app.state.conn_factory(), "Renomeada")
