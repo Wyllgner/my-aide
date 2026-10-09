@@ -17,12 +17,25 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from aide.storage import links, vault
-from aide.web.markdown import Citacao, citacoes
+from aide.web.markdown import Citacao, citacoes, etiquetas
 from aide.web.notas_api import TAMANHO_MAXIMO
 
-# caminho absoluto -> (mtime_ns, tamanho, citações). O tamanho entra porque
+
+@dataclass(frozen=True)
+class Leitura:
+    """O que se tira de uma nota de uma vez só, e se guarda até ela mudar."""
+
+    citacoes: list[Citacao]
+    tags: list[str]
+    palavras: int
+    modificada: float  # mtime, para a atividade por dia
+
+
+VAZIA = Leitura([], [], 0, 0.0)
+
+# caminho absoluto -> (mtime_ns, tamanho, leitura). O tamanho entra porque
 # duas gravações no mesmo instante podem ter o mesmo mtime em alguns discos
-_CACHE: dict[Path, tuple[int, int, list[Citacao]]] = {}
+_CACHE: dict[Path, tuple[int, int, Leitura]] = {}
 _TRAVA = threading.Lock()
 
 
@@ -49,39 +62,48 @@ class Mapa:
         return [lig for lig in self.ligacoes if lig.destino is None]
 
 
-def _citacoes_de(arquivo: Path) -> list[Citacao]:
+def ler(arquivo: Path) -> Leitura:
     estado = arquivo.stat()
     if estado.st_size > TAMANHO_MAXIMO:
         # um export ou log de centenas de MB no vault não pode travar a tela
-        return []
+        return Leitura([], [], 0, estado.st_mtime)
     marca = (estado.st_mtime_ns, estado.st_size)
     with _TRAVA:
         guardado = _CACHE.get(arquivo)
     if guardado and guardado[:2] == marca:
         return guardado[2]
-    achadas = citacoes(arquivo.read_text(encoding="utf-8", errors="replace"))
+    texto = arquivo.read_text(encoding="utf-8", errors="replace")
+    leitura = Leitura(citacoes(texto), etiquetas(texto), len(vault.separar(texto)[1].split()),
+                      estado.st_mtime)
     with _TRAVA:
-        _CACHE[arquivo] = (*marca, achadas)
-    return achadas
+        _CACHE[arquivo] = (*marca, leitura)
+    return leitura
 
 
-def mapa(vault_dir: Path, indice: links.Indice | None = None) -> Mapa:
-    indice = indice or links.indice(vault_dir)
-    resultado = Mapa()
+def leituras(vault_dir: Path, indice: links.Indice) -> dict[str, Leitura]:
+    """A leitura de cada nota do vault, pelo caminho; tira do cache quem sumiu."""
+    resultado: dict[str, Leitura] = {}
     vistos = set()
-    for origem in indice.caminhos:
+    for caminho in indice.caminhos:
         try:
-            arquivo = vault.resolver(vault_dir, origem)
-            achadas = _citacoes_de(arquivo)
+            arquivo = vault.resolver(vault_dir, caminho)
+            resultado[caminho] = ler(arquivo)
         except (vault.ForaDoVault, OSError):
             continue
         vistos.add(arquivo)
-        for citacao in achadas:
-            resultado.ligacoes.append(
-                Ligacao(origem, citacao.destino(origem, indice), citacao))
     with _TRAVA:
         # arquivo apagado ou renomeado não fica ocupando memória
         for velho in [p for p in _CACHE if p.is_relative_to(vault_dir.resolve())
                       and p not in vistos]:
             del _CACHE[velho]
+    return resultado
+
+
+def mapa(vault_dir: Path, indice: links.Indice | None = None) -> Mapa:
+    indice = indice or links.indice(vault_dir)
+    resultado = Mapa()
+    for origem, leitura in leituras(vault_dir, indice).items():
+        for citacao in leitura.citacoes:
+            resultado.ligacoes.append(
+                Ligacao(origem, citacao.destino(origem, indice), citacao))
     return resultado
