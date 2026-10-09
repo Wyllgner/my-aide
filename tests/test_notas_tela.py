@@ -427,9 +427,23 @@ def test_links_quebrados_aberto_fica_marcado(cliente, raiz):
 def test_quem_cita_o_quebrado_leva_a_linha_do_link(cliente, raiz):
     (raiz / "Inbox" / "Ideia.md").write_text("primeira\n\nfalar com [[Fornecedores]] amanhã\n\n[[Fornecedores]]")
     html = cliente.get("/notas?quebrados=1").text
-    assert 'href="/notas?arquivo=Inbox/Ideia.md&amp;linha=2&amp;alvo=Fornecedores">Ideia</a>' in html
+    assert 'href="/notas?arquivo=Inbox/Ideia.md&amp;linha=2&amp;alvo=Fornecedores"' in html
+    assert "<span>Ideia</span>" in html
     assert '<span class="vezes">2×</span>' in html
-    assert '<span class="trecho">falar com [[Fornecedores]] amanhã</span>' in html
+    # o trecho sem [[ ]], com o link quebrado marcado
+    assert '<span class="trecho">falar com <mark>Fornecedores</mark> amanhã</span>' in html
+    assert "1 nota faltando · 2 citações" in html
+    assert "nasce em Inbox/" in html
+
+
+def test_trecho_do_quebrado_fica_em_volta_do_link_e_nao_vira_html():
+    from aide.web.notas_tela import _trecho_do_link
+
+    longo = "a" * 80 + " [[Outra|outra]] e [[Falta]] <b>" + "z" * 80
+    html = _trecho_do_link(longo, "Falta")
+    assert html.startswith("…") and html.endswith("…")
+    assert "<mark>Falta</mark>" in html and "outra e" in html
+    assert "<b>" not in html and "&lt;b&gt;" in html
 
 
 def test_botao_de_anexar_aceita_so_os_tipos_da_lista(cliente):
