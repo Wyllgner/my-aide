@@ -36,7 +36,8 @@ def test_tabela(indice):
 def test_frontmatter_vira_propriedades_e_nao_texto(indice):
     html = _html("---\ntitle: Telhado\ntags: [casa]\n---\n\ncorpo", indice)
     assert '<dl class="propriedades" data-bloco="0-4">' in html
-    assert "<dt>tags</dt><dd>[casa]</dd>" in html
+    assert "<dt>title</dt><dd>Telhado</dd>" in html
+    assert "<dt>tags</dt><dd><a class=\"tag\"" in html
     assert "<hr" not in html
 
 
@@ -323,3 +324,27 @@ def test_callout_nao_injeta_html(indice):
 def test_link_no_titulo_do_callout_conta_como_ligacao():
     achadas = markdown.citacoes("> [!info] veja [[Telhado]]\n> e [[Ideias]]")
     assert [c.alvo for c in achadas] == ["Telhado", "Ideias"]
+
+
+# ---------- tags ----------
+
+def test_tag_no_texto_vira_etiqueta_que_leva_a_lista(indice):
+    html = _html("comprar telhas #compras e #casa/obra", indice)
+    assert ('<a class="tag" href="/notas?tag=compras&amp;arquivo=Projetos/Casa/Telhado.md">'
+            "#compras</a>") in html
+    assert '#casa/obra</a>' in html
+
+
+def test_tag_em_codigo_link_ou_numero_nao_vira_etiqueta(indice):
+    html = _html("`#nao` [veja #isto](https://a.org) #2024 email@x#y", indice)
+    assert 'class="tag"' not in html
+
+
+def test_tags_do_frontmatter_viram_etiquetas(indice):
+    html = _html("---\ntags: [casa, #obra]\n---\n\ntexto", indice)
+    assert "<dt>tags</dt><dd><a class=\"tag\"" in html
+    assert ">#casa</a> <a class=\"tag\"" in html and ">#obra</a></dd>" in html
+
+
+def test_etiquetas_continua_achando_as_tags():
+    assert markdown.etiquetas("---\ntags: [a]\n---\n\n#b e `#c` #b") == ["a", "b"]
