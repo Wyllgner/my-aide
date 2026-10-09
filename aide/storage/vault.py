@@ -175,7 +175,8 @@ class ForaDoVault(ValueError):
     """Caminho que não é de uma nota ou pasta do vault."""
 
 
-def resolver(vault_dir: Path, relativo: str, pasta: bool = False) -> Path:
+def resolver(vault_dir: Path, relativo: str, pasta: bool = False,
+             extensoes: tuple[str, ...] = (".md",)) -> Path:
     """O caminho de `relativo` dentro do vault, ou ForaDoVault.
 
     É a única porta por onde um caminho escrito na página chega ao disco, e
@@ -195,8 +196,8 @@ def resolver(vault_dir: Path, relativo: str, pasta: bool = False) -> Path:
             raise ForaDoVault(f"trecho inválido no caminho: {parte!r}")
         if PROIBIDOS.search(parte) or len(parte.encode()) > 255:
             raise ForaDoVault(f"nome inválido: {parte!r}")
-    if not pasta and not partes[-1].lower().endswith(".md"):
-        raise ForaDoVault("só arquivos .md")
+    if not pasta and not partes[-1].lower().endswith(extensoes):
+        raise ForaDoVault("tipo de arquivo não aceito")
 
     base = vault_dir.resolve()
     caminho = base.joinpath(*partes)
