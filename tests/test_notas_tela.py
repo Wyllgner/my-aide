@@ -281,7 +281,8 @@ def test_quebrado_por_link_markdown_mostra_o_nome_de_verdade(cliente, raiz):
     assert 'data-caminho="Inbox/Nova nota.md"' in html
     assert 'data-caminho="Raiz.md"' in html
     lista = html[html.index('<div class="arvore"'):html.index("voltar às pastas")]
-    assert "foto" not in lista
+    # foto.png não vira item próprio (a linha citada pode mencioná-la)
+    assert "<strong>foto" not in lista and 'data-caminho="Inbox/foto' not in lista
 
 
 def test_nota_enorme_nao_abre_no_editor(cliente, raiz):
@@ -414,3 +415,11 @@ def test_links_quebrados_aberto_fica_marcado(cliente, raiz):
     html = cliente.get("/notas?quebrados=1&arquivo=Inbox/Ideia.md").text
     assert 'class="aviso-quebrados" href="/notas?arquivo=Inbox/Ideia.md" aria-current="page"' in html
     assert "1 link quebrado</span>" in html
+
+
+def test_quem_cita_o_quebrado_leva_a_linha_do_link(cliente, raiz):
+    (raiz / "Inbox" / "Ideia.md").write_text("primeira\n\nfalar com [[Fornecedores]] amanhã\n\n[[Fornecedores]]")
+    html = cliente.get("/notas?quebrados=1").text
+    assert 'href="/notas?arquivo=Inbox/Ideia.md&amp;linha=2&amp;alvo=Fornecedores">Ideia</a>' in html
+    assert '<span class="vezes">2×</span>' in html
+    assert '<span class="trecho">falar com [[Fornecedores]] amanhã</span>' in html

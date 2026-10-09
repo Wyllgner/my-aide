@@ -225,15 +225,28 @@ def _quebrados(raiz: Path, quebrados: list[grafo.Ligacao]) -> str:
         origens = list(dict.fromkeys(lig.origem for lig in ligs))
         novo = _caminho_novo(raiz, ligs[0].citacao.caminho_pedido(ligs[0].origem))
         alvo = (novo or ligs[0].citacao.alvo).rpartition("/")[2].removesuffix(".md")
-        citam = ", ".join(
-            f'<a href="{escape(_href(o))}">{escape(o.rpartition("/")[2].removesuffix(".md"))}</a>'
-            for o in origens)
+        citam = "".join(_onde_cita(o, [lig for lig in ligs if lig.origem == o])
+                        for o in origens)
         botao = (f'<button type="button" class="botao-fraco criar-quebrado"'
                  f' data-caminho="{escape(novo)}">criar</button>' if novo else
                  '<span class="onde">nome que não pode virar arquivo</span>')
-        itens += (f'<div class="quebrado-item"><div><strong>{escape(alvo)}</strong>'
-                  f'<span class="onde">citada em {citam}</span></div>{botao}</div>')
+        itens += (f'<div class="quebrado-item"><div class="quebrado-alvo">'
+                  f'<strong>{escape(alvo)}</strong>{botao}</div>'
+                  f'<ul class="quebrado-citacoes">{citam}</ul></div>')
     return itens
+
+
+def _onde_cita(origem: str, ligs: list[grafo.Ligacao]) -> str:
+    """Quem cita, com a linha em volta; o clique abre a nota já no link —
+    `linha` e `alvo` o /app.js lê da URL para rolar e destacar."""
+    primeira = min(ligs, key=lambda lig: lig.citacao.linha)
+    href = (f"{_href(origem)}&linha={primeira.citacao.linha}"
+            f"&alvo={quote(primeira.citacao.alvo, safe='')}")
+    vezes = f' <span class="vezes">{len(ligs)}×</span>' if len(ligs) > 1 else ""
+    trecho = primeira.citacao.trecho
+    return (f'<li><a href="{escape(href)}">{escape(origem.rpartition("/")[2].removesuffix(".md"))}'
+            f'</a>{vezes}<span class="trecho">{escape(trecho[:140])}'
+            f'{"…" if len(trecho) > 140 else ""}</span></li>')
 
 
 def _caminho_novo(raiz: Path, caminho: str) -> str | None:
