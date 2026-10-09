@@ -394,3 +394,23 @@ def test_a_lateral_diz_onde_a_nota_nova_vai(cliente):
 
 def test_apagar_pasta_tem_lugar_para_o_aviso(cliente):
     assert '<span class="rotulo"></span></button>' in _tela(cliente)
+
+
+@pytest.mark.parametrize("param, rotulo", [("geral", "visão geral do vault"), ("grafo", "grafo")])
+def test_atalho_aberto_fica_no_lugar_e_marcado(cliente, param, rotulo):
+    """Clicar não some com o atalho: ele fica marcado, e clicar de novo volta à nota."""
+    html = cliente.get(f"/notas?{param}=1&arquivo=Inbox/Ideia.md").text
+    import re
+
+    assert re.search(r'<a class="atalho-visao" href="/notas\?arquivo=Inbox/Ideia.md"'
+                     r' aria-current="page"><svg[^<]*<path[^>]*/></svg><span>'
+                     + re.escape(rotulo) + "</span>", html)
+    outro = "grafo" if param == "geral" else "geral"
+    assert f'href="/notas?{outro}=1&amp;arquivo=Inbox/Ideia.md"' in html
+
+
+def test_links_quebrados_aberto_fica_marcado(cliente, raiz):
+    (raiz / "Inbox" / "Ideia.md").write_text("[[Fornecedores]]")
+    html = cliente.get("/notas?quebrados=1&arquivo=Inbox/Ideia.md").text
+    assert 'class="aviso-quebrados" href="/notas?arquivo=Inbox/Ideia.md" aria-current="page"' in html
+    assert "1 link quebrado</span>" in html

@@ -317,6 +317,9 @@ nav a svg { flex-shrink: 0; }
                 border-radius: var(--r-inner); color: var(--muted); }
 .atalho-visao:hover { background: var(--line-soft); color: var(--ink); }
 .atalho-visao svg, .aviso-quebrados svg { flex-shrink: 0; }
+/* aberto: fica no lugar, marcado como a nota aberta na árvore */
+.atalho-visao[aria-current="page"] { background: var(--soft); color: var(--accent); font-weight: 600; }
+.aviso-quebrados[aria-current="page"] { background: var(--accent); color: #fff; }
 .visao { display: flex; flex-direction: column; gap: 14px; }
 .visao-numeros { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
 .visao-dupla { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
