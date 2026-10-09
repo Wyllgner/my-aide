@@ -41,6 +41,16 @@ def ancora(titulo: str) -> str:
     return "s-" + (re.sub(r"\s+", "-", texto).strip("-") or "secao")
 
 
+def href_da_tag(tag: str, origem: str | None = None) -> str:
+    """A lista de notas com a tag, sem fechar a nota que está aberta."""
+    href = "/notas?tag=" + quote(tag, safe="/")
+    return href + ("&arquivo=" + quote(origem, safe="/") if origem else "")
+
+
+def _etiqueta(tag: str, origem: str | None) -> str:
+    return f'<a class="tag" href="{escape(href_da_tag(tag, origem))}">#{escape(tag)}</a>'
+
+
 def href_da_nota(caminho: str, secao: str = "") -> str:
     return ("/notas?arquivo=" + quote(caminho, safe="/")
             + ("#" + quote(ancora(secao)) if secao else ""))
@@ -405,6 +415,38 @@ def _render_callout_fecha(self, tokens, idx, options, env) -> str:
     return "</span></summary>\n" if tokens[idx].meta["dobra"] else "</span></div>\n"
 
 
+def _tags(state) -> None:
+    """#tag no texto vira etiqueta que leva às notas com ela. Fora de link e
+    de código, como a URL solta; a mesma regra de `etiquetas`."""
+    for bloco in state.tokens:
+        if bloco.type != "inline" or not bloco.children:
+            continue
+        novos, dentro_de_link = [], 0
+        for token in bloco.children:
+            if token.type == "link_open":
+                dentro_de_link += 1
+            elif token.type == "link_close":
+                dentro_de_link -= 1
+            if token.type != "text" or dentro_de_link or "#" not in token.content:
+                novos.append(token)
+                continue
+            texto, inicio = token.content, 0
+            for casado in TAG.finditer(texto):
+                if casado.start() > inicio:
+                    novos.append(_texto(texto[inicio:casado.start()]))
+                tag = Token("tag", "", 0)
+                tag.meta = {"nome": casado.group(1).strip("/") or casado.group(1)}
+                novos.append(tag)
+                inicio = casado.end()
+            if inicio < len(texto):
+                novos.append(_texto(texto[inicio:]))
+        bloco.children = novos
+
+
+def _render_tag(self, tokens, idx, options, env) -> str:
+    return _etiqueta(tokens[idx].meta["nome"], env.get("origem"))
+
+
 def _texto(conteudo: str) -> Token:
     token = Token("text", "", 0)
     token.content = conteudo
@@ -419,11 +461,13 @@ def _motor() -> MarkdownIt:
     md.core.ruler.push("tarefas", _tarefas)
     md.core.ruler.push("url_solta", _url_solta)
     md.core.ruler.push("callouts", _callouts)
+    md.core.ruler.push("tags", _tags)
     md.core.ruler.push("fontes", _fontes)
     md.add_render_rule("wikilink", _render_wikilink)
     md.add_render_rule("link_open", _render_link_open)
     md.add_render_rule("image", _render_imagem)
     md.add_render_rule("tarefa", _render_tarefa)
+    md.add_render_rule("tag", _render_tag)
     md.add_render_rule("callout_titulo_open", _render_callout_abre)
     md.add_render_rule("callout_titulo_close", _render_callout_fecha)
     return md
@@ -432,12 +476,20 @@ def _motor() -> MarkdownIt:
 MOTOR = _motor()
 
 
-def _propriedades(meta: dict[str, str], fim: int) -> str:
+def _valor(chave: str, valor: str, origem: str | None) -> str:
+    """As tags viram etiquetas clicáveis; o resto, texto."""
+    if chave.casefold() not in ("tags", "tag"):
+        return escape(valor)
+    tags = [t.strip().lstrip("#").strip("/") for t in valor.strip("[]").split(",")]
+    return " ".join(_etiqueta(t, origem) for t in tags if t) or escape(valor)
+
+
+def _propriedades(meta: dict[str, str], fim: int, origem: str | None = None) -> str:
     """O frontmatter em lista; `fim` é a linha onde o corpo começa, e o
     bloco vai da primeira linha do arquivo até ela."""
     if not meta:
         return ""
-    linhas = "".join(f"<dt>{escape(chave)}</dt><dd>{escape(valor)}</dd>"
+    linhas = "".join(f"<dt>{escape(chave)}</dt><dd>{_valor(chave, valor, origem)}</dd>"
                      for chave, valor in meta.items())
     return f'<dl class="propriedades" data-bloco="0-{fim}">{linhas}</dl>'
 
@@ -450,7 +502,7 @@ def renderizar(texto: str, origem: str | None, indice: Indice, anexos=None) -> s
     # prévia precisa bater com a do arquivo
     corpo = "\n".join(texto.split("\n")[inicio:])
     env = {"origem": origem, "indice": indice, "deslocamento": inicio, "anexos": anexos}
-    return _propriedades(meta, inicio) + MOTOR.render(corpo, env)
+    return _propriedades(meta, inicio, origem) + MOTOR.render(corpo, env)
 
 
 # ---------- links de uma nota, para o mapa ----------
@@ -564,8 +616,8 @@ def etiquetas(texto: str) -> list[str]:
         if bloco.type != "inline" or not bloco.children:
             continue
         for token in bloco.children:
-            if token.type == "text":
-                achadas.extend(TAG.findall(token.content))
+            if token.type == "tag":
+                achadas.append(token.meta["nome"])
     vistas: dict[str, str] = {}
     for tag in achadas:
         tag = tag.strip("/")

@@ -321,6 +321,11 @@ nav a svg { flex-shrink: 0; }
 .previa th, .previa td { border: 1px solid var(--line); padding: 5px 10px; text-align: left; }
 .previa hr { border: 0; border-top: 1px solid var(--line); margin: 1.4em 0; }
 .previa .wikilink { border-bottom: 1px solid var(--soft); }
+/* #tag: etiqueta azul, a mesma cor da tag no editor; leva às notas com ela */
+.previa a.tag { display: inline-block; padding: 0 7px; border-radius: var(--r-pill);
+  font-size: .88em; line-height: 1.6; text-decoration: none; color: #2B5FA8;
+  background: color-mix(in srgb, #2B5FA8 10%, transparent); }
+.previa a.tag:hover { background: color-mix(in srgb, #2B5FA8 18%, transparent); }
 .previa .wikilink.quebrado { color: var(--faint); border-bottom: 1px dashed var(--faint);
                              cursor: pointer; }
 .previa .wikilink.quebrado:hover { color: var(--accent); border-color: var(--accent); }
