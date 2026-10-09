@@ -294,3 +294,73 @@ def test_tracos_no_comeco_que_nao_sao_frontmatter():
 
 def test_frontmatter_vazio():
     assert vault.separar("---\n---\ncorpo") == ({}, "corpo")
+
+
+# ---------- mover ----------
+
+def test_mover_leva_o_arquivo_e_cria_a_pasta(raiz):
+    vault.mover(raiz / "Inbox" / "Nota.md", raiz / "Projetos" / "Casa" / "Nota nova.md")
+    assert not (raiz / "Inbox" / "Nota.md").exists()
+    assert (raiz / "Projetos" / "Casa" / "Nota nova.md").read_text() == "x"
+
+
+def test_mover_nunca_passa_por_cima(raiz):
+    (raiz / "Outra.md").write_text("não apague")
+    with pytest.raises(FileExistsError):
+        vault.mover(raiz / "Inbox" / "Nota.md", raiz / "Outra.md")
+    assert (raiz / "Outra.md").read_text() == "não apague"
+    assert (raiz / "Inbox" / "Nota.md").exists()
+
+
+def test_mover_no_indice_mantem_a_linha_e_o_vetor(raiz, banco):
+    from aide.storage.reconciliacao import mover_no_indice, sincronizar
+    from aide.storage.search import buscar_texto, guardar_vetor
+
+    de, para = raiz / "Inbox" / "Nota.md", raiz / "Inbox" / "Telhado.md"
+    note_id = sincronizar(banco, de)
+    guardar_vetor(banco, "note", note_id, "x", [1.0], "m")
+    vault.mover(de, para)
+    assert mover_no_indice(banco, de, para) == note_id
+    row = banco.execute("SELECT path, title FROM notes WHERE id = ?", (note_id,)).fetchone()
+    assert tuple(row) == (str(para), "Telhado")
+    assert banco.execute("SELECT COUNT(*) FROM embeddings").fetchone()[0] == 1
+    assert buscar_texto(banco, "Telhado")
+
+
+def test_mover_no_indice_mantem_o_titulo_do_frontmatter(raiz, banco):
+    from aide.storage.reconciliacao import mover_no_indice, sincronizar
+
+    de, para = raiz / "Inbox" / "Nota.md", raiz / "Arquivo.md"
+    de.write_text("---\ntitle: Título próprio\n---\n\nx")
+    sincronizar(banco, de)
+    vault.mover(de, para)
+    note_id = mover_no_indice(banco, de, para)
+    assert banco.execute("SELECT title FROM notes WHERE id = ?", (note_id,)).fetchone()[0] \
+        == "Título próprio"
+
+
+def test_mover_para_o_caminho_de_uma_nota_apagada(raiz, banco):
+    """O caminho é único no banco; a linha apagada não pode travar o mover."""
+    from aide.storage.reconciliacao import esquecer, mover_no_indice, reconciliar, sincronizar
+
+    velha = raiz / "Velha.md"
+    velha.write_text("antiga")
+    sincronizar(banco, velha)
+    esquecer(banco, velha)
+    vault.para_lixeira(raiz, velha)
+    de = raiz / "Inbox" / "Nota.md"
+    sincronizar(banco, de)
+    vault.mover(de, velha)
+    mover_no_indice(banco, de, velha)
+    reconciliar(banco, raiz)
+    assert velha.exists(), "a reconciliação não pode mandar a nota movida para a lixeira"
+
+
+def test_mover_arquivo_que_o_banco_nao_conhecia(raiz, banco):
+    from aide.storage.reconciliacao import mover_no_indice
+
+    de, para = raiz / "Inbox" / "Nota.md", raiz / "Nova.md"
+    vault.mover(de, para)
+    note_id = mover_no_indice(banco, de, para)
+    assert banco.execute("SELECT path FROM notes WHERE id = ?", (note_id,)).fetchone()[0] \
+        == str(para)
