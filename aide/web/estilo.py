@@ -220,6 +220,26 @@ nav a svg { flex-shrink: 0; }
   .visao-dupla { grid-template-columns: 1fr; }
 }
 
+/* grafo */
+.atalhos { display: flex; flex-direction: column; gap: 1px; margin-bottom: 2px; }
+.grafo-topo { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.grafo-topo .onde { font-size: 11.5px; color: var(--faint); }
+.grafo { width: 100%; height: 66vh; background: var(--paper); border-radius: var(--r-inner);
+         border: 1px solid var(--line-soft); cursor: grab; touch-action: none;
+         user-select: none; }
+.grafo:active { cursor: grabbing; }
+.grafo line { stroke: #D9DCE2; stroke-width: 1; transition: opacity .12s; }
+.grafo text { font-size: 11px; fill: var(--muted); text-anchor: middle; paint-order: stroke;
+              stroke: var(--paper); stroke-width: 3px; pointer-events: none;
+              font-family: 'Public Sans', system-ui, sans-serif; }
+.grafo a.no circle { stroke: var(--paper); stroke-width: 1.5; transition: opacity .12s; }
+.grafo a.no:hover circle { stroke: var(--ink); }
+.grafo a.atual circle { stroke: var(--ink); stroke-width: 2.5; }
+.grafo.focado a.no:not(.perto), .grafo.focado line:not(.perto) { opacity: .15; }
+.grafo.focado line.perto { stroke: var(--accent); stroke-width: 1.5; }
+.grafo text.so-perto { display: none; }
+.grafo.focado a.perto text.so-perto { display: inline; }
+
 /* links quebrados */
 .aviso-quebrados { display: block; font-size: 12px; padding: 6px 8px; margin: 0 0 4px;
                    border-radius: var(--r-inner); background: var(--soft); color: var(--accent); }
