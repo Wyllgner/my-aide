@@ -21,13 +21,25 @@ for fonte in "$PACOTE"/fonts/*/; do
     [ "$nome" = Xiaolai ] || cp -r "$fonte" "$DESTINO/fonts/$nome"
 done
 
-# a licença de cada pacote que entrou no bundle (todas MIT ou parecidas)
+# a licença de cada pacote que entrou no bundle (todas MIT ou parecidas). Os
+# que o npm publica sem o arquivo têm o texto do repositório em licencas/; um
+# pacote novo sem nenhum dos dois para o build, em vez de sair sem aviso.
+licenca_de() {
+    local achado
+    achado=$(find node_modules/"$1" -maxdepth 1 -type f -iregex '.*/\(licen[cs]e\|copying\)[^/]*' \
+        | head -1)
+    if [ -n "$achado" ]; then echo "$achado"; return; fi
+    case "$1" in
+        @excalidraw/excalidraw) echo licencas/excalidraw.txt ;;
+        @radix-ui/*) echo licencas/radix-ui.txt ;;
+        react-remove-scroll-bar) echo licencas/react-remove-scroll-bar.txt ;;
+        *) echo "sem licença: $1" >&2; return 1 ;;
+    esac
+}
 {
     while read -r pacote; do
-        licenca=$(ls node_modules/"$pacote"/LICEN[CS]E* 2>/dev/null | head -1 || true)
         echo "== $pacote $(node -p "require('./node_modules/$pacote/package.json').version") =="
-        if [ -n "$licenca" ]; then cat "$licenca"; else
-            node -p "require('./node_modules/$pacote/package.json').license"; fi
+        cat "$(licenca_de "$pacote")"
         echo
     done < pacotes.txt
     echo "== fontes =="
