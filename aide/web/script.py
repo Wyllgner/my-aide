@@ -210,6 +210,65 @@ JS = r"""
     }
   });
 
+  // ---------- renomear e mover ----------
+  var titulo = document.getElementById("titulo");
+  var renomear = document.getElementById("renomear");
+  var campoCaminho = document.getElementById("renomear-caminho");
+  var erroRenomear = document.getElementById("renomear-erro");
+
+  function abrirRenomear() {
+    titulo.hidden = true;
+    renomear.hidden = false;
+    erroRenomear.textContent = "";
+    campoCaminho.focus();
+    // seleciona só o nome, como o Obsidian: o caso comum é renomear
+    var barra = campoCaminho.value.lastIndexOf("/");
+    campoCaminho.setSelectionRange(barra + 1, campoCaminho.value.length);
+  }
+
+  function fecharRenomear() {
+    renomear.hidden = true;
+    titulo.hidden = false;
+    campoCaminho.value = caminho.replace(/\.md$/i, "");
+  }
+
+  titulo.addEventListener("click", abrirRenomear);
+  document.getElementById("botao-renomear").addEventListener("click", abrirRenomear);
+  campoCaminho.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") { fecharRenomear(); }
+  });
+  renomear.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var novo = campoCaminho.value.trim().replace(/^\/+|\/+$/g, "");
+    if (!novo) { return; }
+    if (!/\.md$/i.test(novo)) { novo += ".md"; }
+    if (novo === caminho) { fecharRenomear(); return; }
+    // o que ainda não foi salvo vai antes: o arquivo muda de lugar
+    salvar().then(function () {
+      return pedir("POST", "/api/notas/mover", { de: caminho, para: novo });
+    }).then(function (r) {
+      if (r.ok) {
+        return r.json().then(function (d) {
+          var n = (d.links_atualizados || []).length;
+          try {
+            sessionStorage.setItem("aide.notas.aviso", n ? (n === 1 ? "1 nota teve o link atualizado"
+              : n + " notas tiveram o link atualizado") : "");
+          } catch (e2) { /* sem armazenamento: só não mostra o aviso */ }
+          salvo = editor.value;
+          abrir(d.caminho);
+        });
+      }
+      return erroDe(r).then(function (m) { erroRenomear.textContent = m; });
+    });
+  });
+
+  // o aviso deixado por um renomear, na página da nota já com o nome novo
+  try {
+    var aviso = sessionStorage.getItem("aide.notas.aviso");
+    if (aviso) { mostrar(aviso, "salvo"); }
+    sessionStorage.removeItem("aide.notas.aviso");
+  } catch (e) { /* idem */ }
+
   // ---------- link quebrado: um clique cria a nota ----------
   function criarDoLink(e) {
     var link = e.target.closest("a.quebrado");

@@ -185,6 +185,16 @@ nav a svg { flex-shrink: 0; }
 .propriedades dt { color: var(--faint); font-family: 'IBM Plex Mono', ui-monospace, monospace; }
 .propriedades dd { margin: 0; color: var(--muted); overflow-wrap: anywhere; }
 
+/* renomear */
+.titulo-nota { margin: 0; font-size: 20px; font-weight: 600; cursor: text;
+               border-radius: 6px; padding: 0 4px; margin-left: -4px; }
+.titulo-nota:hover { background: var(--line-soft); }
+.renomear { display: flex; flex-direction: column; gap: 3px; }
+.renomear input { font: inherit; font-size: 15px; font-weight: 600; padding: 4px 8px;
+                  width: min(520px, 100%); border: 1px solid var(--faint);
+                  border-radius: 8px; }
+.renomear .dica { font-size: 11px; color: var(--faint); }
+
 /* links quebrados */
 .aviso-quebrados { display: block; font-size: 12px; padding: 6px 8px; margin: 0 0 4px;
                    border-radius: var(--r-inner); background: var(--soft); color: var(--accent); }

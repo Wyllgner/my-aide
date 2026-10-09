@@ -284,3 +284,12 @@ def test_nota_enorme_nao_abre_no_editor(cliente, raiz):
     assert 'id="editor"' not in html
     # e o link dela não entra no mapa
     assert "Nenhuma nota aponta" in _tela(cliente, "Projetos/Casa/Telhado.md")
+
+
+# ---------- renomear ----------
+
+def test_titulo_abre_o_renomear_com_o_caminho(cliente):
+    html = _tela(cliente, "Projetos/Casa/Telhado.md")
+    assert '<h2 id="titulo" class="titulo-nota"' in html
+    assert 'id="renomear-caminho" autocomplete="off" spellcheck="false"\n        value="Projetos/Casa/Telhado"' in html
+    assert 'id="botao-renomear"' in html
