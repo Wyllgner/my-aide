@@ -214,6 +214,29 @@ JS = r"""
       if (r.ok || r.status === 409) { abrir(novo); } else { erroDe(r).then(function (m) { mostrar(m, "erro"); }); }
     });
   }
+  // ---------- tarefa marcada na prévia ----------
+  // a caixa diz a linha; o script troca [ ] por [x] no texto e salva. Se o
+  // texto mudou desde a última prévia, a linha pode não ser mais a tarefa:
+  // aí não mexe em nada e espera a prévia nova
+  var TAREFA = /^(\s*(?:[-*+]|\d+[.)])\s+\[)([ xX])(\])/;
+  previa.addEventListener("change", function (e) {
+    var caixa = e.target;
+    if (!caixa.matches || !caixa.matches("input[data-linha]")) { return; }
+    var linhas = editor.value.split("\n");
+    var n = parseInt(caixa.dataset.linha, 10);
+    var casado = TAREFA.exec(linhas[n] || "");
+    var estavaFeita = !caixa.checked;
+    if (!casado || (casado[2] !== " ") !== estavaFeita || editor.value !== salvo || !conflito.hidden) {
+      caixa.checked = estavaFeita;
+      mostrar("a prévia está atrás do texto; tente de novo", "pendente");
+      salvar();
+      return;
+    }
+    linhas[n] = linhas[n].replace(TAREFA, "$1" + (caixa.checked ? "x" : " ") + "$3");
+    editor.value = linhas.join("\n");
+    salvar();
+  });
+
   previa.addEventListener("click", criarDoLink);
   previa.addEventListener("keydown", criarDoLink);
 

@@ -48,3 +48,17 @@ def test_o_script_ve_o_frontmatter_igual_ao_servidor(texto):
         assert vault.separar(f"---\n{miolo}\n---\n{resto}" if miolo else f"---\n---\n{resto}") \
             == (meta, corpo)
         assert resto.strip() == corpo
+
+
+@pytest.mark.parametrize("linha, marcada", [
+    ("- [ ] comprar", "- [x] comprar"),
+    ("  * [x] feita", "  * [ ] feita"),
+    ("1. [ ] numerada", "1. [x] numerada"),
+    ("3) [X] outra", "3) [ ] outra"),
+])
+def test_a_regra_de_tarefa_do_script_troca_so_a_caixa(linha, marcada):
+    regex = re.search(r"var TAREFA = (/.*/);", JS).group(1)
+    codigo = (f"const T = {regex}; const l = {json.dumps(linha)}; const m = T.exec(l);"
+              "console.log(l.replace(T, '$1' + (m[2] === ' ' ? 'x' : ' ') + '$3'));")
+    saida = subprocess.run([node, "-e", codigo], capture_output=True, text=True, check=True)
+    assert saida.stdout.rstrip("\n") == marcada
