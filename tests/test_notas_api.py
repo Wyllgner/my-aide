@@ -429,3 +429,9 @@ def test_privada_so_no_banco_nao_vira_normal_ao_salvar(app, cliente, vault_dir):
     assert resposta.status_code == 409
     assert "private: true" in resposta.json()["texto"]
     assert app.state.conn_factory().execute("SELECT private FROM notes").fetchone()[0] == 1
+
+
+def test_abrir_nota_fora_de_utf8(cliente, vault_dir):
+    (vault_dir / "Inbox" / "Velha.md").write_bytes("acentua\xe7\xe3o".encode("latin-1"))
+    resposta = cliente.get("/api/notas/arquivo", params={"caminho": "Inbox/Velha.md"})
+    assert resposta.status_code == 415
