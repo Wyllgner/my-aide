@@ -265,7 +265,7 @@ def _por_tag(raiz: Path, indice, tag: str, aberto: str | None) -> str:
 
 
 def _quebrados(raiz: Path, quebrados: list[grafo.Ligacao]) -> str:
-    """Os links para notas que não existem, um item por nota que falta, com
+    """Os links para notas que não existem, um cartão por nota que falta, com
     quem cita e o botão de criar. Criar vai para a pasta de quem citou
     primeiro — o mesmo que o clique no link quebrado faz na prévia."""
     por_alvo: dict[str, list[grafo.Ligacao]] = {}
@@ -273,7 +273,14 @@ def _quebrados(raiz: Path, quebrados: list[grafo.Ligacao]) -> str:
         nome = lig.citacao.caminho_pedido(lig.origem).rpartition("/")[2]
         por_alvo.setdefault(markdown.chave_link(nome), []).append(lig)
     if not por_alvo:
-        return '<p class="vazio">Nenhum link quebrado.</p>'
+        return ('<div class="quebrados-topo"><p class="eyebrow">Links quebrados</p>'
+                '<p class="quebrados-explica">Nenhum: todo [[link]] leva a uma nota.</p></div>')
+    citacoes = len(quebrados)
+    topo = ('<div class="quebrados-topo"><p class="eyebrow">Links quebrados</p>'
+            f'<p class="quebrados-resumo">{formato.plural(len(por_alvo), "nota faltando", "notas faltando")}'
+            f' · {formato.plural(citacoes, "citação", "citações")}</p>'
+            '<p class="quebrados-explica">Links para notas que ainda não existem. Crie a nota,'
+            ' ou abra quem cita para corrigir o nome.</p></div>')
     itens = ""
     for chave in sorted(por_alvo, key=lambda k: (-len(por_alvo[k]), k)):
         ligs = por_alvo[chave]
@@ -282,26 +289,54 @@ def _quebrados(raiz: Path, quebrados: list[grafo.Ligacao]) -> str:
         alvo = (novo or ligs[0].citacao.alvo).rpartition("/")[2].removesuffix(".md")
         citam = "".join(_onde_cita(o, [lig for lig in ligs if lig.origem == o])
                         for o in origens)
+        pasta = novo.rpartition("/")[0] if novo else ""
         botao = (f'<button type="button" class="botao-fraco criar-quebrado"'
-                 f' data-caminho="{escape(novo)}">criar</button>' if novo else
-                 '<span class="onde">nome que não pode virar arquivo</span>')
+                 f' data-caminho="{escape(novo)}" title="criar {escape(novo)}">'
+                 f'{icone("nova-nota", 14)}<span>criar</span></button>' if novo else "")
+        onde = (f'<span class="onde">nasce em {escape(pasta + "/" if pasta else "raiz do vault")}</span>'
+                if novo else '<span class="onde">nome que não pode virar arquivo</span>')
+        vezes = formato.plural(len(origens), "nota cita", "notas citam")
         itens += (f'<div class="quebrado-item"><div class="quebrado-alvo">'
-                  f'<strong>{escape(alvo)}</strong>{botao}</div>'
+                  f'<div class="quebrado-nome"><strong>{escape(alvo)}</strong>'
+                  f'<span class="onde">{vezes} · </span>{onde}</div>{botao}</div>'
                   f'<ul class="quebrado-citacoes">{citam}</ul></div>')
-    return itens
+    return topo + itens
+
+
+# o trecho em volta do link: uns 50 caracteres de cada lado, sem [[ ]] e com
+# o link quebrado marcado
+_EM_VOLTA = 50
+
+
+def _trecho_do_link(trecho: str, alvo: str) -> str:
+    casado = re.search(r"!?\[\[\s*" + re.escape(alvo) + r"[^\]]*\]\]", trecho)
+    if not casado:
+        casado = re.search(re.escape(alvo), trecho)
+    if not casado:
+        return escape(trecho[:_EM_VOLTA * 2]) + ("…" if len(trecho) > _EM_VOLTA * 2 else "")
+    antes = trecho[max(0, casado.start() - _EM_VOLTA):casado.start()]
+    depois = trecho[casado.end():casado.end() + _EM_VOLTA]
+
+    def limpo(t: str) -> str:
+        return escape(re.sub(r"!?\[\[(?:[^\]|]*\|)?([^\]]*)\]\]", r"\1", t))
+
+    return (("…" if casado.start() > _EM_VOLTA else "") + limpo(antes)
+            + f"<mark>{escape(alvo)}</mark>" + limpo(depois)
+            + ("…" if len(trecho) - casado.end() > _EM_VOLTA else ""))
 
 
 def _onde_cita(origem: str, ligs: list[grafo.Ligacao]) -> str:
-    """Quem cita, com a linha em volta; o clique abre a nota já no link —
-    `linha` e `alvo` o /app.js lê da URL para rolar e destacar."""
+    """Quem cita, com o trecho em volta do link; o clique abre a nota já no
+    link — `linha` e `alvo` o /app.js lê da URL para rolar e destacar."""
     primeira = min(ligs, key=lambda lig: lig.citacao.linha)
     href = (f"{_href(origem)}&linha={primeira.citacao.linha}"
             f"&alvo={quote(primeira.citacao.alvo, safe='')}")
     vezes = f' <span class="vezes">{len(ligs)}×</span>' if len(ligs) > 1 else ""
-    trecho = primeira.citacao.trecho
-    return (f'<li><a href="{escape(href)}">{escape(origem.rpartition("/")[2].removesuffix(".md"))}'
-            f'</a>{vezes}<span class="trecho">{escape(trecho[:140])}'
-            f'{"…" if len(trecho) > 140 else ""}</span></li>')
+    nome = origem.rpartition("/")[2].removesuffix(".md")
+    return (f'<li><a href="{escape(href)}" title="abrir {escape(origem)} no link">'
+            f'{icone("nota", 13)}<span>{escape(nome)}</span>{vezes}</a>'
+            f'<span class="trecho">{_trecho_do_link(primeira.citacao.trecho, primeira.citacao.alvo)}'
+            f'</span></li>')
 
 
 def _caminho_novo(raiz: Path, caminho: str) -> str | None:

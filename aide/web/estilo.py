@@ -480,19 +480,34 @@ button.atalho-visao { width: 100%; border: 0; background: none; font: inherit; f
 .aviso-quebrados { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500;
                    padding: 7px 8px; margin: 0 0 4px;
                    border-radius: var(--r-inner); background: var(--soft); color: var(--accent); }
-.quebrado-item { display: flex; align-items: flex-start; justify-content: space-between;
-                 gap: 8px; padding: 8px; border-radius: var(--r-inner); font-size: 13px; }
-.quebrado-item:hover { background: var(--line-soft); }
-.quebrado-item { flex-direction: column; align-items: stretch; }
-.quebrado-alvo { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.quebrado-item .onde { display: block; font-size: 11.5px; color: var(--faint); margin-top: 2px; }
-.quebrado-citacoes { list-style: none; margin: 4px 0 0; padding: 0; display: flex;
-                     flex-direction: column; gap: 2px; }
-.quebrado-citacoes a { display: inline-block; font-size: 12.5px; padding: 2px 0; }
-.quebrado-citacoes a:hover { text-decoration: underline; }
+.quebrados-topo { padding: 8px 8px 4px; border-top: 1px solid var(--line-soft); margin-top: 2px; }
+.quebrados-topo .eyebrow { margin: 0 0 2px; }
+.quebrados-resumo { margin: 0; font-size: 13px; font-weight: 600; color: var(--ink); }
+.quebrados-explica { margin: 3px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--faint); }
+/* cada nota que falta é um cartão: nome e criar em cima, quem cita embaixo */
+.quebrado-item { display: flex; flex-direction: column; gap: 6px; padding: 10px;
+                 border: 1px solid var(--line-soft); border-radius: var(--r-inner);
+                 background: var(--surface); font-size: 13px; }
+.quebrado-item + .quebrado-item { margin-top: 6px; }
+.quebrado-alvo { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.quebrado-nome { min-width: 0; }
+.quebrado-nome strong { display: block; overflow-wrap: anywhere; }
+.quebrado-nome .onde { font-size: 11px; color: var(--faint); }
+.criar-quebrado { display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0;
+                  padding: 4px 10px; color: var(--accent); border-color: var(--soft);
+                  background: var(--soft); font-weight: 600; }
+.criar-quebrado:hover { color: #fff; background: var(--accent); border-color: var(--accent); }
+.quebrado-citacoes { list-style: none; margin: 0; padding: 6px 0 0; display: flex;
+                     flex-direction: column; gap: 6px; border-top: 1px dashed var(--line); }
+.quebrado-citacoes a { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px;
+                       font-weight: 500; }
+.quebrado-citacoes a svg { color: var(--faint); flex-shrink: 0; }
+.quebrado-citacoes a:hover span { text-decoration: underline; }
 .quebrado-citacoes .vezes { font-size: 11px; color: var(--faint); }
-.quebrado-citacoes .trecho { display: block; font-size: 11.5px; color: var(--faint);
-                             overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.quebrado-citacoes .trecho { display: block; margin-top: 1px; font-size: 11.5px; line-height: 1.45;
+                             color: var(--muted); overflow-wrap: anywhere; }
+.quebrado-citacoes .trecho mark { color: var(--accent); background: none; font-weight: 600;
+                                  border-bottom: 1px dashed var(--accent); }
 
 /* o link aonde a lista de quebrados levou: pisca e some devagar */
 @keyframes destaque { from { background: #FBE3DC; box-shadow: 0 0 0 4px #FBE3DC; }
