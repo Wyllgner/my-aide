@@ -109,8 +109,9 @@ nav a svg { flex-shrink: 0; }
 
 /* notas: árvore à esquerda, editor à direita */
 .notas { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 20px; align-items: start; }
+/* a lateral fica no lugar enquanto a nota rola: a árvore está sempre à mão */
 .notas-lateral { padding: 10px; display: flex; flex-direction: column; gap: 6px;
-                 max-height: 78vh; overflow: auto; }
+                 position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto; }
 .notas-editor { padding: 22px 26px; display: flex; flex-direction: column; gap: 10px;
                 min-height: 60vh; }
 .notas-botoes { display: flex; gap: 6px; padding: 2px 2px 8px;
@@ -144,12 +145,19 @@ nav a svg { flex-shrink: 0; }
 .arvore .conta { margin-left: auto; font-size: 11px; color: var(--faint); }
 .arvore .filhos { padding-left: 14px; border-left: 1px solid var(--line-soft);
                   margin-left: 12px; display: flex; flex-direction: column; gap: 1px; }
-.arvore .arquivo { display: block; padding: 6px 8px; border-radius: var(--r-inner);
-                   color: var(--muted); overflow: hidden; text-overflow: ellipsis;
-                   white-space: nowrap; }
+.arvore .arquivo { display: flex; align-items: center; gap: 7px; padding: 6px 8px;
+                   border-radius: var(--r-inner); color: var(--muted); }
+.arvore .arquivo > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* ícone de pasta e de nota: fracos, só para o olho separar um do outro */
+.arvore summary > svg, .arvore .arquivo > svg { flex-shrink: 0; color: var(--faint); }
+.arvore .arquivo[aria-current="page"] > svg { color: var(--accent); }
+.arvore-topo { display: flex; align-items: center; justify-content: space-between; gap: 6px;
+               padding: 8px 8px 2px; border-top: 1px solid var(--line-soft); margin-top: 2px; }
+.arvore-topo .eyebrow { margin: 0; }
+.arvore-ferramentas { display: flex; gap: 2px; }
 .arvore .arquivo[aria-current="page"] { background: var(--soft); color: var(--accent);
                                          font-weight: 600; }
-.arvore .achado { white-space: normal; }
+.arvore .achado { display: block; white-space: normal; }
 /* a palavra buscada, no trecho do resultado e na nota aberta por ele */
 .arvore .trecho mark, .previa mark.achado-busca { color: inherit; border-radius: 2px;
   padding: 0 1px; background: color-mix(in srgb, #E8B931 40%, transparent); }
