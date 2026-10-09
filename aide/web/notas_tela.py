@@ -376,20 +376,25 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
         lateral = _ramo(itens, "" if geral or grafo_todo else aberto or "") or (
             '<p class="vazio">Nenhuma nota ainda. Crie a primeira com “+ nota”.</p>')
     volta = "&amp;arquivo=" + escape(quote(aberto, safe="/")) if aberto else ""
-    atalhos = "".join(
-        f'<a class="atalho-visao" href="/notas?{param}=1{volta}">{icone(nome_icone, 15)}'
-        f'<span>{rotulo}</span></a>'
-        for param, rotulo, nome_icone, ativo in (
-            ("geral", "visão geral do vault", "painel", geral),
-            ("grafo", "grafo", "grafo", grafo_todo)) if not ativo)
+    de_volta = escape(_href(aberto)) if aberto else "/notas"
+
+    def atalho(classe: str, param: str, rotulo: str, nome_icone: str, ativo: bool) -> str:
+        """O atalho continua no lugar quando aberto, só marcado; clicar de novo
+        volta para a nota, como desmarcar."""
+        href = de_volta if ativo else f"/notas?{param}=1{volta}"
+        atual = ' aria-current="page"' if ativo else ""
+        return (f'<a class="{classe}" href="{href}"{atual}>{icone(nome_icone, 15)}'
+                f'<span>{rotulo}</span></a>')
+
+    atalhos = (atalho("atalho-visao", "geral", "visão geral do vault", "painel", geral)
+               + atalho("atalho-visao", "grafo", "grafo", "grafo", grafo_todo))
     lateral = f'<div class="atalhos">{atalhos}</div>' + lateral
-    if quebrados_todos and not quebrados:
+    if quebrados_todos or quebrados:
         alvos = len({markdown.chave_link(lig.citacao.caminho_pedido(lig.origem)
                                          .rpartition("/")[2]) for lig in quebrados_todos})
-        lateral = (f'<a class="aviso-quebrados" href="/notas?quebrados=1'
-                   f'{"&amp;arquivo=" + escape(quote(aberto, safe="/")) if aberto else ""}">'
-                   f'{icone("quebrado", 15)}<span>'
-                   f'{formato.plural(alvos, "link quebrado", "links quebrados")}</span></a>' + lateral)
+        lateral = atalho("aviso-quebrados", "quebrados",
+                         formato.plural(alvos, "link quebrado", "links quebrados"),
+                         "quebrado", quebrados) + lateral
 
     pasta_atual = aberto.rpartition("/")[0] if aberto else ""
     if grafo_todo:
