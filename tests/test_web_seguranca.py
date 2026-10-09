@@ -284,6 +284,22 @@ def test_excalidraw_sem_cdn_nas_partes():
             assert cdn not in texto, (arquivo.name, cdn)
 
 
+def test_excalidraw_sem_chave_do_firebase_deles():
+    """O pacote traz a config do Firebase da colaboração do excalidraw.com, com
+    uma chave AIza… que o scanner de segredos do GitHub acusa. Não é nossa nem
+    secreta, mas o build tira: a colaboração não existe aqui."""
+    import re
+    from pathlib import Path
+
+    import aide.web
+
+    pasta = Path(aide.web.__file__).parent / "vendor" / "excalidraw"
+    for arquivo in [pasta / "excalidraw.js", *(pasta / "partes").glob("*.js")]:
+        texto = arquivo.read_text(encoding="utf-8")
+        assert not re.search(r"AIza[0-9A-Za-z_-]{35}", texto), arquivo.name
+        assert "firebaseapp.com" not in texto, arquivo.name
+
+
 @pytest.mark.parametrize("caminho", [
     "excalidraw/LICENCAS.txt", "excalidraw/../../app.py", "excalidraw/..%2F..%2Fapp.py",
     "excalidraw/nada.js", "../fontes/OFL-publicsans.txt", "excalidraw",
