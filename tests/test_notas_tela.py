@@ -244,7 +244,7 @@ def test_contexto_do_backlink_e_escapado(cliente, raiz):
 def test_aviso_de_links_quebrados_na_lateral(cliente, raiz):
     (raiz / "Inbox" / "Ideia.md").write_text("[[Fornecedores]] e [[fornecedores]] e [[Orçamento]]")
     html = _tela(cliente, "Inbox/Ideia.md")
-    assert "2 links quebrados</a>" in html
+    assert "2 links quebrados</span></a>" in html
     assert 'href="/notas?quebrados=1&amp;arquivo=Inbox/Ideia.md"' in html
 
 
@@ -323,8 +323,9 @@ def test_visao_geral_mostra_os_numeros_e_as_orfas(cliente, raiz):
 
 
 def test_atalho_para_a_visao_geral_na_lateral(cliente):
-    assert 'href="/notas?geral=1&amp;arquivo=Inbox/Ideia.md">visão geral do vault' in \
-        _tela(cliente, "Inbox/Ideia.md")
+    html = _tela(cliente, "Inbox/Ideia.md")
+    assert 'href="/notas?geral=1&amp;arquivo=Inbox/Ideia.md"><svg' in html
+    assert "<span>visão geral do vault</span>" in html
 
 
 def test_visao_geral_escapa_nome_e_tag(cliente, raiz):
@@ -382,3 +383,14 @@ def test_os_botoes_da_nota_tem_icone_e_dica(cliente):
     assert 'class="botao botao-perigo"' in html
     assert '<span class="rotulo">apagar</span>' in html
     assert "Ctrl+E alterna editar e ler" in html
+
+
+def test_a_lateral_diz_onde_a_nota_nova_vai(cliente):
+    html = _tela(cliente, "Projetos/Casa/Telhado.md")
+    assert 'id="nova-nota" class="botao botao-principal"' in html
+    assert 'title="nova nota em Projetos/Casa"' in html
+    assert "Enter cria · Esc cancela" in html
+
+
+def test_apagar_pasta_tem_lugar_para_o_aviso(cliente):
+    assert '<span class="rotulo"></span></button>' in _tela(cliente)

@@ -52,10 +52,11 @@ def _ramo(itens: list[dict], aberto: str) -> str:
                      f'<span class="nome-pasta">{escape(item["nome"])}</span>'
                      f'<button type="button" class="renomear-pasta" data-pasta="{caminho}"'
                      f' title="renomear ou mover a pasta"'
-                     f' aria-label="renomear {escape(item["nome"])}">✎</button>'
+                     f' aria-label="renomear {escape(item["nome"])}">{icone("renomear", 14)}</button>'
                      f'<button type="button" class="apagar-pasta" data-pasta="{caminho}"'
-                     f' title="mandar a pasta para a lixeira"'
-                     f' aria-label="apagar {escape(item["nome"])}">×</button>'
+                     f' title="mandar a pasta para a lixeira (pede um segundo clique)"'
+                     f' aria-label="apagar {escape(item["nome"])}">{icone("lixeira", 14)}'
+                     f'<span class="rotulo"></span></button>'
                      f'<span class="conta">{_contar(item["filhos"])[0]}</span></summary>'
                      f'<div class="filhos">{_ramo(item["filhos"], aberto) or _vazia()}</div>'
                      f'</details>')
@@ -376,16 +377,19 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
             '<p class="vazio">Nenhuma nota ainda. Crie a primeira com “+ nota”.</p>')
     volta = "&amp;arquivo=" + escape(quote(aberto, safe="/")) if aberto else ""
     atalhos = "".join(
-        f'<a class="atalho-visao" href="/notas?{param}=1{volta}">{rotulo}</a>'
-        for param, rotulo, ativo in (("geral", "visão geral do vault", geral),
-                                     ("grafo", "grafo", grafo_todo)) if not ativo)
+        f'<a class="atalho-visao" href="/notas?{param}=1{volta}">{icone(nome_icone, 15)}'
+        f'<span>{rotulo}</span></a>'
+        for param, rotulo, nome_icone, ativo in (
+            ("geral", "visão geral do vault", "painel", geral),
+            ("grafo", "grafo", "grafo", grafo_todo)) if not ativo)
     lateral = f'<div class="atalhos">{atalhos}</div>' + lateral
     if quebrados_todos and not quebrados:
         alvos = len({markdown.chave_link(lig.citacao.caminho_pedido(lig.origem)
                                          .rpartition("/")[2]) for lig in quebrados_todos})
         lateral = (f'<a class="aviso-quebrados" href="/notas?quebrados=1'
                    f'{"&amp;arquivo=" + escape(quote(aberto, safe="/")) if aberto else ""}">'
-                   f'{formato.plural(alvos, "link quebrado", "links quebrados")}</a>' + lateral)
+                   f'{icone("quebrado", 15)}<span>'
+                   f'{formato.plural(alvos, "link quebrado", "links quebrados")}</span></a>' + lateral)
 
     pasta_atual = aberto.rpartition("/")[0] if aberto else ""
     if grafo_todo:
@@ -417,11 +421,16 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
 <div class="notas">
   <div class="card notas-lateral">
     <div class="notas-botoes">
-      <button type="button" id="nova-nota" class="botao-fraco">+ nota</button>
-      <button type="button" id="nova-pasta" class="botao-fraco">+ pasta</button>
+      <button type="button" id="nova-nota" class="botao botao-principal"
+        title="nova nota{" em " + escape(pasta_atual) if pasta_atual else ""}">
+        {icone("nova-nota", 15)}<span>nova nota</span></button>
+      <button type="button" id="nova-pasta" class="botao"
+        title="nova pasta{" em " + escape(pasta_atual) if pasta_atual else ""}">
+        {icone("nova-pasta", 15)}<span>pasta</span></button>
     </div>
     <form id="criar" class="criar" hidden data-pasta="{escape(pasta_atual)}">
       <input id="criar-nome" autocomplete="off" required>
+      <span class="dica">Enter cria · Esc cancela</span>
       <span id="criar-erro" class="erro"></span>
     </form>
     <div class="arvore" aria-label="pastas e notas">{lateral}</div>
