@@ -66,6 +66,14 @@ def test_a_caixa_privada_segue_o_frontmatter(cliente):
     assert 'id="privada" checked' not in _tela(cliente, "Inbox/Ideia.md")
 
 
+def test_privada_so_no_banco_abre_com_a_caixa_marcada(cliente, raiz):
+    cliente.app.state.conn_factory().execute("INSERT INTO notes (title, path, private) VALUES ('Ideia', ?, 1)",
+                 (str(raiz / "Inbox" / "Ideia.md"),))
+    html = _tela(cliente, "Inbox/Ideia.md")
+    assert 'id="privada" checked' in html
+    assert "private: true" in (raiz / "Inbox" / "Ideia.md").read_text()
+
+
 def test_sem_arquivo_abre_a_ultima_mexida(cliente, raiz):
     import os
 

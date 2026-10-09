@@ -328,6 +328,11 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
     itens = vault.arvore(raiz)
     indice = links.indice(raiz, itens)
     aberto = _escolher(ctx, raiz, arquivo, nota, indice)
+    if aberto:
+        # antes de mostrar: a caixa "privada" lê o frontmatter
+        from aide.storage.reconciliacao import privado_para_o_arquivo
+
+        privado_para_o_arquivo(ctx.conn, raiz / aberto)
     notas, pastas = _contar(itens)
     # apagar nota move o arquivo para vault/.trash; sem dizer isso em algum lugar,
     # a lixeira é uma pasta que só cresce e ninguém sabe que existe
