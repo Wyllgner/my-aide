@@ -37,6 +37,22 @@ TRACOS = {
     "lixeira": "M4 6h12M8 6V4h4v2M5.5 6l.8 10.5h7.4L14.5 6M8.5 9v5M11.5 9v5",
     "anexar": ("M14 8.5l-5.5 5.5a2 2 0 0 1-2.8-2.8l6-6a3.25 3.25 0 0 1 4.6 4.6l-6.2 6.2"
                "a4.5 4.5 0 0 1-6.4-6.4l5.3-5.3"),
+    # os callouts (> [!tipo]) na prévia
+    "callout-note": "M4 16l.8-3.6 8.4-8.4 2.8 2.8-8.4 8.4zM11.5 5.7l2.8 2.8",
+    "callout-abstract": "M6 4.5h8v12.5H6zM8 3h4v3H8zM8.5 9.5h3M8.5 12.5h3",
+    "callout-info": "M10 17a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM10 9.5V14M10 6.5v.01",
+    "callout-todo": "M10 17a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM7 10.2l2 2 4-4.2",
+    "callout-tip": "M7.5 13a4.5 4.5 0 1 1 5 0v2h-5zM8.5 17.5h3",
+    "callout-success": "M4.5 10.5l3.5 3.5 7.5-8",
+    "callout-question": ("M10 17a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM8 8a2 2 0 1 1 2.8 1.8"
+                         "c-.5.3-.8.7-.8 1.2v.5M10 14v.01"),
+    "callout-warning": "M10 3.5 17 16H3zM10 8.5v3.5M10 14v.01",
+    "callout-failure": "M5.5 5.5l9 9M14.5 5.5l-9 9",
+    "callout-danger": "M11 3 5 11h4.5L9 17l6-8h-4.5z",
+    "callout-bug": ("M7 8.5h6V13a3 3 0 0 1-6 0zM8 8.5a2 2 0 0 1 4 0M3.5 11H7M13 11h3.5"
+                    "M4 15.5l3-1.5M16 15.5l-3-1.5"),
+    "callout-example": "M7.5 5.5h9M7.5 10h9M7.5 14.5h9M4 5.5v.01M4 10v.01M4 14.5v.01",
+    "callout-quote": "M4.5 9h3.5v4H4.5zM4.5 9c0-2 1-3 3.5-3.5M12 9h3.5v4H12zM12 9c0-2 1-3 3.5-3.5",
     # a lateral das notas
     "nova-nota": "M5 3h7l3 3v11H5zM12 3v3.5h3M10 9v5M7.5 11.5h5",
     "nova-pasta": "M3 5.5h5l1.5 2H17v8.5H3zM10 9.5v4.5M7.75 11.75h4.5",

@@ -12,7 +12,7 @@ site, de um e-mail, de um arquivo baixado —, então nada nele vira código:
   ganhar o mesmo id de um elemento da página.
 
 E o que é do Obsidian: [[links]], [[nota|apelido]], [[nota#seção]], listas de
-tarefa e o frontmatter mostrado como propriedades.
+tarefa, callouts (`> [!info] Título`) e o frontmatter mostrado como propriedades.
 """
 
 from __future__ import annotations
@@ -29,6 +29,7 @@ from markdown_it.token import Token
 from aide.storage import vault
 from aide.storage.links import Indice
 from aide.storage.links import chave as chave_link
+from aide.web.icones import icone
 
 ESQUEMAS_SEGUROS = ("http", "https", "mailto")
 
@@ -303,6 +304,103 @@ def _url_solta(state) -> None:
         bloco.children = novos
 
 
+# ---------- callouts do Obsidian ----------
+# `> [!tipo] Título` vira uma caixa com ícone e cor. Os tipos e apelidos são
+# os do Obsidian, para o vault continuar abrindo igual lá; o rótulo é o
+# título quando você não escreve um. `[!tipo]-` nasce fechado, `+` aberto.
+
+CALLOUTS = {
+    "note": "Nota", "abstract": "Resumo", "info": "Info", "todo": "A fazer",
+    "tip": "Dica", "success": "Feito", "question": "Pergunta", "warning": "Atenção",
+    "failure": "Falhou", "danger": "Perigo", "bug": "Bug", "example": "Exemplo",
+    "quote": "Citação",
+}
+APELIDOS_CALLOUT = {
+    "summary": "abstract", "tldr": "abstract", "hint": "tip", "important": "tip",
+    "check": "success", "done": "success", "help": "question", "faq": "question",
+    "caution": "warning", "attention": "warning", "fail": "failure", "missing": "failure",
+    "error": "danger", "cite": "quote",
+}
+CALLOUT = re.compile(r"\[!([\w-]+)\]([+-]?)[ \t]*")
+
+
+def _fim_do_bloco(tokens: list[Token], i: int) -> int:
+    """O blockquote_close do blockquote_open em `i` (pode haver outros dentro)."""
+    fundo = 0
+    for k in range(i, len(tokens)):
+        if tokens[k].type == "blockquote_open":
+            fundo += 1
+        elif tokens[k].type == "blockquote_close":
+            fundo -= 1
+            if not fundo:
+                return k
+    return len(tokens) - 1
+
+
+def _callouts(state) -> None:
+    """A primeira linha da citação, se for `[!tipo]`, vira o título; o resto
+    fica como corpo. O título continua sendo um token `inline`: os [[links]]
+    nele contam no grafo como qualquer outro."""
+    tokens = state.tokens
+    i = 0
+    while i < len(tokens):
+        abre = tokens[i]
+        if (abre.type != "blockquote_open" or i + 3 >= len(tokens)
+                or tokens[i + 1].type != "paragraph_open" or tokens[i + 2].type != "inline"):
+            i += 1
+            continue
+        linha = tokens[i + 2]
+        filhos = linha.children or []
+        casado = CALLOUT.match(filhos[0].content) if filhos and filhos[0].type == "text" else None
+        if not casado:
+            i += 1
+            continue
+        escrito = casado.group(1).casefold()
+        tipo = APELIDOS_CALLOUT.get(escrito, escrito)
+        dobra = casado.group(2)
+        quebra = next((k for k, f in enumerate(filhos) if f.type in ("softbreak", "hardbreak")),
+                      len(filhos))
+        resto = filhos[0].content[casado.end():]
+        titulo = ([_texto(resto)] if resto else []) + filhos[1:quebra]
+        if not titulo:
+            titulo = [_texto(CALLOUTS.get(tipo, escrito.capitalize()))]
+        linha.children = filhos[quebra + 1:]
+        linha.content = linha.content.partition("\n")[2]
+        if not linha.children:
+            # só o título: o parágrafo vazio some
+            tokens[i + 1].hidden = tokens[i + 3].hidden = True
+
+        fecha = tokens[_fim_do_bloco(tokens, i)]
+        abre.attrSet("class", "callout")
+        abre.attrSet("data-callout", tipo)
+        if dobra:
+            abre.tag = fecha.tag = "details"
+            if dobra == "+":
+                abre.attrSet("open", "")
+        cabeca = Token("callout_titulo_open", "", 1)
+        cabeca.meta = {"tipo": tipo, "dobra": bool(dobra)}
+        corpo_titulo = Token("inline", "", 0)
+        corpo_titulo.children = titulo
+        corpo_titulo.content = ""
+        corpo_titulo.map = linha.map
+        pe = Token("callout_titulo_close", "", -1)
+        pe.meta = cabeca.meta
+        tokens[i + 1:i + 1] = [cabeca, corpo_titulo, pe]
+        i += 4
+
+
+def _render_callout_abre(self, tokens, idx, options, env) -> str:
+    meta = tokens[idx].meta
+    tag = "summary" if meta["dobra"] else "div"
+    # o ícone é dos nossos; tipo desconhecido usa o da nota
+    nome = "callout-" + (meta["tipo"] if meta["tipo"] in CALLOUTS else "note")
+    return f'<{tag} class="callout-titulo">{icone(nome, 16)}<span>'
+
+
+def _render_callout_fecha(self, tokens, idx, options, env) -> str:
+    return "</span></summary>\n" if tokens[idx].meta["dobra"] else "</span></div>\n"
+
+
 def _texto(conteudo: str) -> Token:
     token = Token("text", "", 0)
     token.content = conteudo
@@ -316,11 +414,14 @@ def _motor() -> MarkdownIt:
     md.core.ruler.push("ancoras", _ancoras)
     md.core.ruler.push("tarefas", _tarefas)
     md.core.ruler.push("url_solta", _url_solta)
+    md.core.ruler.push("callouts", _callouts)
     md.core.ruler.push("fontes", _fontes)
     md.add_render_rule("wikilink", _render_wikilink)
     md.add_render_rule("link_open", _render_link_open)
     md.add_render_rule("image", _render_imagem)
     md.add_render_rule("tarefa", _render_tarefa)
+    md.add_render_rule("callout_titulo_open", _render_callout_abre)
+    md.add_render_rule("callout_titulo_close", _render_callout_fecha)
     return md
 
 
