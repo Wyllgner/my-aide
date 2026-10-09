@@ -46,12 +46,12 @@ def instalar(app) -> None:
         except vault.ForaDoVault as erro:
             raise HTTPException(400, str(erro)) from None
 
-    def auditar(acao: str, caminho: str, ok: bool = True) -> None:
+    def auditar(acao: str, caminho: str, ok: bool = True, **extra) -> None:
         conn = app.state.conn_factory()
         conn.execute(
             "INSERT INTO audit (actor, tool, args_json, result_summary, ok)"
             " VALUES ('web', ?, ?, ?, ?)",
-            (acao, json.dumps({"caminho": caminho}, ensure_ascii=False),
+            (acao, json.dumps({"caminho": caminho, **extra}, ensure_ascii=False),
              "ok" if ok else "recusado", int(ok)))
 
     def texto_valido(texto) -> str:
@@ -127,7 +127,8 @@ def instalar(app) -> None:
         mover_no_indice(conn, raiz() / de, raiz() / para)
         for nota in mudadas:
             sincronizar(conn, raiz() / nota)
-        auditar("notas.mover", f"{de} → {para}")
+        # mover reescreve outras notas: a trilha diz quais
+        auditar("notas.mover", f"{de} → {para}", links_atualizados=mudadas)
         return {"caminho": para, "versao": versao(destino), "links_atualizados": mudadas}
 
     @app.post("/api/notas/mover-pasta")
@@ -150,7 +151,7 @@ def instalar(app) -> None:
             mover_no_indice(conn, raiz() / velho, raiz() / novo)
         for nota in mudadas:
             sincronizar(conn, raiz() / nota)
-        auditar("notas.mover_pasta", f"{de} → {para}")
+        auditar("notas.mover_pasta", f"{de} → {para}", links_atualizados=mudadas)
         return {"caminho": para, "notas_movidas": movidas, "links_atualizados": mudadas}
 
     @app.post("/api/notas/pasta", status_code=201)
