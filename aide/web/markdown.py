@@ -166,7 +166,9 @@ TAREFA = re.compile(r"\[([ xX])\] ")
 
 
 def _tarefas(state) -> None:
-    """`- [ ] item` vira caixa marcável só de olhar; quem muda é o texto."""
+    """`- [ ] item` vira caixa marcável. A caixa leva a linha do arquivo onde
+    a tarefa está, e quem marca é o script, trocando `[ ]` por `[x]` no texto
+    — a prévia nunca escreve sozinha."""
     tokens = state.tokens
     for i, token in enumerate(tokens):
         if (token.type != "inline" or i < 2 or tokens[i - 1].type != "paragraph_open"
@@ -178,14 +180,20 @@ def _tarefas(state) -> None:
         primeiro = token.children[0]
         primeiro.content = primeiro.content[casado.end():]
         caixa = Token("tarefa", "", 0)
-        caixa.meta = {"feita": casado.group(1) != " "}
+        item = tokens[i - 2]
+        caixa.meta = {"feita": casado.group(1) != " ",
+                      "linha": state.env.get("deslocamento", 0) + item.map[0]
+                      if item.map else None}
         token.children.insert(0, caixa)
         tokens[i - 2].attrSet("class", "tarefa")
 
 
 def _render_tarefa(self, tokens, idx, options, env) -> str:
-    feita = " checked" if tokens[idx].meta["feita"] else ""
-    return f'<input type="checkbox" disabled{feita}> '
+    meta = tokens[idx].meta
+    feita = " checked" if meta["feita"] else ""
+    if meta["linha"] is None:
+        return f'<input type="checkbox" disabled{feita}> '
+    return f'<input type="checkbox" data-linha="{int(meta["linha"])}"{feita}> '
 
 
 def _motor() -> MarkdownIt:
@@ -214,6 +222,10 @@ def _propriedades(meta: dict[str, str]) -> str:
 
 def renderizar(texto: str, origem: str | None, indice: Indice) -> str:
     """O HTML da prévia da nota `origem` (caminho no vault)."""
-    meta, corpo = vault.separar(texto)
-    env = {"origem": origem, "indice": indice}
+    meta, _ = vault.separar(texto)
+    inicio = vault.inicio_do_corpo(texto)
+    # o corpo sem cortar as linhas vazias do começo: a linha de cada tarefa na
+    # prévia precisa bater com a do arquivo
+    corpo = "\n".join(texto.split("\n")[inicio:])
+    env = {"origem": origem, "indice": indice, "deslocamento": inicio}
     return _propriedades(meta) + MOTOR.render(corpo, env)

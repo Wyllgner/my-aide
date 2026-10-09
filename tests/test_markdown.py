@@ -90,9 +90,21 @@ def test_link_markdown_para_outra_nota(indice):
 
 def test_lista_de_tarefas(indice):
     html = _html("- [ ] comprar telha\n- [x] medir o telhado\n- item comum", indice)
-    assert '<input type="checkbox" disabled> comprar telha' in html
-    assert '<input type="checkbox" disabled checked> medir o telhado' in html
+    assert '<input type="checkbox" data-linha="0"> comprar telha' in html
+    assert '<input type="checkbox" data-linha="1" checked> medir o telhado' in html
     assert "<li>item comum</li>" in html
+
+
+def test_a_linha_da_tarefa_e_a_do_arquivo(indice):
+    """Com frontmatter e linhas vazias antes: a caixa marca a linha certa."""
+    texto = "---\ntitle: x\n---\n\n\n# Lista\n\n- [ ] a\n  - [x] dentro\n\n```\n- [ ] código\n```\n- [ ] b"
+    html = _html(texto, indice)
+    linhas = texto.split("\n")
+    import re
+
+    for numero in re.findall(r'data-linha="(\d+)"', html):
+        assert re.match(r"\s*- \[[ x]\] ", linhas[int(numero)])
+    assert re.findall(r'data-linha="(\d+)"', html) == ["7", "8", "13"]
 
 
 def test_titulos_repetidos_ganham_numero(indice):
