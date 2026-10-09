@@ -457,3 +457,23 @@ def test_nome_repetido_em_outra_pasta_leva_o_caminho(ligadas, ctx, registry):
     dados = registry.call("notes.create", {"title": "Obra", "body": "x",
                                            "relacionadas": ["Arquivo/Telhado"]}, ctx).data
     assert dados["relacionadas"] == ["Arquivo/Telhado"]
+
+
+@pytest.mark.parametrize("nome", ["fornecedores", "FORNECEDORES", "Inbox/Fornecedores",
+                                  "Fornecedores.md"])
+def test_nota_achada_pelo_nome_sem_titulo_exato(ligadas, ctx, registry, nome):
+    """O modelo raramente repete o título com a caixa exata."""
+    assert registry.call("notes.read", {"title": nome}, ctx).data["title"] == "Fornecedores"
+
+
+def test_titulo_sem_acento_tambem_acha(ligadas, ctx, registry):
+    import unicodedata
+
+    nfd = unicodedata.normalize("NFD", "reunião")
+    assert registry.call("notes.links", {"title": nfd}, ctx).data["title"] == "Reunião"
+
+
+def test_nome_que_leva_a_privada_continua_recusado(ligadas, ctx, registry):
+    resultado = registry.call("notes.read", {"title": "diário"}, ctx)
+    assert not resultado.ok
+    assert "SEGREDO" not in resultado.error

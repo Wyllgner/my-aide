@@ -50,10 +50,32 @@ def _nota(ctx: ToolContext, id_ou_titulo):
         row = ctx.conn.execute(
             "SELECT * FROM notes WHERE title = ? AND deleted_at IS NULL"
             " ORDER BY updated_at DESC LIMIT 1", (str(id_ou_titulo),)
-        ).fetchone()
+        ).fetchone() or _nota_pelo_nome(ctx, str(id_ou_titulo))
     if row is None:
         raise ValueError(f"nota não encontrada: {id_ou_titulo}")
     return row
+
+
+def _nota_pelo_nome(ctx: ToolContext, nome: str):
+    """O modelo escreve "obra" para a nota "Obra", ou o caminho "Inbox/Obra":
+    o título exato falha, e então vale a regra de link do Obsidian — nome do
+    arquivo ou caminho, sem caixa e sem diferença de acento —, e por fim o
+    título sem caixa."""
+    from aide.storage import links
+
+    raiz = Path(ctx.config.vault_dir)
+    destino = links.indice(raiz).resolver(nome)
+    if destino:
+        row = ctx.conn.execute("SELECT * FROM notes WHERE path = ? AND deleted_at IS NULL",
+                               (str(raiz / destino),)).fetchone()
+        if row:
+            return row
+    procurado = links.chave(nome)
+    for row in ctx.conn.execute("SELECT * FROM notes WHERE deleted_at IS NULL"
+                                " ORDER BY updated_at DESC"):
+        if links.chave(row["title"]) == procurado:
+            return row
+    return None
 
 
 def _privada_so_no_arquivo(ctx: ToolContext, note_id: int) -> bool:
