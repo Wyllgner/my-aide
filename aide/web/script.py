@@ -130,7 +130,7 @@ JS = r"""
             var depois = antes && d.notas_movidas[antes];
             if (depois) { abrir(depois); } else { location.reload(); }
           });
-        });
+        }).catch(function (e3) { erro.textContent = e3.message; });
       });
     });
   });
@@ -193,9 +193,17 @@ JS = r"""
   }
 
   // a pasta da nota aberta pode mudar de lugar: quem move salva antes
-  window.aideSalvar = function () {
-    return salvar().then(function () { salvo = editor.value; });
-  };
+  // Salva e só segue se ficou mesmo salvo. Com conflito, sem conexão ou erro,
+  // rejeita: renomear ou abrir outra nota por cima descartaria o que você
+  // escreveu e ainda não está no disco
+  function garantirSalvo() {
+    return salvar().then(function () {
+      if (editor.value !== salvo || !conflito.hidden) {
+        throw new Error("salve a nota antes (há texto que não foi para o disco)");
+      }
+    });
+  }
+  window.aideSalvar = garantirSalvo;
 
   function agendar() {
     clearTimeout(espera);
@@ -300,7 +308,7 @@ JS = r"""
     if (!/\.md$/i.test(novo)) { novo += ".md"; }
     if (novo === caminho) { fecharRenomear(); return; }
     // o que ainda não foi salvo vai antes: o arquivo muda de lugar
-    salvar().then(function () {
+    garantirSalvo().then(function () {
       return pedir("POST", "/api/notas/mover", { de: caminho, para: novo });
     }).then(function (r) {
       if (r.ok) {
@@ -315,7 +323,7 @@ JS = r"""
         });
       }
       return erroDe(r).then(function (m) { erroRenomear.textContent = m; });
-    });
+    }).catch(function (e) { erroRenomear.textContent = e.message; });
   });
 
   // o aviso deixado por um renomear, na página da nota já com o nome novo
@@ -336,11 +344,11 @@ JS = r"""
     var pasta = caminho.lastIndexOf("/") >= 0 ? caminho.slice(0, caminho.lastIndexOf("/")) : "";
     var novo = (alvo.indexOf("/") >= 0 || !pasta ? alvo : pasta + "/" + alvo);
     if (!/\.md$/i.test(novo)) { novo += ".md"; }
-    salvar().then(function () {
+    garantirSalvo().then(function () {
       return pedir("POST", "/api/notas/arquivo", { caminho: novo });
     }).then(function (r) {
       if (r.ok || r.status === 409) { abrir(novo); } else { erroDe(r).then(function (m) { mostrar(m, "erro"); }); }
-    });
+    }).catch(function (e) { mostrar(e.message, "erro"); });
   }
   // ---------- tarefa marcada na prévia ----------
   // a caixa diz a linha; o script troca [ ] por [x] no texto e salva. Se o
