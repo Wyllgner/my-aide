@@ -430,6 +430,10 @@ o servidor não precisa de Node. Para trocar de versão, mude o `package.json` d
 `deploy/excalidraw/` e rode `deploy/excalidraw/build.sh` (precisa de Node só
 ali). O build deixa de fora o mermaid e os idiomas que não são pt-BR e inglês,
 e aponta a reserva das fontes para o próprio site em vez do esm.sh.
+Com a CSP do site, sem `unsafe-eval`, o Excalidraw não recorta a fonte ao
+exportar SVG e embute a fonte inteira; o PNG sai normal. "Mermaid to
+Excalidraw" e "Web Embed" não funcionam aqui (o mermaid ficou fora e a CSP
+barra iframe de fora) e saem do menu na tela de desenho.
 
 Os testes de CLI rodam com `AIDE_ROOT` numa raiz temporária. Sem isso eles
 abririam o banco real e, pior, o `.env` com as credenciais de verdade.
