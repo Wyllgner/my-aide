@@ -1078,6 +1078,45 @@ JS = r"""
     }
   })();
 
+  // ---------- chegar pela busca ----------
+  // aberta por um resultado (?busca=), a nota marca as palavras buscadas e
+  // rola até a primeira. As mesmas palavras que a busca usa: de 3 letras para cima
+  (function marcarBusca() {
+    var busca = new URLSearchParams(location.search).get("busca") || "";
+    var termos = (busca.toLowerCase().match(/[\p{L}\p{N}_]+/gu) || []).filter(function (t) {
+      return t.length > 2;
+    });
+    if (!termos.length) { return; }
+    var padrao = new RegExp(termos.map(function (t) {
+      return t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }).join("|"), "gi");
+    var nos = [];
+    var andar = document.createTreeWalker(previa, NodeFilter.SHOW_TEXT);
+    while (andar.nextNode()) { nos.push(andar.currentNode); }
+    var primeira = null;
+    nos.forEach(function (no) {
+      var texto = no.nodeValue;
+      padrao.lastIndex = 0;
+      if (!padrao.test(texto)) { return; }
+      padrao.lastIndex = 0;
+      var pedacos = document.createDocumentFragment();
+      var fim = 0;
+      var m;
+      while ((m = padrao.exec(texto))) {
+        pedacos.appendChild(document.createTextNode(texto.slice(fim, m.index)));
+        var marca = document.createElement("mark");
+        marca.className = "achado-busca";
+        marca.textContent = m[0];
+        pedacos.appendChild(marca);
+        primeira = primeira || marca;
+        fim = m.index + m[0].length;
+      }
+      pedacos.appendChild(document.createTextNode(texto.slice(fim)));
+      no.parentNode.replaceChild(pedacos, no);
+    });
+    if (primeira && area.dataset.modo !== "editar") { primeira.scrollIntoView({ block: "center" }); }
+  })();
+
   // ---------- autocompletar [[ e comandos com / ----------
   var notas = [];
   try { notas = JSON.parse(editor.dataset.notas || "[]"); } catch (e) { notas = []; }

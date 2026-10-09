@@ -454,3 +454,23 @@ def test_buscar_por_hashtag_abre_a_lista_da_tag(cliente, raiz):
     (raiz / "Inbox" / "Obra.md").write_text("# Obra\n\n#reforma\n")
     html = cliente.get("/notas?busca=%23reforma").text
     assert "#reforma · 1 nota" in html
+
+
+def test_a_busca_poe_o_titulo_primeiro_e_marca_o_trecho_limpo(cliente, config, raiz):
+    from aide.storage.reconciliacao import reconciliar
+
+    (raiz / "Inbox" / "Muro.md").write_text(
+        "# Muro\n\nsobre o muro, o muro e mais o muro do [[Vizinho|vizinho]]\n")
+    (raiz / "Inbox" / "Outra.md").write_text("# Outra\n\nfala do muro uma vez\n")
+    reconciliar(cliente.app.state.conn_factory(), config.vault_dir)
+    html = cliente.get("/notas?busca=muro").text
+    assert "2 resultados" in html
+    assert html.index("Inbox/Muro.md</span>") < html.index("Inbox/Outra.md</span>")
+    assert "<mark>muro</mark>" in html
+    assert "[[" not in html.split('class="arvore')[1].split("voltar às pastas")[0]
+
+
+def test_trecho_da_busca_nao_vira_html():
+    from aide.web.notas_tela import _trecho
+
+    assert _trecho("<img src=x> lt", ["img"]) == "&lt;<mark>img</mark> src=x&gt; lt"
