@@ -28,6 +28,7 @@ FRASES = {
     "notes.search": ("procurando nas suas notas", "procurei nas suas notas"),
     "notes.list": ("vendo suas notas", "vi suas notas"),
     "notes.read": ("lendo a nota inteira", "li a nota inteira"),
+    "notes.links": ("seguindo os links da nota", "segui os links da nota"),
     "notes.create": ("guardando a nota no vault", "guardei a nota no vault"),
     "notes.append": ("acrescentando à nota", "acrescentei à nota"),
     "notes.delete": ("apagando a nota", "apaguei a nota"),
