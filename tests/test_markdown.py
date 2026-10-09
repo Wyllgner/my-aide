@@ -209,3 +209,43 @@ def test_embutir_nota_vira_link(indice):
 def test_nome_com_ponto_continua_nota(indice):
     """"v1.2" não é extensão de anexo que importe: "Plano v1.2" é nota."""
     assert "quebrado" in _html("[[Plano v1.2]]", indice)
+
+
+# ---------- URL solta ----------
+
+@pytest.mark.parametrize("texto, url", [
+    ("veja https://exemplo.org/a?b=1 depois", "https://exemplo.org/a?b=1"),
+    ("fim de frase https://exemplo.org.", "https://exemplo.org"),
+    ("(entre parênteses https://exemplo.org)", "https://exemplo.org"),
+    ("wiki https://pt.wikipedia.org/wiki/Teste_(desambiguação) ok",
+     "https://pt.wikipedia.org/wiki/Teste_(desambigua%C3%A7%C3%A3o)"),
+    ("HTTP://EXEMPLO.ORG", "HTTP://EXEMPLO.ORG"),
+])
+def test_url_solta_vira_link(indice, texto, url):
+    html = _html(texto, indice)
+    assert f'href="{url}"' in html
+    assert 'target="_blank"' in html and 'rel="noopener noreferrer"' in html
+
+
+@pytest.mark.parametrize("texto", [
+    "`https://exemplo.org` em código",
+    "```\nhttps://exemplo.org\n```",
+    "[já é link](https://exemplo.org)",
+    "javascript://alert(1)",
+    "só https:// sem nada",
+])
+def test_url_que_nao_deve_virar_link_novo(indice, texto):
+    assert _html(texto, indice).count("<a ") <= 1
+
+
+def test_url_solta_nao_vira_atributo(indice):
+    html = _html('https://x.org/"><script>alert(1)</script>', indice)
+    assert "<script>" not in html
+    for _, atributos in _tags(html):
+        assert not any(nome.startswith("on") for nome, _ in atributos)
+
+
+def test_url_solta_nao_conta_como_ligacao_entre_notas():
+    from aide.web.markdown import citacoes
+
+    assert citacoes("veja https://exemplo.org/nota.md") == []
