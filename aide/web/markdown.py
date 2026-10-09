@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from dataclasses import dataclass
 from html import escape
 from urllib.parse import quote, urlsplit
 
@@ -229,3 +230,43 @@ def renderizar(texto: str, origem: str | None, indice: Indice) -> str:
     corpo = "\n".join(texto.split("\n")[inicio:])
     env = {"origem": origem, "indice": indice, "deslocamento": inicio}
     return _propriedades(meta) + MOTOR.render(corpo, env)
+
+
+# ---------- links de uma nota, para o mapa ----------
+
+
+@dataclass(frozen=True)
+class Citacao:
+    """Um link escrito numa nota: o que está no texto, ainda sem destino."""
+
+    tipo: str  # "wiki" para [[...]], "md" para [texto](arquivo.md)
+    alvo: str
+    secao: str
+    linha: int  # linha no arquivo, contando o frontmatter
+
+    def destino(self, origem: str, indice: Indice) -> str | None:
+        """Para onde aponta hoje — muda quando notas são criadas ou apagadas."""
+        env = {"origem": origem, "indice": indice}
+        if self.tipo == "wiki":
+            return indice.resolver(self.alvo, origem) if self.alvo else origem
+        return _nota_por_link_markdown(self.alvo, env)[0]
+
+
+def citacoes(texto: str) -> list[Citacao]:
+    """Os links da nota, pelo mesmo parser da prévia: link dentro de bloco de
+    código não conta, e o que a prévia mostra como link é o que vira ligação."""
+    inicio = vault.inicio_do_corpo(texto)
+    corpo = "\n".join(texto.split("\n")[inicio:])
+    achadas = []
+    for bloco in MOTOR.parse(corpo, {"deslocamento": inicio}):
+        if bloco.type != "inline" or not bloco.children:
+            continue
+        linha = inicio + (bloco.map[0] if bloco.map else 0)
+        for token in bloco.children:
+            if token.type == "wikilink" and not ANEXO.search(token.meta["nome"]):
+                achadas.append(Citacao("wiki", token.meta["nome"], token.meta["secao"], linha))
+            elif token.type == "link_open":
+                href = token.attrGet("href") or ""
+                if not _seguro(href):
+                    achadas.append(Citacao("md", href, "", linha))
+    return achadas
