@@ -85,10 +85,7 @@ def _render_wikilink(self, tokens, idx, options, env) -> str:
     nome, secao, apelido = meta["nome"], meta["secao"], meta["apelido"]
     texto = apelido or (f"{nome} › {secao}" if nome and secao else nome or secao)
     if ANEXO.search(nome):
-        # a página ainda não serve anexos; como link quebrado, um clique
-        # criaria "foto.png.md"
-        return (f'<span class="anexo" title="anexos ainda não aparecem aqui">'
-                f'{escape(apelido or nome)}</span>')
+        return _anexo(nome, apelido, env)
     destino = env["indice"].resolver(nome, env["origem"]) if nome else env["origem"]
     if destino is None:
         # quebrado: sem href, para não levar a lugar nenhum; o alvo fica
@@ -140,14 +137,52 @@ def _nota_por_link_markdown(href: str, env) -> tuple[str | None, str]:
     return env["indice"].resolver(alvo, env["origem"]), secao
 
 
+def _anexo(alvo: str, apelido: str, env) -> str:
+    """Imagem, áudio, vídeo ou PDF do vault. `apelido` numérico é a largura,
+    como no Obsidian: ![[foto.png|300]]."""
+    from aide.storage import anexos
+
+    indice = env.get("anexos")
+    caminho = indice.resolver(alvo, env["origem"]) if indice else None
+    nome = alvo.rpartition("/")[2]
+    if caminho is None:
+        return (f'<span class="anexo" title="anexo não encontrado no vault">'
+                f'{escape(apelido or nome)}</span>')
+    src = "/api/notas/anexo?caminho=" + quote(caminho, safe="/")
+    largura = f' width="{int(apelido)}"' if apelido.isdigit() and 0 < int(apelido) <= 4000 else ""
+    rotulo = escape(apelido if apelido and not apelido.isdigit() else nome)
+    tipo = anexos.tipo(caminho)
+    if tipo.startswith("image/"):
+        return (f'<img class="anexo-imagem" src="{escape(src)}" alt="{rotulo}"'
+                f' loading="lazy"{largura}>')
+    if tipo.startswith("audio/"):
+        return f'<audio class="anexo-midia" controls preload="none" src="{escape(src)}"></audio>'
+    if tipo.startswith("video/"):
+        return (f'<video class="anexo-midia" controls preload="metadata"'
+                f' src="{escape(src)}"{largura}></video>')
+    return (f'<a class="anexo" href="{escape(src)}" target="_blank" rel="noopener noreferrer">'
+            f'{rotulo}</a>')
+
+
 def _render_imagem(self, tokens, idx, options, env) -> str:
     token = tokens[idx]
     src = token.attrGet("src") or ""
     alt = self.renderInlineAsText(token.children or [], options, env) or "imagem"
     if _seguro(src):
+        # imagem de fora nunca carrega: avisaria o dono dela que a nota foi aberta
         return (f'<a class="imagem-externa" href="{escape(src)}" target="_blank"'
                 f' rel="noopener noreferrer" title="imagem de fora, não carregada">'
                 f'{escape(alt)}</a>')
+    # ![texto](anexos/foto.png): relativa à nota, como o Obsidian grava
+    import posixpath
+    from urllib.parse import unquote
+
+    if env.get("anexos") and not urlsplit(src).scheme:
+        pasta = (env["origem"] or "").rpartition("/")[0]
+        relativo = posixpath.normpath(posixpath.join(pasta, unquote(src)))
+        alvo = relativo if not relativo.startswith("..") else unquote(src)
+        if ANEXO.search(alvo):
+            return _anexo(alvo, alt if alt != "imagem" else "", env)
     return f'<span class="imagem-externa">{escape(alt)}</span>'
 
 
@@ -277,14 +312,14 @@ def _propriedades(meta: dict[str, str]) -> str:
     return f'<dl class="propriedades">{linhas}</dl>'
 
 
-def renderizar(texto: str, origem: str | None, indice: Indice) -> str:
+def renderizar(texto: str, origem: str | None, indice: Indice, anexos=None) -> str:
     """O HTML da prévia da nota `origem` (caminho no vault)."""
     meta, _ = vault.separar(texto)
     inicio = vault.inicio_do_corpo(texto)
     # o corpo sem cortar as linhas vazias do começo: a linha de cada tarefa na
     # prévia precisa bater com a do arquivo
     corpo = "\n".join(texto.split("\n")[inicio:])
-    env = {"origem": origem, "indice": indice, "deslocamento": inicio}
+    env = {"origem": origem, "indice": indice, "deslocamento": inicio, "anexos": anexos}
     return _propriedades(meta) + MOTOR.render(corpo, env)
 
 

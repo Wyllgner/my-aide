@@ -62,10 +62,37 @@ def instalar(app) -> None:
         return texto
 
     def previa(texto: str, caminho: str) -> str:
-        from aide.storage import links
+        from aide.storage import anexos, links
         from aide.web import markdown
 
-        return markdown.renderizar(texto, caminho, links.indice(raiz()))
+        return markdown.renderizar(texto, caminho, links.indice(raiz()), anexos.indice(raiz()))
+
+    @app.get("/api/notas/anexo")
+    def anexo(caminho: str = Query(...)):
+        """Um anexo do vault, para a prévia mostrar. Só leitura, só os tipos da
+        lista (sem SVG nem HTML), e com uma CSP própria e fechada: mesmo aberto
+        sozinho numa aba, o arquivo não roda nada."""
+        from fastapi.responses import FileResponse
+
+        from aide.storage import anexos
+
+        try:
+            arquivo = anexos.resolver(raiz(), caminho)
+        except vault.ForaDoVault as erro:
+            raise HTTPException(400, str(erro)) from None
+        if not arquivo.is_file():
+            raise HTTPException(404, "anexo não encontrado")
+        if arquivo.stat().st_size > anexos.TAMANHO_MAXIMO:
+            raise HTTPException(413, "anexo grande demais")
+        from urllib.parse import quote as citar
+
+        return FileResponse(arquivo, media_type=anexos.tipo(caminho), headers={
+            # o nome do arquivo vira o título da aba do PDF e o nome ao baixar
+            "content-disposition": f"inline; filename*=UTF-8''{citar(arquivo.name)}",
+            "content-security-policy": "default-src 'none'; img-src 'self'; media-src 'self';"
+                                       " object-src 'self'; sandbox",
+            "cache-control": "no-cache",
+        })
 
     @app.get("/api/notas/arquivo")
     def abrir(caminho: str = Query(...)) -> dict:
