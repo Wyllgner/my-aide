@@ -91,6 +91,11 @@ def pagina(caminho: str, voltar: str, citado_por: str = "") -> str:
   <button type="button" id="usar-disco" class="botao-fraco">ficar com o do disco</button>
   <button type="button" id="usar-meu" class="botao-fraco">manter o que eu desenhei</button>
 </div>
+<div id="link-faltando" class="conflito desenho-conflito" role="alert" hidden>
+  <span id="link-faltando-texto"></span>
+  <button type="button" id="link-criar" class="botao-fraco">criar e abrir</button>
+  <button type="button" id="link-deixar" class="botao-fraco">deixar</button>
+</div>
 <div id="desenho" class="desenho-editor" data-caminho="{escape(caminho)}"></div>
 </body>
 </html>
