@@ -32,7 +32,8 @@ def modelo(ctx):
 def _desenho_privado(dono):
     """Um desenho marcado privado, com o segredo escrito numa caixa de texto e
     citado por uma nota pública: nem a busca, nem o notes.drawing, nem o
-    notes.links podem devolver o texto dele."""
+    notes.links podem devolver o texto dele — nem o link que ele faz para a
+    nota pública."""
     import json
 
     from aide.storage import desenhos
@@ -41,7 +42,9 @@ def _desenho_privado(dono):
     raiz.mkdir(parents=True, exist_ok=True)
     dados = json.loads(desenhos.vazio())
     dados["elements"] = [{"type": "text", "id": "t", "text": f"desenho {SEGREDO}",
-                          "originalText": f"desenho {SEGREDO}"}]
+                          "originalText": f"desenho {SEGREDO}"},
+                         # e um link para a nota pública, com o segredo no link
+                         {"type": "rectangle", "id": "r", "link": f"[[Pública#{SEGREDO}]]"}]
     dados["aide"] = {"privada": True}
     (raiz / "Segredo.excalidraw").write_text(json.dumps(dados))
 
@@ -279,6 +282,20 @@ def test_desenho_privado_nao_pode_ser_lido_pelo_modelo(com_segredos, modelo, reg
 def test_o_dono_le_o_desenho_privado(com_segredos, dono, registry):
     resultado = registry.call("notes.drawing", {"caminho": "Segredo.excalidraw"}, dono)
     assert SEGREDO in resultado.data["texto"]
+
+
+@pytest.mark.parametrize("quem", ["modelo", "dono"])
+def test_link_do_desenho_privado_nao_aparece_nos_links_da_nota(com_segredos, registry, request,
+                                                              quem):
+    """O desenho privado leva à nota pública; a página mostra isso ao dono,
+    mas o notes.links (que vai para o modelo) não."""
+    from aide.web import grafo
+
+    raiz = com_segredos.config.vault_dir
+    assert grafo.mapa(raiz).de_desenhos, "o desenho privado deveria citar a nota"
+    resultado = registry.call("notes.links", {"title": "Pública"}, request.getfixturevalue(quem))
+    assert resultado.ok
+    assert SEGREDO not in resultado.to_json() and "Segredo" not in resultado.to_json()
 
 
 def test_desenho_privado_editado_no_obsidian_continua_fora_do_modelo(com_segredos, dono, modelo,
