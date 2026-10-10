@@ -127,7 +127,7 @@ def do_mapa(mapa, nos: list[str]) -> set[tuple[str, str]]:
     os desenhos em `nos`, também as de nota para desenho."""
     validos = set(nos)
     return {tuple(sorted((lig.origem, lig.destino)))
-            for lig in [*mapa.ligacoes, *mapa.desenhos]
+            for lig in [*mapa.ligacoes, *mapa.desenhos, *mapa.de_desenhos]
             if lig.destino is not None and lig.destino != lig.origem
             and lig.origem in validos and lig.destino in validos}
 

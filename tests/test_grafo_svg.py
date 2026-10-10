@@ -100,3 +100,18 @@ def test_ligacoes_de_nota_para_desenho_so_com_o_desenho_nos_nos(tmp_path):
     assert grafo_svg.do_mapa(mapa, ["A.md", "B.md"]) == {("A.md", "B.md")}
     assert grafo_svg.do_mapa(mapa, ["A.md", "B.md", "Casa.excalidraw"]) == {
         ("A.md", "B.md"), ("A.md", "Casa.excalidraw")}
+
+
+def test_ligacao_de_desenho_para_nota_pelo_link_do_elemento(tmp_path):
+    import json
+
+    from aide.storage import desenhos
+    from aide.web import grafo
+
+    (tmp_path / "B.md").write_text("x")
+    dados = json.loads(desenhos.vazio())
+    dados["elements"] = [{"type": "rectangle", "id": "a", "link": "[[B]]"}]
+    (tmp_path / "Casa.excalidraw").write_text(json.dumps(dados))
+    mapa = grafo.mapa(tmp_path)
+    assert grafo_svg.do_mapa(mapa, ["B.md"]) == set()
+    assert grafo_svg.do_mapa(mapa, ["B.md", "Casa.excalidraw"]) == {("B.md", "Casa.excalidraw")}
