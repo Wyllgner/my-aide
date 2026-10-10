@@ -287,6 +287,20 @@ window.addEventListener("keydown", (evento) => {
   }
 }, true);
 
+// "N notas citam" fecha com clique fora ou Esc, como um menu; sem isso fica
+// aberto por cima do desenho
+const citadoPor = document.getElementById("citado-por");
+if (citadoPor) {
+  document.addEventListener("pointerdown", (evento) => {
+    if (citadoPor.open && !citadoPor.contains(evento.target)) citadoPor.open = false;
+  }, true);
+  citadoPor.addEventListener("keydown", (evento) => {
+    if (evento.key !== "Escape" || !citadoPor.open) return;
+    citadoPor.open = false;
+    citadoPor.querySelector("summary").focus();
+  });
+}
+
 // O Excalidraw só desenha no navegador: a prévia que as notas mostram é
 // exportada aqui e vai para o servidor presa à assinatura da versão salva.
 // Só quando a tela é essa versão (nada por salvar); senão a imagem mostraria o
