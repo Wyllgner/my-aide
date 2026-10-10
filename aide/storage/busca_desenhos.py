@@ -38,6 +38,8 @@ class Leitura:
     privado: bool  # a marcação do arquivo; o registro se confere à parte
     texto: str
     legivel: bool = True
+    # os links dos elementos, para o mapa: quais notas o desenho cita
+    links: tuple[str, ...] = ()
 
 
 _ILEGIVEL = Leitura(privado=True, texto="", legivel=False)
@@ -55,7 +57,8 @@ def ler(arquivo: Path) -> Leitura:
         return guardada[2]
     try:
         _, dados = desenhos.ler(arquivo)
-        leitura = Leitura(desenhos.privado(dados), desenhos.texto_de(dados))
+        leitura = Leitura(desenhos.privado(dados), desenhos.texto_de(dados),
+                          links=tuple(desenhos.links_de(dados)))
     except (desenhos.DesenhoInvalido, OSError):
         leitura = _ILEGIVEL
     with _TRAVA:

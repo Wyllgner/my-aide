@@ -212,9 +212,10 @@ def _modos(atual: str) -> str:
     return f'<div class="modos" role="group" aria-label="modo de visualização">{botoes}</div>'
 
 
-def _backlinks(entradas: list[grafo.Ligacao]) -> str:
+def _backlinks(entradas: list[grafo.Ligacao], aberto: str = "") -> str:
     """Quem aponta para a nota aberta, com a linha em volta de cada link —
-    é o contexto que diz por que a outra nota fala desta."""
+    é o contexto que diz por que a outra nota fala desta. Desenho entra com o
+    link do elemento no lugar da linha, e abre o desenho."""
     por_origem: dict[str, list[str]] = {}
     for lig in entradas:
         por_origem.setdefault(lig.origem, []).append(lig.citacao.trecho)
@@ -225,12 +226,24 @@ def _backlinks(entradas: list[grafo.Ligacao]) -> str:
     for origem in sorted(por_origem, key=str.casefold):
         trechos = "".join(f'<li>{escape(t[:160])}{"…" if len(t) > 160 else ""}</li>'
                           for t in dict.fromkeys(por_origem[origem]))
-        nome = origem.rpartition("/")[2].removesuffix(".md")
-        itens += (f'<li><a href="{escape(_href(origem))}">{escape(nome)}</a>'
-                  f'<span class="onde">{escape(origem)}</span><ul class="trechos">{trechos}'
-                  f'</ul></li>')
+        if markdown.DESENHO.search(origem):
+            nome = origem.rpartition("/")[2][:-len(".excalidraw")]
+            href = "/desenho?caminho=" + quote(origem, safe="/")
+            if aberto:
+                href += "&de=" + quote(aberto, safe="/")
+            link = (f'<a class="desenho" href="{escape(href)}">{icone("desenho", 13)}'
+                    f'{escape(nome)}</a>')
+        else:
+            nome = origem.rpartition("/")[2].removesuffix(".md")
+            link = f'<a href="{escape(_href(origem))}">{escape(nome)}</a>'
+        itens += (f'<li>{link}<span class="onde">{escape(origem)}</span>'
+                  f'<ul class="trechos">{trechos}</ul></li>')
+    qtd_desenhos = sum(1 for o in por_origem if markdown.DESENHO.search(o))
+    contagem = " · ".join(p for p in (
+        formato.plural(len(por_origem) - qtd_desenhos, "nota") if len(por_origem) > qtd_desenhos else "",
+        formato.plural(qtd_desenhos, "desenho") if qtd_desenhos else "") if p)
     return (f'<section class="backlinks"><p class="eyebrow">Links para esta nota · '
-            f'{formato.plural(len(por_origem), "nota")}</p><ul>{itens}</ul></section>')
+            f'{contagem}</p><ul>{itens}</ul></section>')
 
 
 def _visao_geral(raiz: Path, agora: datetime, indice: links.Indice, conn=None) -> str:
@@ -522,7 +535,7 @@ def _editor(raiz: Path, aberto: str, agora: datetime, indice: links.Indice,
 {escape(texto)}</textarea></div>
 <article id="previa" class="previa">{markdown.renderizar(texto, aberto, indice, anexos.indice(raiz), indice_desenhos or desenhos.indice(raiz), previa_de)}</article>
 </div>
-<div class="ao-redor">{_backlinks(entradas or [])}{local}</div>"""
+<div class="ao-redor">{_backlinks(entradas or [], aberto)}{local}</div>"""
 
 
 def tela(ctx, registry, agora: datetime, nota: int | None = None,
@@ -562,7 +575,7 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
         resumo += f" · tag: #{tag}"
 
     mapa = grafo.mapa(raiz, indice, indice_desenhos)
-    entradas = mapa.entradas(aberto) if aberto else []
+    entradas = mapa.entradas(aberto) + mapa.desenhos_que_citam(aberto) if aberto else []
     quebrados_todos = mapa.quebrados() + mapa.desenhos_quebrados()
     voltar = (f'<a class="limpar" href="{escape(_href(aberto)) if aberto else "/notas"}">'
               f'voltar às pastas</a>')

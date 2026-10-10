@@ -231,6 +231,19 @@ def texto_de(dados: dict) -> str:
     return "\n".join(trechos)
 
 
+def links_de(dados: dict) -> list[str]:
+    """Os links dos elementos (o campo "link", Ctrl+K no Excalidraw), cada um
+    uma vez, na ordem do desenho. Elemento apagado não conta."""
+    achados: dict[str, None] = {}
+    for elemento in dados.get("elements", []):
+        if not isinstance(elemento, dict) or elemento.get("isDeleted") is True:
+            continue
+        link = elemento.get("link")
+        if isinstance(link, str) and link.strip():
+            achados[link.strip()] = None
+    return list(achados)
+
+
 def gravar(caminho: Path, texto: str, privada: bool | None = None) -> dict:
     """Confere e grava por cima, de uma vez (`vault.gravar`). Devolve o desenho.
 

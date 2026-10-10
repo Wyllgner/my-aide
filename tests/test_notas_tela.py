@@ -236,6 +236,24 @@ def test_backlinks_mostram_quem_aponta_e_o_contexto(cliente, raiz):
     assert "pensar no [[Telhado]] antes da chuva" in painel
 
 
+def test_backlinks_mostram_desenho_que_cita_a_nota(cliente, raiz):
+    import json
+
+    from aide.storage import desenhos
+
+    dados = json.loads(desenhos.vazio())
+    dados["elements"] = [{"type": "rectangle", "id": "a", "link": "[[Telhado]]"},
+                         {"type": "rectangle", "id": "b", "link": '[[Telhado|<b>"x"</b>]]'}]
+    (raiz / "Projetos" / "Corte.excalidraw").write_text(json.dumps(dados))
+    (raiz / "Inbox" / "Ideia.md").write_text("pensar no [[Telhado]]")
+    html = _tela(cliente, "Projetos/Casa/Telhado.md")
+    painel = html[html.index('<section class="backlinks">'):]
+    assert "Links para esta nota · 1 nota · 1 desenho" in painel
+    assert ('href="/desenho?caminho=Projetos/Corte.excalidraw'
+            '&amp;de=Projetos/Casa/Telhado.md">') in painel
+    assert "&lt;b&gt;&quot;x&quot;&lt;/b&gt;" in painel and "<b>" not in painel
+
+
 def test_sem_backlinks_diz_que_nao_ha(cliente):
     assert "Nenhuma nota aponta para esta ainda." in _tela(cliente, "Inbox/Ideia.md")
 
