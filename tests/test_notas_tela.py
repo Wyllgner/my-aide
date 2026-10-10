@@ -759,3 +759,10 @@ def test_marcar_a_busca_nao_quebra_o_que_foi_escapado(texto, termo, esperado):
     from aide.web.notas_tela import _trecho
 
     assert _trecho(texto, [termo]) == esperado
+
+
+@pytest.mark.parametrize("nota", ["999999999999999999999", "-999999999999999999999", "424242"])
+def test_id_de_nota_que_nao_existe_abre_a_tela_normal(cliente, nota):
+    """Um id maior que o inteiro do SQLite dava erro 500."""
+    resposta = cliente.get("/notas", params={"nota": nota})
+    assert resposta.status_code == 200
