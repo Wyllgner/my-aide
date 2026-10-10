@@ -21,7 +21,7 @@ def app(config, tmp_path):
     (tmp_path / "vault" / "Projetos").mkdir(parents=True)
     (tmp_path / "vault" / "Projetos" / "Casa.excalidraw").write_text(desenhos.vazio())
     (tmp_path / "vault" / "Inbox").mkdir()
-    (tmp_path / "vault" / "Inbox" / "Obra.md").write_text("# Obra\n")
+    (tmp_path / "vault" / "Inbox" / "Obra.md").write_text("# Obra\n\nplanta: [[Casa.excalidraw]]\n")
 
     def conn_factory():
         conn = connect(tmp_path / "w.db")
@@ -239,3 +239,53 @@ def test_renomear_salva_antes_e_para_de_salvar_no_caminho_velho():
     assert "movido = false;" in envio[envio.index("catch"):]
     assert "api !== null && !apagado && !movido" in JS
     assert 'if (conflito !== null) {' in envio
+
+
+# ---------- quem cita ----------
+
+def test_barra_mostra_as_notas_que_citam_o_desenho(cliente):
+    html = _tela(cliente).text
+    barra = html[html.index('<header class="desenho-barra">'):html.index("</header>")]
+    assert '<details class="desenho-citado" id="citado-por">' in barra
+    assert "1 nota cita" in barra
+    # abre a nota já no link
+    assert 'href="/notas?arquivo=Inbox/Obra.md&amp;linha=2&amp;alvo=Casa.excalidraw"' in barra
+    assert "<mark>Casa.excalidraw</mark>" in barra
+
+
+def test_varias_citacoes_da_mesma_nota_contam_uma_nota(cliente, app):
+    from pathlib import Path
+
+    raiz = Path(app.state.config.vault_dir)
+    (raiz / "Projetos" / "Ideias.md").write_text(
+        "[[Casa.excalidraw]]\n\n![[Projetos/Casa.excalidraw|300]]\n\n[[Outro.excalidraw]]")
+    barra = _tela(cliente).text
+    assert "2 notas citam" in barra
+    assert '<span class="vezes">2×</span>' in barra
+
+
+def test_sem_quem_cite_so_avisa(cliente, app):
+    from pathlib import Path
+
+    raiz = Path(app.state.config.vault_dir)
+    (raiz / "Solto.excalidraw").write_text(desenhos.vazio())
+    html = cliente.get("/desenho", params={"caminho": "Solto.excalidraw"}).text
+    assert "nenhuma nota cita" in html and "<details" not in html
+
+
+def test_trecho_de_quem_cita_sai_escapado(cliente, app):
+    from pathlib import Path
+
+    raiz = Path(app.state.config.vault_dir)
+    (raiz / "Inbox" / "Má.md").write_text("<img src=x onerror=alert(1)> [[Casa.excalidraw]]")
+    html = _tela(cliente).text
+    assert "<img src=x" not in html
+    assert "&lt;img src=x onerror=alert(1)&gt;" in html
+
+
+def test_lista_de_quem_cita_fecha_com_clique_fora_e_esc():
+    from aide.web.desenho_script import JS
+
+    assert 'getElementById("citado-por")' in JS
+    assert "!citadoPor.contains(evento.target)) citadoPor.open = false;" in JS
+    assert 'evento.key !== "Escape"' in JS
