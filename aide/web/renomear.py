@@ -187,3 +187,70 @@ def ligar(raiz: Path, alvo: str, para: str, puladas: list[str] | None = None) ->
         if mudou:
             mudadas.append(nota)
     return mudadas
+
+
+def mover_desenho(raiz: Path, de: str, para: str,
+                  puladas: list[str] | None = None) -> list[str]:
+    """Move o desenho `de` para `para` e conserta os [[...excalidraw]] das notas.
+
+    O mapa de notas não conhece link de desenho, então este lê as notas aqui
+    mesmo, uma vez, antes de mover. Troca o link que levava ao desenho e,
+    como no mover de nota, o que outro desenho de mesmo nome passaria a
+    "roubar" pela regra da mesma pasta: o texto vira o caminho de antes.
+
+    Devolve as notas cujo texto mudou; as que não deu para ler ou gravar vão
+    para `puladas`. Quem chama já conferiu os dois caminhos."""
+    from aide.storage import desenhos
+    from aide.web.markdown import citacoes
+    from aide.web.notas_api import TAMANHO_MAXIMO
+
+    antes = desenhos.indice(raiz)
+    citadas: dict[str, list[tuple[Citacao, str]]] = {}
+    for nota in links.indice(raiz).caminhos:
+        try:
+            arquivo = vault.resolver(raiz, nota)
+            if arquivo.stat().st_size > TAMANHO_MAXIMO:
+                continue
+            texto = arquivo.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError, vault.ForaDoVault):
+            continue
+        for citacao in citacoes(texto, de_desenho=True):
+            destino = antes.resolver(citacao.alvo, nota)
+            if destino is not None:
+                citadas.setdefault(nota, []).append((citacao, destino))
+
+    vault.mover(desenhos.resolver(raiz, de), desenhos.resolver(raiz, para))
+    depois = desenhos.indice(raiz)
+
+    def como_link(destino: str, nota: str) -> str:
+        curto = destino.rpartition("/")[2]
+        return curto if depois.resolver(curto, nota) == destino else destino
+
+    mudadas = []
+    for nota, lista in citadas.items():
+        trocas = []
+        for citacao, destino in lista:
+            novo_destino = para if destino == de else destino
+            if novo_destino != destino or depois.resolver(citacao.alvo, nota) != destino:
+                trocas.append((citacao, como_link(novo_destino, nota)))
+        if not trocas:
+            continue
+        try:
+            arquivo = vault.resolver(raiz, nota)
+            texto = arquivo.read_text(encoding="utf-8")
+            linhas = texto.split("\n")
+            for citacao, novo in trocas:
+                if citacao.linha < len(linhas):
+                    linhas[citacao.linha] = _trocar_na_linha(linhas[citacao.linha], citacao,
+                                                             novo, "")
+            novo_texto = "\n".join(linhas)
+            if novo_texto == texto:
+                continue
+            vault.gravar(arquivo, novo_texto)
+        except (OSError, UnicodeDecodeError, vault.ForaDoVault):
+            log.warning("não consegui atualizar os links de desenho em %s", nota, exc_info=True)
+            if puladas is not None:
+                puladas.append(nota)
+            continue
+        mudadas.append(nota)
+    return mudadas

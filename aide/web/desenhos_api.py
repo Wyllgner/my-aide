@@ -121,21 +121,30 @@ def instalar(app) -> None:
 
     @app.post("/api/desenhos/mover")
     def mover(de: str = Body(...), para: str = Body(...)) -> dict:
-        """Renomeia ou muda de pasta, nunca por cima de outro arquivo. Os links
-        para o desenho ainda não são reescritos aqui (vem com os links)."""
+        """Renomeia ou muda de pasta, nunca por cima de outro arquivo, e
+        conserta os [[...excalidraw]] das notas que levavam a ele."""
+        from aide.storage.reconciliacao import sincronizar
+        from aide.web import renomear
+
         origem, destino = local(de), local(para)
         if not origem.is_file():
             raise HTTPException(404, "desenho não encontrado")
         if destino.exists():
             raise HTTPException(409, "já existe um desenho com esse nome")
+        puladas: list[str] = []
         try:
-            vault.mover(origem, destino)
+            mudadas = renomear.mover_desenho(raiz(), de, para, puladas)
         except FileExistsError:
             raise HTTPException(409, "já existe um desenho com esse nome") from None
+        conn = app.state.conn_factory()
+        for nota in mudadas:
+            sincronizar(conn, raiz() / nota)
         # no lugar novo, a próxima abertura gera a prévia de novo
         previas.limpar(dados_dir(), de)
-        auditar("desenhos.mover", de, para=para)
-        return {"caminho": para, "versao": versao(destino)}
+        auditar("desenhos.mover", de, para=para, links_atualizados=mudadas,
+                links_nao_atualizados=puladas)
+        return {"caminho": para, "versao": versao(destino), "links_atualizados": mudadas,
+                "links_nao_atualizados": puladas}
 
     # ---------- a prévia em PNG, para ![[desenho.excalidraw]] numa nota ----------
 
