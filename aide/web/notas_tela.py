@@ -63,6 +63,9 @@ def _ramo(itens: list[dict], aberto: str) -> str:
                      f'<button type="button" class="nova-na-pasta" data-pasta="{caminho}"'
                      f' title="nova nota nesta pasta"'
                      f' aria-label="nova nota em {escape(item["nome"])}">{icone("nova-nota", 14)}</button>'
+                     f'<button type="button" class="novo-desenho-na-pasta" data-pasta="{caminho}"'
+                     f' title="novo desenho nesta pasta"'
+                     f' aria-label="novo desenho em {escape(item["nome"])}">{icone("desenho", 14)}</button>'
                      f'<button type="button" class="renomear-pasta" data-pasta="{caminho}"'
                      f' title="renomear ou mover a pasta"'
                      f' aria-label="renomear {escape(item["nome"])}">{icone("renomear", 14)}</button>'
@@ -601,6 +604,9 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
       <button type="button" id="nova-pasta" class="botao"
         title="nova pasta{" em " + escape(pasta_atual) if pasta_atual else ""}">
         {icone("nova-pasta", 15)}<span>pasta</span></button>
+      <button type="button" id="novo-desenho" class="botao"
+        title="novo desenho{" em " + escape(pasta_atual) if pasta_atual else ""}">
+        {icone("desenho", 15)}<span>desenho</span></button>
     </div>
     <form id="criar" class="criar" hidden data-pasta="{escape(pasta_atual)}">
       <input id="criar-nome" autocomplete="off" required>

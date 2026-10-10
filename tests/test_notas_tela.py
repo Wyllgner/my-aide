@@ -557,3 +557,20 @@ def test_desenho_fica_fora_do_arrastar_de_nota():
     from aide.web.script import JS
 
     assert '.arquivo[title]:not(.desenho)' in JS
+
+
+def test_botao_de_novo_desenho_no_topo_e_em_cada_pasta(cliente, raiz):
+    html = cliente.get("/notas", params={"arquivo": "Inbox/Ideia.md"}).text
+    assert 'id="novo-desenho"' in html
+    assert ('<button type="button" class="novo-desenho-na-pasta" data-pasta="Projetos/Casa"'
+            in html)
+
+
+def test_script_cria_desenho_pela_rota_dele_e_abre_a_tela():
+    from aide.web.script import JS
+
+    assert 'desenho: "/api/desenhos/arquivo"' in JS
+    assert 'criando === "desenho" && !/\\.excalidraw$/i.test(caminho)' in JS
+    assert 'location.href = "/desenho?caminho=" + encodeURIComponent(caminho)' in JS
+    # cada id que o script procura existe na tela
+    assert 'getElementById("novo-desenho")' in JS
