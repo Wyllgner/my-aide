@@ -12,6 +12,9 @@ salvamento comum deixa o servidor manter o que está no disco.
 A biblioteca de formas é uma só para todos os desenhos (Biblioteca.excalidrawlib
 na raiz do vault) e salva à parte. Se ela não abriu, nunca é gravada: seria
 trocar a sua biblioteca por uma vazia.
+
+O link de um elemento (Ctrl+K) que é [[Nota]], Nota.md ou [[x.excalidraw]]
+abre aqui mesmo, depois de salvar; site de fora, em outra aba sem `opener`.
 """
 
 from __future__ import annotations
@@ -263,6 +266,68 @@ formRenomear.addEventListener("submit", async (evento) => {
   }
 });
 
+// Links dos elementos (Ctrl+K no Excalidraw). [[Nota]], Nota.md ou
+// [[Outro.excalidraw]] abrem aqui mesmo, resolvidos pelo servidor a partir da
+// pasta do desenho, como um [[link]] numa nota de lá — depois de salvar.
+// Site de fora abre em outra aba sem `opener` nem Referer; "//site" conta
+// como de fora (o Excalidraw o abriria nesta aba, como endereço daqui).
+const ESQUEMA = /^[a-z][a-z0-9+.-]*:/i;
+const SITE = /^(https?|mailto):/i;
+
+function linkDoElemento(elemento) {
+  // o Excalidraw passa o link já trocado (" vira %22): o cru está na cena
+  const naCena = api && api.getSceneElements().find((e) => e.id === elemento.id);
+  return ((naCena && naCena.link) || elemento.link || "").trim();
+}
+
+function abrirLink(elemento, evento) {
+  const link = linkDoElemento(elemento);
+  if (!link) return;
+  evento.preventDefault();
+  if (ESQUEMA.test(link) || link.startsWith("//") || link.startsWith("/\\")) {
+    if (SITE.test(link)) window.open(link, "_blank", "noopener,noreferrer");
+    else avisar("esse link não abre daqui", true);
+    return;
+  }
+  if (link.startsWith("/")) { sair(link); return; }
+  irPeloVault(link);
+}
+
+async function irPeloVault(link) {
+  let dados;
+  try {
+    const resposta = await fetch("/api/desenhos/link?caminho=" + encodeURIComponent(caminho)
+                                 + "&alvo=" + encodeURIComponent(link));
+    dados = await resposta.json().catch(() => ({}));
+    if (!resposta.ok) throw new Error(dados.detail || "não consegui abrir o link");
+  } catch (e) {
+    avisar(e.message === "Failed to fetch" ? "sem conexão com o my-aide" : e.message, true);
+    return;
+  }
+  if (!dados.existe) {
+    avisar((dados.tipo === "desenho" ? "o desenho " : "a nota ") + dados.caminho
+           + " ainda não existe", true);
+    return;
+  }
+  let href = dados.href;
+  // de desenho em desenho, o "Notas" continua voltando para a nota de origem
+  const de = new URLSearchParams(location.search).get("de");
+  if (dados.tipo === "desenho" && de) href += "&de=" + encodeURIComponent(de);
+  sair(href);
+}
+
+// sai da tela só com tudo salvo; com conflito, ou se o salvamento falhou,
+// fica (o aviso do salvamento já está na barra)
+async function sair(href) {
+  if (conflito !== null) {
+    avisar("resolva o conflito antes de sair", true);
+    return;
+  }
+  await esperarSalvar();
+  if (pendente()) return;
+  location.href = href;
+}
+
 // O corretor do navegador pode mandar o texto para fora (o "corretor
 // avançado" do Chrome usa o Google). Em desenho privado, desligado em todo
 // campo de texto do editor, como nas notas privadas. O Excalidraw cria o
@@ -443,6 +508,7 @@ async function abrir() {
       scrollToContent: true,
     },
     onLibraryChange: mudouBiblioteca,
+    onLinkOpen: abrirLink,
     excalidrawAPI: (a) => {
       api = a;
     },
