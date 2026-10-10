@@ -302,6 +302,7 @@ def test_mover_fica_na_trilha(cliente, app):
     assert trilha[-1]["tool"] == "notas.mover"
     assert json.loads(trilha[-1]["args_json"]) == {"caminho": "Inbox/Nota.md → Nova.md",
                                                   "links_atualizados": [],
+                                                  "desenhos_atualizados": [],
                                                   "links_nao_atualizados": []}
 
 

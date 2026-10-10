@@ -228,8 +228,9 @@ def instalar(app) -> None:
         from aide.web import renomear
 
         puladas: list[str] = []
+        desenhos_mudados: list[str] = []
         try:
-            mudadas = renomear.mover(raiz(), de, para, puladas)
+            mudadas = renomear.mover(raiz(), de, para, puladas, desenhos_mudados)
         except FileExistsError:
             raise HTTPException(409, "já existe uma nota com esse nome") from None
         conn = app.state.conn_factory()
@@ -239,9 +240,9 @@ def instalar(app) -> None:
             sincronizar(conn, raiz() / nota)
         # mover reescreve outras notas: a trilha diz quais
         auditar("notas.mover", f"{de} → {para}", links_atualizados=mudadas,
-                links_nao_atualizados=puladas)
+                desenhos_atualizados=desenhos_mudados, links_nao_atualizados=puladas)
         return {"caminho": para, "versao": versao(destino), "links_atualizados": mudadas,
-                "links_nao_atualizados": puladas}
+                "desenhos_atualizados": desenhos_mudados, "links_nao_atualizados": puladas}
 
     @app.post("/api/notas/ligar")
     def ligar(alvo: str = Body(...), para: str = Body(...)) -> dict:
@@ -272,8 +273,9 @@ def instalar(app) -> None:
         if destino.exists():
             raise HTTPException(409, "já existe uma pasta ou nota com esse nome")
         puladas: list[str] = []
+        desenhos_mudados: list[str] = []
         try:
-            movidas, mudadas = renomear.mover_pasta(raiz(), de, para, puladas)
+            movidas, mudadas = renomear.mover_pasta(raiz(), de, para, puladas, desenhos_mudados)
         except FileExistsError:
             raise HTTPException(409, "já existe uma pasta ou nota com esse nome") from None
         except ValueError as erro:
@@ -288,9 +290,9 @@ def instalar(app) -> None:
         # o privado dos desenhos de dentro vai junto (desenhos.marcados)
         desenhos.mover_marcas(Path(config.data_dir), de, para)
         auditar("notas.mover_pasta", f"{de} → {para}", links_atualizados=mudadas,
-                links_nao_atualizados=puladas)
+                desenhos_atualizados=desenhos_mudados, links_nao_atualizados=puladas)
         return {"caminho": para, "notas_movidas": movidas, "links_atualizados": mudadas,
-                "links_nao_atualizados": puladas}
+                "desenhos_atualizados": desenhos_mudados, "links_nao_atualizados": puladas}
 
     @app.post("/api/notas/pasta", status_code=201)
     def criar_pasta(caminho: str = Body(..., embed=True)) -> dict:
