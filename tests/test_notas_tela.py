@@ -607,3 +607,11 @@ def test_tela_passa_os_desenhos_para_o_autocompletar(cliente, raiz):
     assert json_mod.loads(html_mod.unescape(bruto)) == [
         "Projetos/Casa/Planta.excalidraw", "Solto.excalidraw"]
 
+
+def test_autocompletar_sugere_desenho_marcado_como_desenho():
+    from aide.web.script import JS
+
+    assert "return notas.concat(desenhosDoVault).filter(function (n) {" in JS
+    assert 'onde: DESENHO.test(n) ? "desenho · " + n : n,' in JS
+    # o nome de desenho leva a extensão no link: não vira [[Planta]] (nota)
+    assert 'n.replace(/\\.md$/i, "") : nome;' in JS

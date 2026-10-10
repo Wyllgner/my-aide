@@ -1535,8 +1535,13 @@ JS = r"""
 
   // ---------- autocompletar [[ e comandos com / ----------
   var notas = notasDoVault;
+  // os desenhos entram no [[ também; o nome deles leva a extensão
+  // ([[Planta.excalidraw]]), então não disputam nome com nota
+  var desenhosDoVault = [];
+  try { desenhosDoVault = JSON.parse((raizNotas && raizNotas.dataset.desenhos) || "[]"); } catch (e) { desenhosDoVault = []; }
+  var DESENHO = /\.excalidraw$/i;
   var nomes = {};
-  notas.forEach(function (n) {
+  notas.concat(desenhosDoVault).forEach(function (n) {
     var nome = n.replace(/^.*\//, "").replace(/\.md$/i, "");
     nomes[nome.toLowerCase()] = (nomes[nome.toLowerCase()] || 0) + 1;
   });
@@ -1553,7 +1558,8 @@ JS = r"""
 
   function comoLink(n) {
     var nome = n.replace(/^.*\//, "").replace(/\.md$/i, "");
-    // nome repetido em outra pasta: o caminho desfaz a dúvida
+    // nome repetido em outra pasta: o caminho desfaz a dúvida (desenho
+    // mantém o .excalidraw, que é o que diz que o link é de desenho)
     return nomes[nome.toLowerCase()] > 1 ? n.replace(/\.md$/i, "") : nome;
   }
 
@@ -1605,14 +1611,15 @@ JS = r"""
   }
 
   function notasPara(busca) {
-    return notas.filter(function (n) {
+    return notas.concat(desenhosDoVault).filter(function (n) {
       return n !== caminho && n.toLowerCase().indexOf(busca) >= 0;
     }).sort(function (a, b) {
       var na = a.replace(/^.*\//, "").toLowerCase().indexOf(busca) === 0 ? 0 : 1;
       var nb = b.replace(/^.*\//, "").toLowerCase().indexOf(busca) === 0 ? 0 : 1;
       return na - nb || a.localeCompare(b);
     }).slice(0, 8).map(function (n) {
-      return { nome: n.replace(/^.*\//, "").replace(/\.md$/i, ""), onde: n,
+      return { nome: n.replace(/^.*\//, "").replace(/\.md$/i, "").replace(DESENHO, ""),
+        onde: DESENHO.test(n) ? "desenho · " + n : n,
         escolher: function () { inserir(n); } };
     });
   }
