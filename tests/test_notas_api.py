@@ -399,7 +399,7 @@ def test_apagar_pasta_fica_na_trilha(cliente, app):
     cliente.delete("/api/notas/pasta", params={"caminho": "Inbox"})
     trilha = _trilha(app)[-1]
     assert trilha["tool"] == "notas.apagar_pasta"
-    assert json.loads(trilha["args_json"]) == {"caminho": "Inbox", "notas": 1}
+    assert json.loads(trilha["args_json"]) == {"caminho": "Inbox", "notas": 1, "desenhos": 0}
 
 
 def test_apagar_pasta_de_outra_origem_e_recusado(app, vault_dir):
@@ -478,3 +478,17 @@ def test_ligar_a_nota_que_nao_existe_e_404(cliente, vault_dir):
 def test_ligar_para_fora_do_vault_e_recusado(cliente):
     resposta = cliente.post("/api/notas/ligar", json={"alvo": "x", "para": "../fora.md"})
     assert resposta.status_code in (400, 404)
+
+
+def test_apagar_pasta_com_desenho_leva_e_conta_o_desenho(cliente, app, vault_dir):
+    from aide.storage import desenhos
+    from aide.web import consultas
+
+    (vault_dir / "Inbox" / "Planta.excalidraw").write_text(desenhos.vazio())
+    resposta = cliente.delete("/api/notas/pasta", params={"caminho": "Inbox"})
+    assert resposta.status_code == 200
+    assert (vault_dir / ".trash" / "Inbox" / "Planta.excalidraw").exists()
+    trilha = json.loads(_trilha(app)[-1]["args_json"])
+    assert trilha["notas"] == 1 and trilha["desenhos"] == 1
+    # a contagem da lixeira enxerga os dois
+    assert consultas.notas_na_lixeira(vault_dir) == 2

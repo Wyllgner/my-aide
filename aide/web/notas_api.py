@@ -294,8 +294,10 @@ def instalar(app) -> None:
         notas = [vault.relativo_de(raiz(), p) for p in pasta.rglob("*.md")]
         for nota in notas:
             esquecer(conn, raiz() / nota)
+        # os desenhos vão junto; a trilha conta os dois
+        desenhos = sum(1 for _ in pasta.rglob("*.excalidraw"))
         destino = vault.para_lixeira(raiz(), pasta)
-        auditar("notas.apagar_pasta", caminho, notas=len(notas))
+        auditar("notas.apagar_pasta", caminho, notas=len(notas), desenhos=desenhos)
         return {"caminho": caminho, "lixeira": destino.name if destino else None,
                 "notas": len(notas)}
 
