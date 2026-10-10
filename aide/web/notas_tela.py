@@ -29,16 +29,25 @@ def _href(caminho: str) -> str:
     return "/notas?arquivo=" + quote(caminho, safe="/")
 
 
-def _contar(itens: list[dict]) -> tuple[int, int]:
-    notas = pastas = 0
+def _contar(itens: list[dict]) -> tuple[int, int, int]:
+    """(notas, pastas, desenhos) da árvore inteira."""
+    notas = pastas = desenhos = 0
     for item in itens:
         if item["tipo"] == "pasta":
             pastas += 1
-            n, p = _contar(item["filhos"])
-            notas, pastas = notas + n, pastas + p
+            n, p, d = _contar(item["filhos"])
+            notas, pastas, desenhos = notas + n, pastas + p, desenhos + d
+        elif item["tipo"] == "desenho":
+            desenhos += 1
         else:
             notas += 1
-    return notas, pastas
+    return notas, pastas, desenhos
+
+
+def _href_desenho(caminho: str, de: str) -> str:
+    """A tela do desenho; `de` é a nota aberta, para o "Notas" voltar a ela."""
+    url = "/desenho?caminho=" + quote(caminho, safe="/")
+    return url + "&de=" + quote(de, safe="/") if de else url
 
 
 def _ramo(itens: list[dict], aberto: str) -> str:
@@ -61,14 +70,24 @@ def _ramo(itens: list[dict], aberto: str) -> str:
                      f' title="mandar a pasta para a lixeira (pede um segundo clique)"'
                      f' aria-label="apagar {escape(item["nome"])}">{icone("lixeira", 14)}'
                      f'<span class="rotulo"></span></button>'
-                     f'<span class="conta">{_contar(item["filhos"])[0]}</span></summary>'
+                     f'<span class="conta">{_arquivos_em(item["filhos"])}</span></summary>'
                      f'<div class="filhos">{_ramo(item["filhos"], aberto) or _vazia()}</div>'
                      f'</details>')
+        elif item["tipo"] == "desenho":
+            # fora do arrastar por enquanto: mover desenho tem a sua rota
+            html += (f'<a class="arquivo desenho" href="{escape(_href_desenho(item["caminho"], aberto))}"'
+                     f' title="{caminho}" draggable="false">{icone("desenho", 14)}'
+                     f'<span>{escape(item["nome"])}</span></a>')
         else:
             atual = ' aria-current="page"' if item["caminho"] == aberto else ""
             html += (f'<a class="arquivo" href="{escape(_href(item["caminho"]))}"{atual}'
                      f' title="{caminho}">{icone("nota", 14)}<span>{escape(item["nome"])}</span></a>')
     return html
+
+
+def _arquivos_em(itens: list[dict]) -> int:
+    notas, _pastas, desenhos = _contar(itens)
+    return notas + desenhos
 
 
 def _vazia() -> str:
@@ -479,7 +498,7 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
         from aide.storage.reconciliacao import privado_para_o_arquivo
 
         privado_para_o_arquivo(ctx.conn, raiz / aberto)
-    notas, pastas = _contar(itens)
+    notas, pastas, desenhos = _contar(itens)
     # apagar nota move o arquivo para vault/.trash; sem dizer isso em algum lugar,
     # a lixeira é uma pasta que só cresce e ninguém sabe que existe
     na_lixeira = consultas.notas_na_lixeira(raiz)
@@ -487,6 +506,7 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
     resumo = " · ".join(p for p in (
         formato.plural(notas, "nota"),
         formato.plural(pastas, "pasta") if pastas else "",
+        formato.plural(desenhos, "desenho") if desenhos else "",
         formato.plural(na_lixeira, "arquivo na lixeira", "arquivos na lixeira")
         if na_lixeira else "") if p)
     if busca:

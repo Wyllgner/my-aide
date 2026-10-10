@@ -97,7 +97,9 @@ def test_caminho_invalido_ou_ausente_e_pagina_de_erro(cliente, caminho, status):
 
 def test_tela_fora_da_navegacao_lateral(cliente):
     """É uma tela de um arquivo, não uma seção: não entra no menu."""
-    assert 'href="/desenho' not in cliente.get("/notas").text
+    html = cliente.get("/notas").text
+    nav = html[html.index("<nav>"):html.index("</nav>")]
+    assert "/desenho" not in nav
 
 
 # ---------- o script ----------
