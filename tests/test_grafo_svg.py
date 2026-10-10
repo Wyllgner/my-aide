@@ -66,3 +66,37 @@ def test_vizinhanca_traz_os_links_entre_as_vizinhas():
     assert nos == ["A", "B", "C"]
     assert lig == {("A", "B"), ("A", "C"), ("B", "C")}
     assert grafo_svg.vizinhanca(arestas, "A", saltos=2)[0] == ["A", "B", "C", "D"]
+
+
+# ---------- desenhos ----------
+
+def test_desenho_e_quadrado_e_abre_na_tela_dele():
+    svg = grafo_svg.desenhar(["Inbox/Ideia.md", "Projetos/Casa.excalidraw"],
+                             {("Inbox/Ideia.md", "Projetos/Casa.excalidraw")},
+                             aberto="Inbox/Ideia.md")
+    desenho = svg[svg.index('href="/desenho'):]
+    desenho = desenho[:desenho.index("</a>")]
+    assert desenho.startswith('href="/desenho?caminho=Projetos/Casa.excalidraw'
+                              '&amp;de=Inbox/Ideia.md" class="no desenho"')
+    assert "<rect " in desenho and "<circle" not in desenho
+    assert "Casa · Projetos/Casa.excalidraw · desenho" in desenho
+    assert ">Casa</text>" in desenho
+    assert 'aria-label="grafo de 1 notas e 1 desenhos e 1 ligações"' in svg
+
+
+def test_nome_de_desenho_sai_escapado():
+    svg = grafo_svg.desenhar(["<b>x.excalidraw"], set())
+    assert "<b>" not in svg
+
+
+def test_ligacoes_de_nota_para_desenho_so_com_o_desenho_nos_nos(tmp_path):
+    from aide.storage import desenhos
+    from aide.web import grafo
+
+    (tmp_path / "A.md").write_text("[[B]] [[Casa.excalidraw]] [[Sumido.excalidraw]]")
+    (tmp_path / "B.md").write_text("x")
+    (tmp_path / "Casa.excalidraw").write_text(desenhos.vazio())
+    mapa = grafo.mapa(tmp_path)
+    assert grafo_svg.do_mapa(mapa, ["A.md", "B.md"]) == {("A.md", "B.md")}
+    assert grafo_svg.do_mapa(mapa, ["A.md", "B.md", "Casa.excalidraw"]) == {
+        ("A.md", "B.md"), ("A.md", "Casa.excalidraw")}

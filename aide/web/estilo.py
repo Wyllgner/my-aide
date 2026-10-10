@@ -466,9 +466,9 @@ button.atalho-visao { width: 100%; border: 0; background: none; font: inherit; f
 .grafo text { font-size: 11px; fill: var(--muted); text-anchor: middle; paint-order: stroke;
               stroke: var(--paper); stroke-width: 3px; pointer-events: none;
               font-family: 'Public Sans', system-ui, sans-serif; }
-.grafo a.no circle { stroke: var(--paper); stroke-width: 1.5; transition: opacity .12s; }
-.grafo a.no:hover circle { stroke: var(--ink); }
-.grafo a.atual circle { stroke: var(--ink); stroke-width: 2.5; }
+.grafo a.no circle, .grafo a.no rect { stroke: var(--paper); stroke-width: 1.5; transition: opacity .12s; }
+.grafo a.no:hover circle, .grafo a.no:hover rect { stroke: var(--ink); }
+.grafo a.atual circle, .grafo a.atual rect { stroke: var(--ink); stroke-width: 2.5; }
 .grafo.focado a.no:not(.perto), .grafo.focado line:not(.perto) { opacity: .15; }
 .grafo.focado line.perto { stroke: var(--accent); stroke-width: 1.5; }
 .grafo text.so-perto { display: none; }
@@ -479,7 +479,7 @@ button.atalho-visao { width: 100%; border: 0; background: none; font: inherit; f
 .grafo.local { height: 300px; margin-top: 10px; touch-action: pan-y pinch-zoom; }
 .grafo a.no:focus { outline: none; }
 .dica-grafo { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: 6px; }
-.grafo a.no:focus circle { stroke: var(--accent); stroke-width: 3; }
+.grafo a.no:focus circle, .grafo a.no:focus rect { stroke: var(--accent); stroke-width: 3; }
 @media (max-width: 1100px) { .ao-redor { grid-template-columns: 1fr; } }
 .grafo.focado a.perto text.so-perto { display: inline; }
 

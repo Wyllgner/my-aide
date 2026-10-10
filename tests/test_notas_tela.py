@@ -660,3 +660,26 @@ def test_autocompletar_sugere_desenho_marcado_como_desenho():
     assert 'onde: DESENHO.test(n) ? "desenho · " + n : n,' in JS
     # o nome de desenho leva a extensão no link: não vira [[Planta]] (nota)
     assert 'n.replace(/\\.md$/i, "") : nome;' in JS
+
+
+def test_grafo_do_vault_mostra_os_desenhos(cliente, raiz):
+    from aide.storage import desenhos
+
+    (raiz / "Projetos" / "Casa" / "Planta.excalidraw").write_text(desenhos.vazio())
+    (raiz / "Inbox" / "Ideia.md").write_text("[[Planta.excalidraw]]")
+    html = cliente.get("/notas?grafo=1").text
+    assert "Grafo · 2 notas · 1 desenho · 1 ligação" in html
+    assert 'href="/desenho?caminho=Projetos/Casa/Planta.excalidraw' in html
+    assert 'class="no desenho"' in html
+
+
+def test_grafo_local_traz_o_desenho_citado(cliente, raiz):
+    from aide.storage import desenhos
+
+    (raiz / "Projetos" / "Casa" / "Planta.excalidraw").write_text(desenhos.vazio())
+    (raiz / "Inbox" / "Ideia.md").write_text("[[Planta.excalidraw]]")
+    html = _tela(cliente, "Inbox/Ideia.md")
+    local = html[html.index('<section class="local">'):]
+    assert "Grafo local · 1 vizinha" in local
+    assert ('href="/desenho?caminho=Projetos/Casa/Planta.excalidraw&amp;de=Inbox/Ideia.md"'
+            ' class="no desenho"') in local

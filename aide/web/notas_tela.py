@@ -408,11 +408,14 @@ def _caminho_novo(raiz: Path, caminho: str, desenho: bool = False) -> str | None
     return caminho
 
 
-def _grafo_local(mapa: grafo.Mapa, indice: links.Indice, aberto: str) -> str:
-    """A nota aberta e as vizinhas, no mesmo desenho do grafo do vault."""
+def _grafo_local(mapa: grafo.Mapa, indice: links.Indice, aberto: str,
+                 caminhos_de_desenho: list[str] | None = None) -> str:
+    """A nota aberta e as vizinhas (e os desenhos que ela cita), no mesmo
+    desenho do grafo do vault."""
     from aide.web import grafo_svg
 
-    nos, arestas = grafo_svg.vizinhanca(grafo_svg.do_mapa(mapa, indice.caminhos), aberto)
+    todos = indice.caminhos + (caminhos_de_desenho or [])
+    nos, arestas = grafo_svg.vizinhanca(grafo_svg.do_mapa(mapa, todos), aberto)
     if len(nos) < 2:
         return ""
     return (f'<section class="local"><p class="eyebrow">Grafo local · '
@@ -594,10 +597,12 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
     if grafo_todo:
         from aide.web import grafo_svg
 
-        nos = indice.caminhos
+        nos = indice.caminhos + caminhos_de_desenho
         arestas = grafo_svg.do_mapa(mapa, nos)
         corpo = (f'<div class="grafo-topo"><p class="eyebrow">Grafo · '
-                 f'{formato.plural(len(nos), "nota")} · '
+                 f'{formato.plural(len(indice.caminhos), "nota")} · '
+                 + (f'{formato.plural(len(caminhos_de_desenho), "desenho")} · '
+                    if caminhos_de_desenho else "") +
                  f'{formato.plural(len(arestas), "ligação", "ligações")}</p>'
                  f'<span class="onde">arraste para mover · roda do mouse para zoom ·'
                  f' clique numa nota para abrir</span></div>'
@@ -610,7 +615,7 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
         from aide.storage import previas
 
         corpo = _editor(raiz, aberto, agora, indice, _modo(modo), entradas,
-                        _grafo_local(mapa, indice, aberto),
+                        _grafo_local(mapa, indice, aberto, caminhos_de_desenho),
                         partial(previas.previa_de, Path(ctx.config.data_dir), raiz),
                         indice_desenhos)
     else:

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import math
 from html import escape
+from urllib.parse import quote
 
 from aide.web import layout
 from aide.web.graficos import ACENTO, FRACO
@@ -24,7 +25,27 @@ ROTULOS = 24  # quantas das mais ligadas ganham o nome escrito
 
 
 def _nome(caminho: str) -> str:
-    return caminho.rpartition("/")[2].removesuffix(".md")
+    return caminho.rpartition("/")[2].removesuffix(".md").removesuffix(".excalidraw")
+
+
+def _desenho(caminho: str) -> bool:
+    return caminho.endswith(".excalidraw")
+
+
+def _contagem(nos: list[str]) -> str:
+    desenhos = sum(1 for no in nos if _desenho(no))
+    texto = f"{len(nos) - desenhos} notas"
+    return texto + (f" e {desenhos} desenhos" if desenhos else "")
+
+
+def _href(no: str, aberto: str | None) -> str:
+    """Nota abre nas notas; desenho na tela dele, voltando para a nota aberta."""
+    if not _desenho(no):
+        return href_da_nota(no)
+    href = "/desenho?caminho=" + quote(no, safe="/")
+    if aberto and aberto.endswith(".md"):
+        href += "&de=" + quote(aberto, safe="/")
+    return href
 
 
 def desenhar(nos: list[str], arestas: set[tuple[str, str]], aberto: str | None = None,
@@ -82,21 +103,31 @@ def desenhar(nos: list[str], arestas: set[tuple[str, str]], aberto: str | None =
         # vizinhas da nota sob o mouse
         extra = "" if no in com_nome else ' class="so-perto"'
         rotulo = f'<text x="{x:.1f}" y="{y + r + 12:.1f}"{extra}>{escape(_nome(no))}</text>'
+        if _desenho(no):
+            # desenho é um quadrado: no meio das notas, a forma diz o que é
+            classe_no += " desenho"
+            forma = (f'<rect x="{x - r:.1f}" y="{y - r:.1f}" width="{2 * r:.1f}"'
+                     f' height="{2 * r:.1f}" rx="2" fill="{cor}"/>')
+        else:
+            forma = f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r:.1f}" fill="{cor}"/>'
         circulos += (
-            f'<a href="{escape(href_da_nota(no))}" class="{classe_no}" data-id="{ids[no]}"'
+            f'<a href="{escape(_href(no, aberto))}" class="{classe_no}" data-id="{ids[no]}"'
             f' data-vizinhos="{" ".join(ids[v] for v in sorted(vizinhos[no]))}">'
             f'<title>{escape(_nome(no))} · {escape(no)}'
+            f'{" · desenho" if _desenho(no) else ""}'
             f'{f" · {grau[no]} ligações" if grau[no] != 1 else " · 1 ligação"}</title>'
-            f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r:.1f}" fill="{cor}"/>{rotulo}</a>')
+            f'{forma}{rotulo}</a>')
     return (f'<svg class="{escape(classe)}" viewBox="0 0 {largura} {altura}" role="img"'
-            f' aria-label="grafo de {len(nos)} notas e {len(arestas)} ligações">'
+            f' aria-label="grafo de {_contagem(nos)} e {len(arestas)} ligações">'
             f'<g class="arestas">{linhas}</g><g class="nos">{circulos}</g></svg>')
 
 
 def do_mapa(mapa, nos: list[str]) -> set[tuple[str, str]]:
-    """As ligações entre notas diferentes, sem direção e sem repetição."""
+    """As ligações entre notas diferentes, sem direção e sem repetição; com
+    os desenhos em `nos`, também as de nota para desenho."""
     validos = set(nos)
-    return {tuple(sorted((lig.origem, lig.destino))) for lig in mapa.ligacoes
+    return {tuple(sorted((lig.origem, lig.destino)))
+            for lig in [*mapa.ligacoes, *mapa.desenhos]
             if lig.destino is not None and lig.destino != lig.origem
             and lig.origem in validos and lig.destino in validos}
 
