@@ -641,6 +641,31 @@ def citacoes(texto: str, de_desenho: bool = False) -> list[Citacao]:
     return de_desenhos if de_desenho else notas
 
 
+def citacao_do_link(link: str) -> Citacao | None:
+    """O link de um elemento do desenho (o campo "link" do Excalidraw) como
+    citação: `[[Nota]]`, `[[Nota#Seção|apelido]]`, `Pasta/Nota.md` ou só
+    `Nota`, como o plugin do Obsidian grava. None para site, endereço da
+    página, anexo ou o que não for nota nem desenho."""
+    link = link.strip()
+    if link.startswith("[[") and link.endswith("]]"):
+        dentro = link[2:-2]
+        if not dentro.strip() or any(c in dentro for c in "[]\n"):
+            return None
+        nome, _, secao = dentro.partition("|")[0].partition("#")
+        nome = nome.strip()
+        if not nome or ANEXO.search(nome):
+            return None
+        return Citacao("wiki", nome, secao.strip(), 0)
+    if not link or link.startswith(("/", "#", "\\")) or urlsplit(link).scheme or "\n" in link:
+        return None
+    if _link_para_nota(link):
+        return Citacao("md", link, "", 0)
+    nome, _, secao = link.partition("#")
+    if not nome.strip() or ANEXO.search(nome) or any(c in nome for c in "[]"):
+        return None
+    return Citacao("wiki", nome.strip(), secao.strip(), 0)
+
+
 def citacoes_separadas(texto: str) -> tuple[list[Citacao], list[Citacao]]:
     """(links para notas, links para desenhos), lendo o texto uma vez só."""
     inicio = vault.inicio_do_corpo(texto)

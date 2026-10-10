@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from urllib.parse import quote
 
 from aide.storage import desenhos, previas, vault
 from aide.web.notas_api import versao
@@ -155,6 +156,41 @@ def instalar(app) -> None:
                 links_nao_atualizados=puladas)
         return {"caminho": para, "versao": versao(destino), "links_atualizados": mudadas,
                 "links_nao_atualizados": puladas}
+
+    @app.get("/api/desenhos/link")
+    def link(caminho: str = Query(...), alvo: str = Query(..., max_length=2000)) -> dict:
+        """Para onde leva o link de um elemento do desenho: a nota ou o desenho
+        do vault, resolvido como um [[link]] numa nota da mesma pasta. Se não
+        existe, o caminho que ele pede, para a página oferecer criar."""
+        from aide.storage import links
+        from aide.web import markdown
+
+        local(caminho)
+        citacao = markdown.citacao_do_link(alvo)
+        if citacao is None:
+            raise HTTPException(422, "esse link não é de uma nota nem de um desenho do vault")
+        arvore = vault.arvore(raiz())
+        secao = citacao.secao
+        if citacao.tipo == "wiki" and markdown.DESENHO.search(citacao.alvo):
+            tipo = "desenho"
+            destino = desenhos.indice(raiz(), arvore).resolver(citacao.alvo, caminho)
+        else:
+            tipo = "nota"
+            env = {"origem": caminho, "indice": links.indice(raiz(), arvore)}
+            if citacao.tipo == "md":
+                destino, secao = markdown._nota_por_link_markdown(citacao.alvo, env)
+            else:
+                destino = citacao.destino(caminho, env["indice"])
+        if destino is not None:
+            href = (markdown.href_da_nota(destino, secao) if tipo == "nota"
+                    else "/desenho?caminho=" + quote(destino, safe="/"))
+            return {"tipo": tipo, "existe": True, "caminho": destino, "href": href}
+        pedido = citacao.caminho_pedido(caminho)
+        try:
+            (vault.resolver if tipo == "nota" else desenhos.resolver)(raiz(), pedido)
+        except vault.ForaDoVault:
+            raise HTTPException(422, "esse link aponta para fora do vault") from None
+        return {"tipo": tipo, "existe": False, "caminho": pedido}
 
     # ---------- a prévia em PNG, para ![[desenho.excalidraw]] numa nota ----------
 

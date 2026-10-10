@@ -289,3 +289,25 @@ def test_lista_de_quem_cita_fecha_com_clique_fora_e_esc():
     assert 'getElementById("citado-por")' in JS
     assert "!citadoPor.contains(evento.target)) citadoPor.open = false;" in JS
     assert 'evento.key !== "Escape"' in JS
+
+
+def test_link_do_elemento_passa_pelo_my_aide():
+    """Link de site abre em outra aba sem opener nem Referer, e só http,
+    https e mailto; o resto vai ao servidor, que só leva a nota ou desenho."""
+    from aide.web.desenho_script import JS
+
+    assert "onLinkOpen: abrirLink," in JS
+    abrir = JS[JS.index("function abrirLink("):JS.index("async function irPeloVault(")]
+    assert abrir.index("evento.preventDefault();") < abrir.index("window.open(")
+    assert 'window.open(link, "_blank", "noopener,noreferrer")' in abrir
+    assert "const SITE = /^(https?|mailto):/i;" in JS
+    assert '"/api/desenhos/link?caminho="' in JS
+
+
+def test_sair_pelo_link_so_com_tudo_salvo():
+    from aide.web.desenho_script import JS
+
+    sair = JS[JS.index("async function sair("):]
+    sair = sair[:sair.index("\n}\n")]
+    assert sair.index("await esperarSalvar();") < sair.index("location.href = href;")
+    assert "if (pendente()) return;" in sair
