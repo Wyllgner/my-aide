@@ -683,6 +683,7 @@ JS = r"""
     previa.innerHTML = html;
     previaVale = texto;
     mudancas = [];
+    mostrarLinha();
   }
 
   function salvar() {
@@ -1013,6 +1014,9 @@ JS = r"""
     }
     // a linha onde o texto do bloco começa no texto de agora
     b.inicioReal = b.cabeca ? b.cabeca.split("\n").length - 1 : 0;
+    b.fonte = fonte;
+    // o bloco que o Shift+Enter abriu é o mesmo passo do de cima no desfazer
+    b.juntar = !!novo;
     var campo = document.createElement("textarea");
     campo.className = "bloco-vivo";
     campo.value = fonte;
@@ -1046,6 +1050,8 @@ JS = r"""
     ligarSugestoes(campo);
     ligarAtalhos(campo);
     campo.addEventListener("input", function () {
+      // escrever de novo depois de desfazer: o que foi desfeito não volta mais
+      if (campo.value !== b.fonte) { refazer = []; }
       // o bloco do fim, apagado de volta: a nota fica como estava
       editor.value = !b.el && !campo.value ? b.original : b.cabeca + campo.value + b.cauda;
       ajustarAltura(campo);
@@ -1057,6 +1063,15 @@ JS = r"""
     });
     campo.addEventListener("keydown", function (ev) {
       if (ev.key === "Escape") { ev.preventDefault(); campo.blur(); return; }
+      // o Ctrl+Z do navegador só conhece este bloco: no bloco que ainda está
+      // como abriu, ele é o da nota inteira
+      var passo = passoPedido(ev);
+      if (passo && campo.value === b.fonte && (passo === "desfazer" || refazer.length)) {
+        ev.preventDefault();
+        fecharBloco();
+        andarNoHistorico(passo);
+        return;
+      }
       // Shift+Enter: um bloco novo embaixo, e não mais uma linha neste
       if (ev.key === "Enter" && ev.shiftKey && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
         ev.preventDefault();
@@ -1152,6 +1167,7 @@ JS = r"""
         pendente.dataset.desde = String(mudancas.length);
       }
       previaVale = editor.value;
+      registrar(b.original, editor.value, b.inicioReal, b.juntar);
     }
     if (guardada && guardada.texto === editor.value) {
       mostrarPrevia(guardada.html, guardada.texto);
@@ -1160,6 +1176,89 @@ JS = r"""
       salvar();
     }
   }
+
+  // ---------- desfazer no ao vivo ----------
+  // cada bloco é um campo novo, e o Ctrl+Z do navegador só conhece o que se
+  // digitou nele: ao fechar o bloco, esse histórico ia embora junto. Aqui a
+  // nota guarda o texto de antes e de depois de cada bloco fechado (e de
+  // cada caixa de tarefa), e o Ctrl+Z fora de um bloco — ou num bloco que
+  // ainda não mudou — volta a nota inteira um passo. Só vale enquanto o
+  // texto é o que o histórico deixou: mexido por outro caminho (o modo
+  // editar, o conflito), ele recomeça em vez de apagar o que mudou.
+  var desfazer = [];
+  var refazer = [];
+  var PASSOS = 200;
+  // a linha que o último desfazer mexeu: a prévia nova rola até ela
+  var linhaMexida = null;
+
+  function registrar(antes, depois, linha, juntar) {
+    if (antes === depois) { return; }
+    var topo = desfazer[desfazer.length - 1];
+    if (juntar && topo && topo.depois === antes) {
+      topo.depois = depois;
+    } else {
+      desfazer.push({ antes: antes, depois: depois, linha: linha });
+      if (desfazer.length > PASSOS) { desfazer.shift(); }
+    }
+    refazer = [];
+  }
+
+  function passoPedido(e) {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey) { return null; }
+    var tecla = (e.key || "").toLowerCase();
+    if (tecla === "z") { return e.shiftKey ? "refazer" : "desfazer"; }
+    if (tecla === "y" && !e.shiftKey) { return "refazer"; }
+    return null;
+  }
+
+  function andarNoHistorico(pedido) {
+    var de = pedido === "desfazer" ? desfazer : refazer;
+    var para = pedido === "desfazer" ? refazer : desfazer;
+    var passo = de.pop();
+    if (!passo) {
+      mostrar(pedido === "desfazer" ? "nada para desfazer" : "nada para refazer", "pendente");
+      return;
+    }
+    var esperado = pedido === "desfazer" ? passo.depois : passo.antes;
+    if (editor.value !== esperado || !conflito.hidden) {
+      desfazer = [];
+      refazer = [];
+      mostrar("a nota mudou por outro caminho; não há o que desfazer", "pendente");
+      return;
+    }
+    editor.value = pedido === "desfazer" ? passo.antes : passo.depois;
+    para.push(passo);
+    linhaMexida = passo.linha;
+    privada.checked = marcadaNoTexto();
+    corretor();
+    agendarRealce();
+    // a prévia na tela é do texto de antes; a nova vem com o salvamento. Se
+    // o texto voltou a ser o que está no disco, salvar não iria ao servidor
+    if (editor.value === salvo) { salvo = null; }
+    salvar();
+  }
+
+  function mostrarLinha() {
+    if (linhaMexida == null || previaVale !== editor.value) { return; }
+    var linha = linhaMexida;
+    linhaMexida = null;
+    var achado = null;
+    previa.querySelectorAll("[data-bloco]").forEach(function (el) {
+      var f = el.dataset.bloco.split("-");
+      if (!achado && parseInt(f[1], 10) > linha) { achado = el; }
+    });
+    if (achado) { achado.scrollIntoView({ block: "nearest" }); }
+  }
+
+  document.addEventListener("keydown", function (e) {
+    if (area.dataset.modo !== "vivo" || bloco) { return; }
+    // nos campos de verdade (busca, renomear) o Ctrl+Z é o deles
+    if (e.target.closest && e.target.closest("input, textarea, select, [contenteditable]")) { return; }
+    var passo = passoPedido(e);
+    if (!passo) { return; }
+    e.preventDefault();
+    andarNoHistorico(passo);
+  });
 
   previa.addEventListener("click", function (e) {
     if (area.dataset.modo !== "vivo" || bloco) { return; }
@@ -1283,7 +1382,9 @@ JS = r"""
       return;
     }
     linhas[n] = linhas[n].replace(TAREFA, "$1" + (caixa.checked ? "x" : " ") + "$3");
+    var antes = editor.value;
     editor.value = linhas.join("\n");
+    if (area.dataset.modo === "vivo") { registrar(antes, editor.value, n); }
     agendarRealce();
     salvar();
   });
