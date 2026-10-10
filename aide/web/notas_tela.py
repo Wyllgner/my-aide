@@ -495,13 +495,16 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
     tag = (tag or "").strip().lstrip("#").strip("/") or None
     itens = vault.arvore(raiz)
     indice = links.indice(raiz, itens)
+    # para o [[ sugerir desenhos também
+    caminhos_de_desenho = sorted(desenhos.indice(raiz, itens).por_caminho.values(),
+                                 key=str.casefold)
     aberto = _escolher(ctx, raiz, arquivo, nota, indice)
     if aberto:
         # antes de mostrar: a caixa "privada" lê o frontmatter
         from aide.storage.reconciliacao import privado_para_o_arquivo
 
         privado_para_o_arquivo(ctx.conn, raiz / aberto)
-    notas, pastas, desenhos = _contar(itens)
+    notas, pastas, qtd_desenhos = _contar(itens)
     # apagar nota move o arquivo para vault/.trash; sem dizer isso em algum lugar,
     # a lixeira é uma pasta que só cresce e ninguém sabe que existe
     na_lixeira = consultas.notas_na_lixeira(raiz)
@@ -509,7 +512,7 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
     resumo = " · ".join(p for p in (
         formato.plural(notas, "nota"),
         formato.plural(pastas, "pasta") if pastas else "",
-        formato.plural(desenhos, "desenho") if desenhos else "",
+        formato.plural(qtd_desenhos, "desenho") if qtd_desenhos else "",
         formato.plural(na_lixeira, "arquivo na lixeira", "arquivos na lixeira")
         if na_lixeira else "") if p)
     if busca:
@@ -600,7 +603,8 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
 
     return f"""
 {cabecalho("Notas", resumo, busca_form)}
-<div class="notas" data-notas="{escape(json.dumps(indice.caminhos, ensure_ascii=False))}">
+<div class="notas" data-notas="{escape(json.dumps(indice.caminhos, ensure_ascii=False))}"
+  data-desenhos="{escape(json.dumps(caminhos_de_desenho, ensure_ascii=False))}">
   <div class="card notas-lateral">
     <div class="notas-botoes">
       <button type="button" id="nova-nota" class="botao botao-principal"

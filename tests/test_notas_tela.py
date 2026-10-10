@@ -593,3 +593,17 @@ def test_previa_da_nota_mostra_link_para_o_desenho(cliente, raiz):
     (raiz / "Inbox" / "Ideia.md").write_text("ver [[Planta.excalidraw]]")
     html = cliente.get("/notas", params={"arquivo": "Inbox/Ideia.md"}).text
     assert 'class="wikilink desenho" href="/desenho?caminho=Projetos/Casa/Planta.excalidraw' in html
+
+
+def test_tela_passa_os_desenhos_para_o_autocompletar(cliente, raiz):
+    import html as html_mod
+    import json as json_mod
+    import re
+
+    _com_desenho(raiz)
+    _com_desenho(raiz, "Solto.excalidraw")
+    pagina = cliente.get("/notas", params={"arquivo": "Inbox/Ideia.md"}).text
+    bruto = re.search(r'data-desenhos="([^"]*)"', pagina).group(1)
+    assert json_mod.loads(html_mod.unescape(bruto)) == [
+        "Projetos/Casa/Planta.excalidraw", "Solto.excalidraw"]
+
