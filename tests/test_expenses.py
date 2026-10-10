@@ -150,11 +150,13 @@ def test_periodo_vazio_nao_quebra(ctx, registry):
 
 
 def test_lista_do_mais_recente_para_o_mais_antigo(ctx, registry):
-    agora = now_in(ctx.config.timezone)
+    # a partir da meia-noite, e não de agora: "5 horas atrás" à 1h da manhã
+    # já é ontem, e o "hoje" viria vazio
+    meia_noite = now_in(ctx.config.timezone).replace(hour=0, minute=0, second=0, microsecond=0)
     for i, desc in enumerate(["antigo", "recente"]):
         registry.call("expenses.add", {
             "amount": "10", "description": desc,
-            "when": (agora - timedelta(hours=5 - i * 4)).isoformat(timespec="minutes")}, ctx)
+            "when": (meia_noite + timedelta(hours=1 + i * 4)).isoformat(timespec="minutes")}, ctx)
 
     lista = registry.call("expenses.list", {"periodo": "hoje"}, ctx).data
     assert [g["description"] for g in lista] == ["recente", "antigo"]
