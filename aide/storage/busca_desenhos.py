@@ -5,8 +5,9 @@ o texto de cada um junto com o mtime — mudou o arquivo, lê de novo. Um vault
 tem dezenas de desenhos, não milhares, e o texto deles é curto.
 
 Privacidade:
-- desenho privado (`"aide": {"privada": true}`) só aparece para quem pode ver
-  privado — e o assessor nunca o vê, nem com `ver_privado`, como as notas no
+- desenho privado (`"aide": {"privada": true}` no arquivo, ou no registro de
+  `desenhos.marcados`, que não se perde quando o Obsidian reescreve o
+  arquivo) só aparece para quem pode ver privado — e o assessor nunca o vê, nem com `ver_privado`, como as notas no
   `notes.search`;
 - desenho que não deu para ler (inválido, grande demais) conta como privado:
   sem ler, não dá para saber se ele é;
@@ -34,11 +35,12 @@ _EM_VOLTA = 60
 
 @dataclass(frozen=True)
 class Leitura:
-    privado: bool
+    privado: bool  # a marcação do arquivo; o registro se confere à parte
     texto: str
+    legivel: bool = True
 
 
-_ILEGIVEL = Leitura(privado=True, texto="")
+_ILEGIVEL = Leitura(privado=True, texto="", legivel=False)
 # caminho absoluto -> (mtime_ns, tamanho, leitura)
 _CACHE: dict[Path, tuple[int, int, Leitura]] = {}
 _TRAVA = threading.Lock()
@@ -61,6 +63,14 @@ def ler(arquivo: Path) -> Leitura:
     return leitura
 
 
+def privado(data_dir: Path, caminho: str, leitura: Leitura) -> bool:
+    """Privado de fato: pelo arquivo, pelo registro, ou por não dar para ler."""
+    if not leitura.legivel:
+        return True
+    return desenhos.privado_de_fato(data_dir, caminho,
+                                    {"aide": {"privada": True}} if leitura.privado else {})
+
+
 def _dobrar(texto: str) -> str:
     """Sem acento e sem caixa, letra por letra: o resultado tem o mesmo
     tamanho do original, e a posição achada nele vale no original. É o que o
@@ -77,7 +87,7 @@ def _trecho(texto: str, inicio: int, fim: int) -> str:
     return " ".join(trecho.split())
 
 
-def buscar(vault_dir: Path, consulta: str, incluir_privados: bool,
+def buscar(vault_dir: Path, consulta: str, incluir_privados: bool, *, data_dir: Path,
            limite: int = 20) -> list[dict]:
     """Os desenhos com alguma das palavras da consulta, no nome ou no texto.
     Palavra inteira, como no FTS5: "casa" não acha "casamento". Primeiro os
@@ -95,7 +105,8 @@ def buscar(vault_dir: Path, consulta: str, incluir_privados: bool,
         except (vault.ForaDoVault, OSError):
             continue
         vistos.add(arquivo)
-        if leitura.privado and not incluir_privados:
+        e_privado = privado(data_dir, caminho, leitura)
+        if e_privado and not incluir_privados:
             continue
         titulo = caminho.rpartition("/")[2].removesuffix(desenhos.EXTENSAO)
         no_titulo, no_texto = _dobrar(titulo), _dobrar(leitura.texto)
@@ -112,7 +123,7 @@ def buscar(vault_dir: Path, consulta: str, incluir_privados: bool,
         trecho = (_trecho(leitura.texto, primeiro.start(), primeiro.end()) if primeiro
                   else " ".join(leitura.texto[:_EM_VOLTA * 2].split()))
         achados.append({"caminho": caminho, "titulo": titulo, "trecho": trecho,
-                        "privado": leitura.privado, "_ordem": (-distintos, -vezes,
+                        "privado": e_privado, "_ordem": (-distintos, -vezes,
                                                                 caminho.casefold())})
     achados.sort(key=lambda a: a["_ordem"])
     for achado in achados:

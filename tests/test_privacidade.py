@@ -279,3 +279,23 @@ def test_desenho_privado_nao_pode_ser_lido_pelo_modelo(com_segredos, modelo, reg
 def test_o_dono_le_o_desenho_privado(com_segredos, dono, registry):
     resultado = registry.call("notes.drawing", {"caminho": "Segredo.excalidraw"}, dono)
     assert SEGREDO in resultado.data["texto"]
+
+
+def test_desenho_privado_editado_no_obsidian_continua_fora_do_modelo(com_segredos, dono, modelo,
+                                                                     registry):
+    """O Obsidian salvou por cima sem a marcação; o registro em data/ segura."""
+    import json
+    import os
+
+    from aide.storage import desenhos
+
+    arquivo = dono.config.vault_dir / "Segredo.excalidraw"
+    desenhos.privado_de_fato(dono.config.data_dir, "Segredo.excalidraw",
+                             json.loads(arquivo.read_text()))
+    dados = json.loads(arquivo.read_text())
+    del dados["aide"]
+    arquivo.write_text(json.dumps(dados))
+    os.utime(arquivo, ns=(arquivo.stat().st_mtime_ns + 10**9,) * 2)
+    for nome, args in (("notes.search", {"query": "terapia"}),
+                       ("notes.drawing", {"caminho": "Segredo.excalidraw"})):
+        assert SEGREDO not in registry.call(nome, args, modelo).to_json(), nome

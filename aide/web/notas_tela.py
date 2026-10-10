@@ -178,7 +178,8 @@ def _busca(ctx, raiz: Path, busca: str, aberto: str | None) -> str:
     from aide.storage import busca_desenhos
 
     de = "&amp;de=" + escape(quote(aberto, safe="/")) if aberto else ""
-    for d in busca_desenhos.buscar(raiz, busca, incluir_privados=ctx.ver_privado):
+    for d in busca_desenhos.buscar(raiz, busca, incluir_privados=ctx.ver_privado,
+                                   data_dir=Path(ctx.config.data_dir)):
         trecho = (f'<span class="trecho">{_trecho(d["trecho"], termos)}</span>'
                   if d["trecho"] else "")
         itens += (f'<a class="arquivo achado desenho" href="/desenho?caminho='

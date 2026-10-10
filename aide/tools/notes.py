@@ -377,9 +377,10 @@ def _desenho_visivel(ctx: ToolContext, raiz: Path, caminho: str) -> bool:
     if ctx.ver_privado:
         return True
     try:
-        return not busca_desenhos.ler(desenhos.resolver(raiz, caminho)).privado
+        leitura = busca_desenhos.ler(desenhos.resolver(raiz, caminho))
     except (vault.ForaDoVault, OSError):
         return False
+    return not busca_desenhos.privado(Path(ctx.config.data_dir), caminho, leitura)
 
 
 @registry.register(
@@ -410,7 +411,8 @@ def drawing(ctx: ToolContext, caminho: str) -> dict:
     if not arquivo.is_file():
         raise ValueError(f"desenho não encontrado: {caminho}")
     leitura = busca_desenhos.ler(arquivo)
-    if leitura.privado and not ctx.ver_privado:
+    if not ctx.ver_privado and busca_desenhos.privado(Path(ctx.config.data_dir), caminho,
+                                                      leitura):
         raise ValueError("esse desenho é privado ou não deu para ler; ele não sai desta máquina")
 
     indice = links.indice(raiz)
@@ -520,8 +522,8 @@ def search(ctx: ToolContext, query: str, limit: int = 5) -> list[dict]:
     # desenho privado nunca, nem com ver_privado: a mesma regra das notas aqui
     achados.extend(
         {"tipo": "desenho", "title": d["titulo"], "caminho": d["caminho"], "trecho": d["trecho"]}
-        for d in busca_desenhos.buscar(Path(ctx.config.vault_dir), query,
-                                       incluir_privados=False, limite=limit))
+        for d in busca_desenhos.buscar(Path(ctx.config.vault_dir), query, incluir_privados=False,
+                                       data_dir=Path(ctx.config.data_dir), limite=limit))
     achados.extend(buscar_episodios(ctx.conn, query, limite=limit))
     return achados[: limit * 2]
 
