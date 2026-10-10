@@ -374,8 +374,14 @@ def _trecho_do_link(trecho: str, alvo: str) -> str:
     antes = trecho[max(0, casado.start() - _EM_VOLTA):casado.start()]
     depois = trecho[casado.end():casado.end() + _EM_VOLTA]
 
+    def sem_colchetes(casado: re.Match) -> str:
+        # [[nome|apelido]] mostra o apelido; ![[foto.png|300]] é largura, e
+        # "300" no trecho não diria nada: fica o nome
+        nome, _, apelido = casado.group(1).partition("|")
+        return nome if not apelido or apelido.isdigit() else apelido
+
     def limpo(t: str) -> str:
-        return escape(re.sub(r"!?\[\[(?:[^\]|]*\|)?([^\]]*)\]\]", r"\1", t))
+        return escape(re.sub(r"!?\[\[([^\]]*)\]\]", sem_colchetes, t))
 
     return (("…" if casado.start() > _EM_VOLTA else "") + limpo(antes)
             + f"<mark>{escape(alvo)}</mark>" + limpo(depois)
