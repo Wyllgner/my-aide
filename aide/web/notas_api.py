@@ -263,6 +263,7 @@ def instalar(app) -> None:
 
     @app.post("/api/notas/mover-pasta")
     def mover_pasta(de: str = Body(...), para: str = Body(...)) -> dict:
+        from aide.storage import desenhos
         from aide.web import renomear
 
         origem, destino = local(de, pasta=True), local(para, pasta=True)
@@ -284,6 +285,8 @@ def instalar(app) -> None:
         for nota in mudadas:
             sincronizar(conn, raiz() / nota)
         podar_previas()
+        # o privado dos desenhos de dentro vai junto (desenhos.marcados)
+        desenhos.mover_marcas(Path(config.data_dir), de, para)
         auditar("notas.mover_pasta", f"{de} → {para}", links_atualizados=mudadas,
                 links_nao_atualizados=puladas)
         return {"caminho": para, "notas_movidas": movidas, "links_atualizados": mudadas,

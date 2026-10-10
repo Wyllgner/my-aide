@@ -16,6 +16,9 @@ ignora chave que não conhece, então o arquivo continua abrindo em todo lugar.
 from __future__ import annotations
 
 import json
+import os
+import tempfile
+import threading
 from pathlib import Path
 
 from aide.storage import vault
@@ -116,6 +119,94 @@ def ler(caminho: Path) -> tuple[str, dict]:
 
 def privado(dados: dict) -> bool:
     return dados.get("aide", {}).get("privada", False) is True
+
+
+# ---------- o privado que não se perde ----------
+
+# A marcação mora no arquivo, e o excalidraw.com e o Obsidian descartam a
+# chave "aide" ao salvar: editado lá, o desenho voltaria a ser público, e o
+# assessor passaria a lê-lo. Por isso o servidor também guarda, em `data/`,
+# quais desenhos são privados. Vale o que disser privado — o arquivo ou o
+# registro —, e o registro só perde um desenho quando você desmarca a caixa
+# aqui. Como nas notas: o privado só sobe por fora, descer é decisão sua.
+#
+# A chave é o caminho no vault: mover por aqui leva a marca junto; renomear
+# por fora não leva (aí vale só a marcação do arquivo).
+MARCAS = "desenhos-privados.json"
+_TRAVA_MARCAS = threading.Lock()
+
+
+def _arquivo_de_marcas(data_dir: Path) -> Path:
+    return Path(data_dir) / MARCAS
+
+
+def marcados(data_dir: Path) -> frozenset[str]:
+    """Os caminhos marcados. Registro ilegível levanta OSError ou ValueError:
+    quem pergunta por um desenho trata isso como privado."""
+    try:
+        lista = json.loads(_arquivo_de_marcas(data_dir).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return frozenset()
+    if not isinstance(lista, list):
+        raise ValueError("registro de desenhos privados inválido")  # noqa: TRY004 - conteúdo do arquivo, não argumento
+    return frozenset(c for c in lista if isinstance(c, str))
+
+
+def _gravar_marcas(data_dir: Path, caminhos: set[str]) -> None:
+    destino = _arquivo_de_marcas(data_dir)
+    destino.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    fd, temporario = tempfile.mkstemp(dir=destino.parent, prefix=".", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as saida:
+            json.dump(sorted(caminhos), saida, ensure_ascii=False, indent=1)
+        os.chmod(temporario, 0o600)
+        os.replace(temporario, destino)
+    except BaseException:
+        Path(temporario).unlink(missing_ok=True)
+        raise
+
+
+def marcar(data_dir: Path, caminho: str, privada: bool) -> None:
+    with _TRAVA_MARCAS:
+        atuais = set(marcados(data_dir))
+        if (caminho in atuais) == privada:
+            return
+        if privada:
+            atuais.add(caminho)
+        else:
+            atuais.discard(caminho)
+        _gravar_marcas(data_dir, atuais)
+
+
+def mover_marcas(data_dir: Path, de: str, para: str) -> None:
+    """O desenho `de` virou `para`; ou, com `de` sendo uma pasta, tudo que
+    estava dentro dela foi junto."""
+    with _TRAVA_MARCAS:
+        atuais = set(marcados(data_dir))
+        novos = set()
+        for caminho in atuais:
+            if caminho == de:
+                novos.add(para)
+            elif caminho.startswith(de + "/"):
+                novos.add(para + caminho[len(de):])
+            else:
+                novos.add(caminho)
+        if novos != atuais:
+            _gravar_marcas(data_dir, novos)
+
+
+def privado_de_fato(data_dir: Path, caminho: str, dados: dict | None) -> bool:
+    """Privado pelo arquivo ou pelo registro. Achar a marcação no arquivo põe
+    o registro em dia (desenho marcado antes do registro existir). `dados`
+    None é desenho que não deu para ler: sem ler, conta como privado. Registro
+    ilegível também: na dúvida, não sai."""
+    try:
+        if dados is not None and privado(dados):
+            marcar(data_dir, caminho, True)
+            return True
+        return dados is None or caminho in marcados(data_dir)
+    except (OSError, ValueError):
+        return True
 
 
 def texto_de(dados: dict) -> str:

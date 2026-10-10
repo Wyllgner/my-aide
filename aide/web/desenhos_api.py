@@ -66,7 +66,8 @@ def instalar(app) -> None:
         arquivo = local(caminho)
         texto, dados = ler(arquivo)
         return {"caminho": caminho, "texto": texto, "versao": versao(arquivo),
-                "privada": desenhos.privado(dados), **com_previa(caminho, arquivo)}
+                "privada": desenhos.privado_de_fato(dados_dir(), caminho, dados),
+                **com_previa(caminho, arquivo)}
 
     @app.put("/api/desenhos/arquivo")
     def salvar(caminho: str = Body(...), texto: str = Body(...),
@@ -88,8 +89,14 @@ def instalar(app) -> None:
             no_disco, dados = ler(arquivo)
             return JSONResponse(status_code=409, content={
                 "erro": "o desenho mudou fora daqui desde que você abriu",
-                "texto": no_disco, "versao": atual, "privada": desenhos.privado(dados)})
-        antes = desenhos.privado(ler(arquivo)[1])
+                "texto": no_disco, "versao": atual,
+                "privada": desenhos.privado_de_fato(dados_dir(), caminho, dados)})
+        # o registro conta: editado no Obsidian, o arquivo perdeu a marcação,
+        # e este salvamento a devolve ao arquivo
+        antes = desenhos.privado_de_fato(dados_dir(), caminho, ler(arquivo)[1])
+        if privada is not None:
+            # a caixa mudou: é a única porta para um desenho deixar de ser privado
+            desenhos.marcar(dados_dir(), caminho, privada)
         # explícito, para o gravar não ler e validar o arquivo de novo
         dados = desenhos.gravar(arquivo, texto, privada=antes if privada is None else privada)
         depois = desenhos.privado(dados)
@@ -107,7 +114,9 @@ def instalar(app) -> None:
         except FileExistsError:
             raise HTTPException(409, "já existe um desenho com esse nome") from None
         auditar("desenhos.criar", caminho)
-        return {"caminho": caminho, "versao": versao(arquivo), "privada": False}
+        # um desenho apagado com este nome deixa a marca: na dúvida, privado
+        return {"caminho": caminho, "versao": versao(arquivo),
+                "privada": desenhos.privado_de_fato(dados_dir(), caminho, {})}
 
     @app.delete("/api/desenhos/arquivo")
     def apagar(caminho: str = Query(...)) -> dict:
@@ -141,6 +150,7 @@ def instalar(app) -> None:
             sincronizar(conn, raiz() / nota)
         # no lugar novo, a próxima abertura gera a prévia de novo
         previas.limpar(dados_dir(), de)
+        desenhos.mover_marcas(dados_dir(), de, para)
         auditar("desenhos.mover", de, para=para, links_atualizados=mudadas,
                 links_nao_atualizados=puladas)
         return {"caminho": para, "versao": versao(destino), "links_atualizados": mudadas,
