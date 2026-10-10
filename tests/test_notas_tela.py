@@ -577,3 +577,10 @@ def test_script_cria_desenho_pela_rota_dele_e_abre_a_tela():
     assert 'location.href = "/desenho?caminho=" + encodeURIComponent(caminho)' in JS
     # cada id que o script procura existe na tela
     assert 'getElementById("novo-desenho")' in JS
+
+
+def test_previa_da_nota_mostra_link_para_o_desenho(cliente, raiz):
+    _com_desenho(raiz)
+    (raiz / "Inbox" / "Ideia.md").write_text("ver [[Planta.excalidraw]]")
+    html = cliente.get("/notas", params={"arquivo": "Inbox/Ideia.md"}).text
+    assert 'class="wikilink desenho" href="/desenho?caminho=Projetos/Casa/Planta.excalidraw' in html

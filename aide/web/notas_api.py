@@ -72,10 +72,13 @@ def instalar(app) -> None:
         return texto
 
     def previa(texto: str, caminho: str) -> str:
-        from aide.storage import anexos, links
+        from aide.storage import anexos, desenhos, links
         from aide.web import markdown
 
-        return markdown.renderizar(texto, caminho, links.indice(raiz()), anexos.indice(raiz()))
+        # uma varredura da pasta serve aos dois índices
+        arvore = vault.arvore(raiz())
+        return markdown.renderizar(texto, caminho, links.indice(raiz(), arvore),
+                                   anexos.indice(raiz()), desenhos.indice(raiz(), arvore))
 
     @app.get("/api/notas/anexo")
     def anexo(caminho: str = Query(...)):

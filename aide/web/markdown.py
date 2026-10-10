@@ -69,6 +69,10 @@ ANEXO = re.compile(r"\.(png|jpe?g|gif|bmp|svg|webp|avif|mp3|wav|m4a|ogg|flac|3gp
                    r"|mp4|webm|ogv|mov|mkv|pdf|canvas|base)$", re.IGNORECASE)
 
 
+# [[Planta.excalidraw]]: desenho do vault, que abre na tela dele
+DESENHO = re.compile(r"\.excalidraw$", re.IGNORECASE)
+
+
 def _wikilink(state, silent: bool) -> bool:
     """[[alvo#seção|apelido]] e ![[...]], numa linha só e sem colchete dentro."""
     inicio = state.pos
@@ -97,6 +101,8 @@ def _render_wikilink(self, tokens, idx, options, env) -> str:
     texto = apelido or (f"{nome} › {secao}" if nome and secao else nome or secao)
     if ANEXO.search(nome):
         return _anexo(nome, apelido, env)
+    if DESENHO.search(nome):
+        return _link_de_desenho(nome, apelido, env)
     destino = env["indice"].resolver(nome, env["origem"]) if nome else env["origem"]
     if destino is None:
         # quebrado: sem href, para não levar a lugar nenhum; o alvo fica
@@ -108,6 +114,23 @@ def _render_wikilink(self, tokens, idx, options, env) -> str:
                 f' clique para criar">{escape(texto)}</a>')
     return (f'<a class="wikilink" href="{escape(href_da_nota(destino, secao))}"'
             f' title="{escape(destino)}">{escape(texto)}</a>')
+
+
+def _link_de_desenho(alvo: str, apelido: str, env) -> str:
+    """Abre a tela do desenho, e o "Notas" de lá volta para esta nota. Sem o
+    desenho, fica quebrado como link de nota: o clique cria o desenho."""
+    indice = env.get("desenhos")
+    caminho = indice.resolver(alvo, env["origem"]) if indice else None
+    texto = escape(apelido or alvo.rpartition("/")[2][:-len(".excalidraw")])
+    if caminho is None:
+        return (f'<a class="wikilink desenho quebrado" role="link" tabindex="0"'
+                f' data-alvo="{escape(alvo)}" title="esse desenho ainda não existe;'
+                f' clique para criar">{texto}</a>')
+    href = "/desenho?caminho=" + quote(caminho, safe="/")
+    if env["origem"]:
+        href += "&de=" + quote(env["origem"], safe="/")
+    return (f'<a class="wikilink desenho" href="{escape(href)}"'
+            f' title="{escape(caminho)}">{texto}</a>')
 
 
 def _render_link_open(self, tokens, idx, options, env) -> str:
@@ -494,14 +517,16 @@ def _propriedades(meta: dict[str, str], fim: int, origem: str | None = None) -> 
     return f'<dl class="propriedades" data-bloco="0-{fim}">{linhas}</dl>'
 
 
-def renderizar(texto: str, origem: str | None, indice: Indice, anexos=None) -> str:
+def renderizar(texto: str, origem: str | None, indice: Indice, anexos=None,
+               desenhos=None) -> str:
     """O HTML da prévia da nota `origem` (caminho no vault)."""
     meta, _ = vault.separar(texto)
     inicio = vault.inicio_do_corpo(texto)
     # o corpo sem cortar as linhas vazias do começo: a linha de cada tarefa na
     # prévia precisa bater com a do arquivo
     corpo = "\n".join(texto.split("\n")[inicio:])
-    env = {"origem": origem, "indice": indice, "deslocamento": inicio, "anexos": anexos}
+    env = {"origem": origem, "indice": indice, "deslocamento": inicio, "anexos": anexos,
+           "desenhos": desenhos}
     return _propriedades(meta, inicio, origem) + MOTOR.render(corpo, env)
 
 
@@ -580,7 +605,11 @@ def citacoes(texto: str) -> list[Citacao]:
         de = inicio + (bloco.map[0] if bloco.map else 0)
         ate = inicio + (bloco.map[1] if bloco.map else 1)
         for token in bloco.children:
-            if token.type == "wikilink" and not ANEXO.search(token.meta["nome"]):
+            # anexo e desenho não são nota: no mapa, virariam "nota que não
+            # existe", e o "criar" faria Planta.excalidraw.md
+            nome = token.meta.get("nome", "") if token.type == "wikilink" else ""
+            if (token.type == "wikilink" and not ANEXO.search(nome)
+                    and not DESENHO.search(nome)):
                 marcas = (token.meta["nome"] or "[[",)
                 tipo, alvo, secao = "wiki", token.meta["nome"], token.meta["secao"]
             elif token.type == "link_open" and _link_para_nota(token.attrGet("href") or ""):
