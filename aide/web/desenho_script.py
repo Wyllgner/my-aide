@@ -8,6 +8,10 @@ Salva sozinho um segundo depois da última mudança, e na hora com Ctrl+S. Se o
 arquivo mudou por fora desde que abriu, para e pergunta qual versão fica, como
 as notas. A caixa de privado é o único caminho que manda `privada`: o
 salvamento comum deixa o servidor manter o que está no disco.
+
+A biblioteca de formas é uma só para todos os desenhos (Biblioteca.excalidrawlib
+na raiz do vault) e salva à parte. Se ela não abriu, nunca é gravada: seria
+trocar a sua biblioteca por uma vazia.
 """
 
 from __future__ import annotations
@@ -36,6 +40,15 @@ let conflito = null;
 // a caixa mudou e o servidor ainda não confirmou: vai explícito no próximo
 // salvamento. Sem ele, o servidor mantém o que está no disco
 let privadaPedida = null;
+
+// a biblioteca: versão lida (null = não abriu, então não grava), o último
+// texto gravado e o timer próprio
+let bibliotecaVersao = null;
+let bibliotecaSalva = null;
+let bibliotecaTimer = null;
+let bibliotecaSalvando = false;
+let bibliotecaDeNovo = null;
+let bibliotecaAgendada = false;
 
 function avisar(texto, erro) {
   estado.textContent = texto;
@@ -174,8 +187,72 @@ window.addEventListener("keydown", (evento) => {
   }
 }, true);
 
+function textoDaBiblioteca(itens) {
+  return JSON.stringify({ type: "excalidrawlib", version: 2, source: "my-aide",
+                          libraryItems: itens }, null, 2) + "\n";
+}
+
+function mudouBiblioteca(itens) {
+  if (bibliotecaVersao === null) return;
+  const texto = textoDaBiblioteca(itens);
+  if (texto === bibliotecaSalva) return;
+  clearTimeout(bibliotecaTimer);
+  bibliotecaAgendada = true;
+  bibliotecaTimer = setTimeout(() => {
+    bibliotecaAgendada = false;
+    salvarBiblioteca(texto);
+  }, 500);
+}
+
+async function salvarBiblioteca(texto) {
+  if (bibliotecaSalvando) { bibliotecaDeNovo = texto; return; }
+  bibliotecaSalvando = true;
+  try {
+    const resposta = await pedir("PUT", "/api/desenhos/biblioteca",
+                                 { texto: texto, versao: bibliotecaVersao });
+    const dados = await resposta.json().catch(() => ({}));
+    if (resposta.ok) {
+      bibliotecaVersao = dados.versao;
+      bibliotecaSalva = texto;
+    } else if (resposta.status === 409) {
+      // outra aba guardou formas no meio: junta as de lá com as daqui, e o
+      // onLibraryChange que isso dispara grava a soma com a versão nova
+      bibliotecaVersao = dados.versao;
+      bibliotecaSalva = dados.texto;
+      const deLa = JSON.parse(dados.texto).libraryItems || [];
+      api.updateLibrary({ libraryItems: deLa, merge: true });
+    } else {
+      avisar(dados.detail || "não consegui salvar a biblioteca", true);
+    }
+  } catch (e) {
+    avisar("sem conexão com o my-aide — a biblioteca não foi salva", true);
+  } finally {
+    bibliotecaSalvando = false;
+    if (bibliotecaDeNovo !== null) {
+      const proximo = bibliotecaDeNovo;
+      bibliotecaDeNovo = null;
+      salvarBiblioteca(proximo);
+    }
+  }
+}
+
+async function abrirBiblioteca() {
+  try {
+    const resposta = await fetch("/api/desenhos/biblioteca");
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.detail || "");
+    bibliotecaVersao = dados.versao;
+    bibliotecaSalva = dados.texto;
+    return JSON.parse(dados.texto).libraryItems || [];
+  } catch (e) {
+    avisar("a biblioteca de formas não abriu; ela não será salva", true);
+    return [];
+  }
+}
+
 window.addEventListener("beforeunload", (evento) => {
-  if (salvando || conflito !== null || pendente()) {
+  if (salvando || conflito !== null || pendente() || bibliotecaSalvando
+      || bibliotecaAgendada) {
     evento.preventDefault();
     evento.returnValue = "";
   }
@@ -195,6 +272,7 @@ async function abrir() {
     return;
   }
   const cena = JSON.parse(dados.texto);
+  const formas = await abrirBiblioteca();
   versao = dados.versao;
   caixaPrivada.checked = dados.privada;
   caixaPrivada.disabled = false;
@@ -204,8 +282,10 @@ async function abrir() {
       elements: cena.elements || [],
       appState: cena.appState || {},
       files: cena.files || {},
+      libraryItems: formas,
       scrollToContent: true,
     },
+    onLibraryChange: mudouBiblioteca,
     excalidrawAPI: (a) => {
       api = a;
     },
@@ -227,7 +307,8 @@ async function abrir() {
       },
     },
   }));
-  avisar("aberto");
+  // se a biblioteca não abriu, o aviso dela fica
+  if (bibliotecaVersao !== null) avisar("aberto");
 }
 
 abrir();
