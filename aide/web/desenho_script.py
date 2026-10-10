@@ -289,7 +289,17 @@ function abrirLink(elemento, evento) {
     else avisar("esse link não abre daqui", true);
     return;
   }
-  if (link.startsWith("/")) { sair(link); return; }
+  if (link.startsWith("/")) {
+    // o navegador tira tab e quebra de linha do endereço: "/\t/site" vira
+    // "//site", outro servidor. Sai só se o endereço montado for daqui
+    const url = new URL(link, location.origin);
+    if (url.origin !== location.origin) {
+      avisar("esse link não abre daqui", true);
+      return;
+    }
+    sair(url.pathname + url.search + url.hash);
+    return;
+  }
   irPeloVault(link);
 }
 
