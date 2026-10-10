@@ -29,6 +29,23 @@ def modelo(ctx):
     return ToolContext(config=ctx.config, conn=ctx.conn, actor="mcp")
 
 
+def _desenho_privado(dono):
+    """Um desenho marcado privado, com o segredo escrito numa caixa de texto e
+    citado por uma nota pública: nem a busca, nem o notes.drawing, nem o
+    notes.links podem devolver o texto dele."""
+    import json
+
+    from aide.storage import desenhos
+
+    raiz = dono.config.vault_dir
+    raiz.mkdir(parents=True, exist_ok=True)
+    dados = json.loads(desenhos.vazio())
+    dados["elements"] = [{"type": "text", "id": "t", "text": f"desenho {SEGREDO}",
+                          "originalText": f"desenho {SEGREDO}"}]
+    dados["aide"] = {"privada": True}
+    (raiz / "Segredo.excalidraw").write_text(json.dumps(dados))
+
+
 @pytest.fixture
 def com_segredos(dono, registry):
     registry.call("tasks.create", {"title": f"Tarefa {SEGREDO}", "private": True}, dono)
@@ -38,6 +55,7 @@ def com_segredos(dono, registry):
     registry.call("notes.create", {"title": "Pública", "body": "qualquer coisa"}, dono)
     registry.call("memory.save", {"kind": "profile", "key": "k",
                                   "value": f"perfil {SEGREDO}", "private": True}, dono)
+    _desenho_privado(dono)
     registry.call("memory.save", {"kind": "episodic", "key": "e",
                                   "value": f"episódio {SEGREDO}", "private": True}, dono)
     registry.call("expenses.add", {"amount": "199,90", "description": f"gasto {SEGREDO}",
@@ -134,7 +152,7 @@ def test_nenhuma_tool_devolve_conteudo_privado(com_segredos, modelo, registry):
         "kind": "profile", "name": "k", "key": "k", "status": "all",
         "limit": 50, "dias": 365, "text": "x", "goal": "x", "body": "x",
         "periodo": "sempre", "amount": "1",
-        "when": "2030-01-01T09:00", "value": "x",
+        "when": "2030-01-01T09:00", "value": "x", "caminho": "Segredo.excalidraw",
     }
 
     vistos = []
@@ -152,7 +170,7 @@ def test_nenhuma_tool_devolve_conteudo_privado(com_segredos, modelo, registry):
 
     # buscar pelo segredo e recebê-lo de volta seria o pior vazamento: é por
     # isso que `query` leva o próprio segredo em vez de um termo inócuo.
-    for busca in ("notes.search", "memory.search"):
+    for busca in ("notes.search", "memory.search", "notes.drawing"):
         assert busca in vistos
 
     # se a varredura parar de exercitar as tools, ela deixa de valer
@@ -243,3 +261,21 @@ def test_privada_so_no_arquivo_some_da_lista_e_da_busca(marcada_no_obsidian, mod
     resultado = registry.call(tool, args, modelo)
     assert resultado.ok
     assert "Diário" not in str(resultado.data) and SEGREDO not in str(resultado.data)
+
+
+def test_desenho_privado_fica_fora_da_busca_do_modelo_mesmo_com_ver_privado(com_segredos, dono,
+                                                                            registry):
+    """Como as notas no notes.search: o que a busca devolve vai para o modelo."""
+    achados = registry.call("notes.search", {"query": "terapia"}, dono).data
+    assert not [a for a in achados if a["tipo"] == "desenho"]
+
+
+def test_desenho_privado_nao_pode_ser_lido_pelo_modelo(com_segredos, modelo, registry):
+    resultado = registry.call("notes.drawing", {"caminho": "Segredo.excalidraw"}, modelo)
+    assert not resultado.ok
+    assert SEGREDO not in resultado.error
+
+
+def test_o_dono_le_o_desenho_privado(com_segredos, dono, registry):
+    resultado = registry.call("notes.drawing", {"caminho": "Segredo.excalidraw"}, dono)
+    assert SEGREDO in resultado.data["texto"]

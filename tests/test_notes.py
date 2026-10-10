@@ -490,3 +490,60 @@ def test_nome_que_leva_a_privada_continua_recusado(ligadas, ctx, registry):
     resultado = registry.call("notes.read", {"title": "diário"}, ctx)
     assert not resultado.ok
     assert "SEGREDO" not in resultado.error
+
+
+# ---------- desenhos para o assessor ----------
+
+def _desenho(raiz, nome, escrito, privada=False):
+    import json
+
+    from aide.storage import desenhos
+
+    raiz.mkdir(parents=True, exist_ok=True)
+    dados = json.loads(desenhos.vazio())
+    dados["elements"] = [{"type": "text", "id": "t", "text": escrito, "originalText": escrito}]
+    if privada:
+        dados["aide"] = {"privada": True}
+    (raiz / nome).write_text(json.dumps(dados))
+
+
+@pytest.fixture
+def com_desenhos(ligadas, ctx):
+    raiz = Path(ctx.config.vault_dir)
+    _desenho(raiz, "Planta.excalidraw", "muro de arrimo na divisa")
+    _desenho(raiz, "Íntimo.excalidraw", "consulta no dentista", privada=True)
+    return raiz
+
+
+def test_busca_traz_o_desenho_com_caminho(com_desenhos, ctx, registry):
+    achados = registry.call("notes.search", {"query": "arrimo"}, ctx).data
+    assert {"tipo": "desenho", "title": "Planta", "caminho": "Planta.excalidraw",
+            "trecho": "muro de arrimo na divisa"} in achados
+
+
+def test_le_o_desenho_e_quem_o_cita_sem_nota_privada(com_desenhos, ligadas, ctx, registry):
+    registry.call("notes.create", {"title": "Obra", "body": "ver [[Planta.excalidraw]]"}, ligadas)
+    registry.call("notes.create", {"title": "Cofre", "body": "SEGREDO [[Planta.excalidraw]]",
+                                   "private": True}, ligadas)
+    dados = registry.call("notes.drawing", {"caminho": "Planta.excalidraw"}, ctx).data
+    assert dados["texto"] == "muro de arrimo na divisa"
+    assert [n["title"] for n in dados["citado_por"]] == ["Obra"]
+    assert "SEGREDO" not in str(dados)
+
+
+@pytest.mark.parametrize("caminho", ["../fora.excalidraw", "Nada.excalidraw", ".trash/x.excalidraw",
+                                     "Inbox/Telhado.md"])
+def test_ler_desenho_por_caminho_invalido_e_erro(com_desenhos, ctx, registry, caminho):
+    assert not registry.call("notes.drawing", {"caminho": caminho}, ctx).ok
+
+
+def test_links_da_nota_trazem_os_desenhos_sem_o_privado(com_desenhos, ligadas, ctx, registry):
+    registry.call("notes.create", {"title": "Obra", "body":
+                                   "[[Planta.excalidraw]] [[Íntimo.excalidraw]] [[Sumido.excalidraw]]"},
+                  ligadas)
+    dados = registry.call("notes.links", {"title": "Obra"}, ctx).data
+    assert dados["desenhos"] == [{"title": "Planta", "caminho": "Planta.excalidraw"}]
+    assert dados["links_quebrados"] == ["Sumido.excalidraw"]
+    # com ver_privado (terminal do dono) o privado aparece
+    dono = registry.call("notes.links", {"title": "Obra"}, ligadas).data
+    assert [d["title"] for d in dono["desenhos"]] == ["Planta", "Íntimo"]

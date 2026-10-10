@@ -353,10 +353,78 @@ def note_links(ctx: ToolContext, id: int | None = None, title: str | None = None
             item = citada.setdefault(lig.origem, {**descrever(lig.origem), "trechos": []})
             if lig.citacao.trecho not in item["trechos"]:
                 item["trechos"].append(lig.citacao.trecho[:200])
-    quebrados = sorted({lig.citacao.alvo for lig in mapa.saidas(aberta) if lig.destino is None})
+    quebrados = {lig.citacao.alvo for lig in mapa.saidas(aberta) if lig.destino is None}
+    desenhos_citados = {}
+    for lig in mapa.desenhos:
+        if lig.origem != aberta:
+            continue
+        if lig.destino is None:
+            quebrados.add(lig.citacao.alvo)
+        elif lig.destino not in desenhos_citados and _desenho_visivel(ctx, raiz, lig.destino):
+            desenhos_citados[lig.destino] = {
+                "title": Path(lig.destino).stem, "caminho": lig.destino}
     return {"id": row["id"], "title": row["title"],
             "aponta_para": list(aponta.values()), "citada_por": list(citada.values()),
-            "links_quebrados": quebrados}
+            "desenhos": list(desenhos_citados.values()),
+            "links_quebrados": sorted(quebrados)}
+
+
+def _desenho_visivel(ctx: ToolContext, raiz: Path, caminho: str) -> bool:
+    """O desenho pode ir para quem pergunta? Privado ou ilegível (sem ler,
+    não dá para saber se é privado) só com ver_privado."""
+    from aide.storage import busca_desenhos, desenhos
+
+    if ctx.ver_privado:
+        return True
+    try:
+        return not busca_desenhos.ler(desenhos.resolver(raiz, caminho)).privado
+    except (vault.ForaDoVault, OSError):
+        return False
+
+
+@registry.register(
+    name="notes.drawing",
+    description=(
+        "Lê o que está escrito num desenho (.excalidraw) do vault — as caixas de "
+        "texto e os nomes dos frames — e quais notas o citam. O caminho vem de "
+        "notes.search (achado com tipo 'desenho') ou de notes.links (campo 'desenhos')."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {"caminho": {"type": "string",
+                                   "description": "Caminho no vault, ex.: Projetos/Casa.excalidraw"}},
+        "required": ["caminho"],
+    },
+)
+def drawing(ctx: ToolContext, caminho: str) -> dict:
+    """Pela mesma porta da página (`desenhos.resolver`: nada de `..`, oculto ou
+    link simbólico). Desenho privado é recusado sem dizer o que tem nele."""
+    from aide.storage import busca_desenhos, desenhos, links
+    from aide.web import grafo
+
+    raiz = Path(ctx.config.vault_dir)
+    try:
+        arquivo = desenhos.resolver(raiz, caminho)
+    except vault.ForaDoVault:
+        raise ValueError("esse caminho não é de um desenho do vault") from None
+    if not arquivo.is_file():
+        raise ValueError(f"desenho não encontrado: {caminho}")
+    leitura = busca_desenhos.ler(arquivo)
+    if leitura.privado and not ctx.ver_privado:
+        raise ValueError("esse desenho é privado ou não deu para ler; ele não sai desta máquina")
+
+    indice = links.indice(raiz)
+    privadas = _privadas(ctx, raiz, grafo.leituras(raiz, indice))
+    citado = {}
+    for lig in grafo.mapa(raiz, indice).citam_desenho(caminho):
+        if lig.origem in privadas:
+            continue
+        item = citado.setdefault(lig.origem, {"title": Path(lig.origem).stem,
+                                              "caminho": lig.origem, "trechos": []})
+        if lig.citacao.trecho[:200] not in item["trechos"]:
+            item["trechos"].append(lig.citacao.trecho[:200])
+    return {"caminho": caminho, "title": arquivo.stem, "texto": leitura.texto,
+            "citado_por": list(citado.values())}
 
 
 def _privadas(ctx: ToolContext, raiz: Path, leituras: dict) -> set[str]:
@@ -439,6 +507,7 @@ def search(ctx: ToolContext, query: str, limit: int = 5) -> list[dict]:
     Separadas, o modelo precisa adivinhar onde o fato foi parar — e erra. Uma
     pergunta, um lugar para procurar.
     """
+    from aide.storage import busca_desenhos
     from aide.storage.search import buscar
     from aide.tools.memory import buscar_episodios
 
@@ -448,6 +517,11 @@ def search(ctx: ToolContext, query: str, limit: int = 5) -> list[dict]:
                         limite=limit, incluir_privadas=False)
         if not _privada_so_no_arquivo(ctx, a["id"])
     ]
+    # desenho privado nunca, nem com ver_privado: a mesma regra das notas aqui
+    achados.extend(
+        {"tipo": "desenho", "title": d["titulo"], "caminho": d["caminho"], "trecho": d["trecho"]}
+        for d in busca_desenhos.buscar(Path(ctx.config.vault_dir), query,
+                                       incluir_privados=False, limite=limit))
     achados.extend(buscar_episodios(ctx.conn, query, limite=limit))
     return achados[: limit * 2]
 
