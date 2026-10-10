@@ -728,7 +728,7 @@ def test_a_web_so_pode_calar_a_trilha_porque_as_telas_nao_escrevem(app):
     # os desenhos, em test_desenhos_api
     assert escrita == {"/api/notas/arquivo", "/api/notas/pasta", "/api/notas/mover",
                        "/api/notas/mover-pasta", "/api/notas/anexo", "/api/notas/ligar",
-                       "/api/desenhos/arquivo"}
+                       "/api/desenhos/arquivo", "/api/desenhos/biblioteca"}
 
 
 # ---------- a janela antiga ----------

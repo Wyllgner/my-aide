@@ -228,3 +228,60 @@ def test_leitura_responde_sem_cache(cliente):
     """O desenho pode ser privado: cópia em cache de disco é cópia fora do vault."""
     resposta = cliente.get(URL, params={"caminho": "Projetos/Casa.excalidraw"})
     assert resposta.headers["cache-control"] == "no-store"
+
+
+# ---------- a biblioteca de formas ----------
+
+BIB = "/api/desenhos/biblioteca"
+
+
+def _bib(*ids) -> str:
+    return json.dumps({"type": "excalidrawlib", "version": 2, "source": "x", "libraryItems": [
+        {"id": i, "status": "unpublished", "created": 1,
+         "elements": [{"id": "e", "type": "rectangle"}]} for i in ids]})
+
+
+def test_biblioteca_comeca_vazia_e_a_primeira_gravacao_cria(cliente, vault_dir, app):
+    lida = cliente.get(BIB).json()
+    assert json.loads(lida["texto"])["libraryItems"] == [] and lida["versao"] == ""
+    resposta = cliente.put(BIB, json={"texto": _bib("a"), "versao": ""})
+    assert resposta.status_code == 200, resposta.text
+    assert (vault_dir / "Biblioteca.excalidrawlib").read_text() == _bib("a")
+    assert resposta.json()["versao"] == cliente.get(BIB).json()["versao"]
+    assert _trilha(app)[-1] == ("web", "desenhos.biblioteca",
+                                {"caminho": "Biblioteca.excalidrawlib"})
+
+
+def test_biblioteca_mudou_em_outra_aba_e_409_com_a_de_la(cliente, vault_dir):
+    cliente.put(BIB, json={"texto": _bib("a"), "versao": ""})
+    resposta = cliente.put(BIB, json={"texto": _bib("b"), "versao": ""})
+    assert resposta.status_code == 409
+    assert json.loads(resposta.json()["texto"])["libraryItems"][0]["id"] == "a"
+    assert (vault_dir / "Biblioteca.excalidrawlib").read_text() == _bib("a")
+
+
+def test_biblioteca_torta_e_400_e_nao_grava(cliente, vault_dir):
+    assert cliente.put(BIB, json={"texto": "{}", "versao": ""}).status_code == 400
+    assert not (vault_dir / "Biblioteca.excalidrawlib").exists()
+
+
+def test_biblioteca_corrompida_no_disco_e_422_ao_abrir(cliente, vault_dir):
+    (vault_dir / "Biblioteca.excalidrawlib").write_text("não é json")
+    resposta = cliente.get(BIB)
+    assert resposta.status_code == 422
+    assert "biblioteca não abre" in resposta.json()["detail"]
+
+
+def test_biblioteca_link_simbolico_e_400(cliente, vault_dir, tmp_path):
+    fora = tmp_path / "fora.excalidrawlib"
+    fora.write_text(_bib("a"))
+    (vault_dir / "Biblioteca.excalidrawlib").symlink_to(fora)
+    assert cliente.get(BIB).status_code == 400
+    assert cliente.put(BIB, json={"texto": _bib("b"), "versao": ""}).status_code == 400
+    assert fora.read_text() == _bib("a")
+
+
+def test_biblioteca_de_fora_da_pagina_e_recusada(app, vault_dir):
+    de_fora = TestClient(app, base_url=LOCAL, headers={"origin": "http://evil.com"})
+    assert de_fora.put(BIB, json={"texto": _bib("a"), "versao": ""}).status_code == 403
+    assert not (vault_dir / "Biblioteca.excalidrawlib").exists()
