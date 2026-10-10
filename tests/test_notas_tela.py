@@ -683,3 +683,12 @@ def test_grafo_local_traz_o_desenho_citado(cliente, raiz):
     assert "Grafo local · 1 vizinha" in local
     assert ('href="/desenho?caminho=Projetos/Casa/Planta.excalidraw&amp;de=Inbox/Ideia.md"'
             ' class="no desenho"') in local
+
+
+def test_trecho_mostra_o_nome_e_nao_a_largura_da_imagem():
+    from aide.web.notas_tela import _trecho_do_link
+
+    html = _trecho_do_link("veja [[Casa.excalidraw]] e ![[Casa.excalidraw|300]] e [[A|apelido]]",
+                           "Casa.excalidraw")
+    assert "e Casa.excalidraw e apelido" in html
+    assert "300" not in html
