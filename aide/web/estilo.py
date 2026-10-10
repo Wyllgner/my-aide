@@ -536,6 +536,7 @@ button.atalho-visao { width: 100%; border: 0; background: none; font: inherit; f
 .backlinks > ul > li { padding: 10px 12px; border: 1px solid var(--line-soft);
                        border-radius: var(--r-inner); font-size: 13.5px; min-width: 0; }
 .backlinks a { font-weight: 600; }
+.backlinks a.desenho { display: inline-flex; align-items: center; gap: 5px; }
 .backlinks .onde { display: block; font-size: 11px; color: var(--faint); margin-top: 2px; }
 .backlinks .trechos { margin: 6px 0 0; padding: 0; list-style: none; font-size: 12.5px;
                       color: var(--muted); line-height: 1.5; }
