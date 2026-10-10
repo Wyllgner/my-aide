@@ -18,7 +18,7 @@ from __future__ import annotations
 
 JS = r"""
 import {
-  createElement, createRoot, Excalidraw, serializeAsJSON,
+  createElement, createRoot, Excalidraw, exportToBlob, serializeAsJSON,
 } from "/vendor/excalidraw/excalidraw.js";
 
 const raiz = document.getElementById("desenho");
@@ -42,6 +42,11 @@ let apagado = false;
 // a caixa mudou e o servidor ainda não confirmou: vai explícito no próximo
 // salvamento. Sem ele, o servidor mantém o que está no disco
 let privadaPedida = null;
+
+// a prévia em PNG para ![[desenho]] nas notas: a assinatura que falta gerar
+// (a do arquivo no disco) e se uma exportação está em andamento
+let previaPendente = null;
+let exportando = false;
 
 // a biblioteca: versão lida (null = não abriu, então não grava), o último
 // texto gravado e o timer próprio
@@ -107,6 +112,7 @@ async function salvar() {
     if (resposta.ok) {
       versao = dados.versao;
       salvo = enviada;
+      if (!dados.previa) pedirPrevia(dados.assinatura);
       // a caixa pode ter mudado de novo enquanto este pedido ia
       if (privadaPedida === pedida) privadaPedida = null;
       if (privadaPedida === null) {
@@ -232,6 +238,47 @@ window.addEventListener("keydown", (evento) => {
   }
 }, true);
 
+// O Excalidraw só desenha no navegador: a prévia que as notas mostram é
+// exportada aqui e vai para o servidor presa à assinatura da versão salva.
+// Só quando a tela é essa versão (nada por salvar); senão a imagem mostraria o
+// que não está no arquivo, e o próximo salvamento pede outra.
+function pedirPrevia(daVersao) {
+  previaPendente = daVersao;
+  if (!exportando) gerarPrevia();
+}
+
+async function gerarPrevia() {
+  const daVersao = previaPendente;
+  previaPendente = null;
+  if (daVersao === null || api === null || apagado || pendente()) return;
+  const elementos = api.getSceneElements();
+  // desenho vazio não tem o que mostrar
+  if (elementos.length === 0) return;
+  exportando = true;
+  try {
+    const png = await exportToBlob({
+      elements: elementos,
+      appState: { ...api.getAppState(), exportBackground: true, exportWithDarkMode: false },
+      files: api.getFiles(),
+      mimeType: "image/png",
+      maxWidthOrHeight: 1600,
+    });
+    // a tela mudou durante a exportação: esta imagem já não é a versão salva
+    if (!pendente()) {
+      await fetch("/api/desenhos/previa?caminho=" + encodeURIComponent(caminho)
+                  + "&assinatura=" + encodeURIComponent(daVersao),
+                  { method: "PUT", headers: { "Content-Type": "image/png", "X-Aide": "1" },
+                    body: png });
+    }
+  } catch (e) {
+    // cache: sem prévia, a nota só mostra "abrir para gerar"
+    console.warn("prévia do desenho não gerada", e);
+  } finally {
+    exportando = false;
+    if (previaPendente !== null) gerarPrevia();
+  }
+}
+
 function textoDaBiblioteca(itens) {
   return JSON.stringify({ type: "excalidrawlib", version: 2, source: "my-aide",
                           libraryItems: itens }, null, 2) + "\n";
@@ -338,7 +385,12 @@ async function abrir() {
     onChange: (elementos, estadoDaTela, arquivos) => {
       if (api === null || conflito !== null) return;
       // a primeira chamada é a cena que acabou de abrir: é o que está no disco
-      if (salvo === null) { salvo = assinatura(elementos, arquivos); return; }
+      if (salvo === null) {
+        salvo = assinatura(elementos, arquivos);
+        // mexido por fora (Obsidian) ou de antes das prévias: gera agora
+        if (!dados.previa) pedirPrevia(dados.assinatura);
+        return;
+      }
       if (assinatura(elementos, arquivos) !== salvo) {
         avisar("alterado");
         agendar();
