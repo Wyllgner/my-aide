@@ -175,3 +175,75 @@ def test_link_com_caminho_numa_linha_e_curto_na_seguinte(raiz):
     renomear.mover(raiz, "Projetos/Casa/Telhado.md", "Projetos/Casa/Cobertura.md")
     # nome único: o renomear encurta o de cima também, como sempre fez
     assert _ler(raiz, "Mista.md") == "a [[Cobertura]]\nb [[Cobertura|o telhado]]\n"
+
+
+# ---------- o link dos elementos dos desenhos ----------
+
+def _desenho(raiz, caminho, *links_, privada=False):
+    import json
+
+    from aide.storage import desenhos
+
+    dados = json.loads(desenhos.vazio())
+    dados["elements"] = [{"type": "rectangle", "id": f"e{i}", "version": 3, "link": link}
+                         for i, link in enumerate(links_)]
+    if privada:
+        dados["aide"] = {"privada": True}
+    (raiz / caminho).write_text(json.dumps(dados))
+
+
+def _links(raiz, caminho):
+    import json
+
+    return [e["link"] for e in json.loads((raiz / caminho).read_text())["elements"]]
+
+
+def test_renomear_nota_conserta_o_link_do_desenho_no_mesmo_formato(raiz):
+    _desenho(raiz, "Projetos/Corte.excalidraw", "[[Telhado#Orçamento|o orçamento]]",
+             "Telhado", " [[telhado]] ", "Casa/Telhado.md#Orçamento", "[[Reunião]]",
+             "https://x.org")
+    mudados = []
+    renomear.mover(raiz, "Projetos/Casa/Telhado.md", "Projetos/Casa/Cobertura.md",
+                   desenhos_mudados=mudados)
+    assert mudados == ["Projetos/Corte.excalidraw"]
+    assert _links(raiz, "Projetos/Corte.excalidraw") == [
+        "[[Cobertura#Orçamento|o orçamento]]", "Cobertura", "[[Cobertura]]",
+        "Casa/Cobertura.md#Orçamento", "[[Reunião]]", "https://x.org"]
+
+
+def test_elemento_mudado_sobe_de_versao_e_o_privado_fica(raiz):
+    import json
+
+    from aide.storage import desenhos
+
+    _desenho(raiz, "Corte.excalidraw", "[[Telhado]]", "[[Reunião]]", privada=True)
+    renomear.mover(raiz, "Projetos/Casa/Telhado.md", "Projetos/Casa/Cobertura.md",
+                   desenhos_mudados=[])
+    dados = json.loads((raiz / "Corte.excalidraw").read_text())
+    assert [e["version"] for e in dados["elements"]] == [4, 3]
+    assert desenhos.privado(dados)
+
+
+def test_mover_pasta_leva_o_desenho_e_refaz_o_link_relativo_dele(raiz):
+    _desenho(raiz, "Projetos/Casa/Corte.excalidraw", "../../Inbox/Reuni%C3%A3o.md",
+             "[[Projetos/Casa/Telhado]]")
+    mudados = []
+    renomear.mover_pasta(raiz, "Projetos", "Arquivo", desenhos_mudados=mudados)
+    assert mudados == ["Arquivo/Casa/Corte.excalidraw"]
+    assert _links(raiz, "Arquivo/Casa/Corte.excalidraw") == [
+        "../../Inbox/Reuni%C3%A3o.md", "[[Telhado]]"]
+
+
+def test_desenho_que_nao_abre_vai_para_as_puladas(raiz, monkeypatch):
+    from aide.storage import desenhos
+
+    _desenho(raiz, "Corte.excalidraw", "[[Telhado]]")
+
+    def falha(*_a, **_k):
+        raise OSError("sem permissão")
+
+    monkeypatch.setattr(desenhos, "gravar", falha)
+    puladas, mudados = [], []
+    renomear.mover(raiz, "Projetos/Casa/Telhado.md", "Projetos/Casa/Cobertura.md",
+                   puladas, mudados)
+    assert puladas == ["Corte.excalidraw"] and mudados == []

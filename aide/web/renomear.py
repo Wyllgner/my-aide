@@ -126,26 +126,107 @@ def _reescrever_nota(raiz: Path, nota: str, lista: list[tuple[Citacao, str]],
     return True
 
 
-def mover(raiz: Path, de: str, para: str, puladas: list[str] | None = None) -> list[str]:
+def _novo_link_do_elemento(citacao: Citacao, destino: str, desenho: str,
+                           depois: links.Indice) -> str:
+    """O link do elemento (em `citacao.trecho`, como está no arquivo) levando
+    a `destino`, no mesmo formato: [[...]], nome solto ou caminho .md relativo
+    ao desenho. Seção e apelido ficam."""
+    escrito = citacao.trecho
+    if citacao.tipo == "md":
+        fragmento = escrito.partition("#")[2]
+        return _como_href(destino, desenho) + ("#" + fragmento if fragmento else "")
+    nome = _como_wikilink(destino, desenho, depois)
+    if escrito.startswith("[["):
+        return re.sub(r"^\[\[\s*" + re.escape(citacao.alvo) + r"\s*(?=[#|\]])",
+                      lambda _: "[[" + nome, escrito, count=1)
+    resto = escrito.partition("#")
+    return nome + resto[1] + resto[2]
+
+
+def _reescrever_desenhos(raiz: Path, notas: dict[str, str], desenhos_: dict[str, str],
+                         ligacoes: list[grafo.Ligacao],
+                         puladas: list[str] | None = None) -> list[str]:
+    """Conserta o link dos elementos dos desenhos (`Mapa.de_desenhos`, de
+    antes da mudança) depois que notas (`notas`) e desenhos (`desenhos_`)
+    mudaram de lugar — velho -> novo. A mesma regra das notas: o link que
+    levava à movida, o .md relativo de um desenho movido e o que outra nota
+    de mesmo nome roubaria. Devolve os desenhos que mudaram.
+
+    `desenhos.gravar` mantém a marca de privado do disco; a versão do
+    elemento sobe, e a tela aberta vê o desenho mudado por fora."""
+    import json
+    import time
+
+    from aide.storage import desenhos
+
+    depois = links.indice(raiz)
+    trocas: dict[str, dict[str, str]] = {}
+    for lig in ligacoes:
+        if lig.destino is None:
+            continue
+        desenho = desenhos_.get(lig.origem, lig.origem)
+        destino = notas.get(lig.destino, lig.destino)
+        if (destino != lig.destino or lig.citacao.tipo == "md" and desenho != lig.origem
+                or lig.citacao.tipo == "wiki"
+                and depois.resolver(lig.citacao.alvo, desenho) != destino):
+            novo = _novo_link_do_elemento(lig.citacao, destino, desenho, depois)
+            if novo != lig.citacao.trecho:
+                trocas.setdefault(desenho, {})[lig.citacao.trecho] = novo
+
+    mudados = []
+    for desenho, por_link in trocas.items():
+        try:
+            arquivo = desenhos.resolver(raiz, desenho)
+            _, dados = desenhos.ler(arquivo)
+            mudou = False
+            for elemento in dados.get("elements", []):
+                link = elemento.get("link")
+                if isinstance(link, str) and link.strip() in por_link:
+                    elemento["link"] = por_link[link.strip()]
+                    elemento["version"] = elemento.get("version", 0) + 1
+                    elemento["updated"] = int(time.time() * 1000)
+                    mudou = True
+            if not mudou:
+                continue
+            desenhos.gravar(arquivo, json.dumps(dados, ensure_ascii=False, indent=2) + "\n")
+        except (OSError, desenhos.DesenhoInvalido, vault.ForaDoVault):
+            log.warning("não consegui atualizar os links do desenho %s", desenho, exc_info=True)
+            if puladas is not None:
+                puladas.append(desenho)
+            continue
+        mudados.append(desenho)
+    return mudados
+
+
+def mover(raiz: Path, de: str, para: str, puladas: list[str] | None = None,
+          desenhos_mudados: list[str] | None = None) -> list[str]:
     """Move a nota `de` para `para` (caminhos no vault) e conserta os links.
 
     Devolve os caminhos das notas cujo texto mudou; as que não deu para
-    atualizar vão para `puladas`. Quem chama já conferiu os dois caminhos e
-    cuida do índice e da auditoria.
+    atualizar vão para `puladas`. Com `desenhos_mudados`, conserta também o
+    link dos elementos dos desenhos e põe ali os que mudaram (desenho não
+    entra no índice: por isso fora da lista das notas). Quem chama já
+    conferiu os dois caminhos e cuida do índice e da auditoria.
     """
-    ligacoes = grafo.mapa(raiz).ligacoes
+    mapa = grafo.mapa(raiz)
     vault.mover(vault.resolver(raiz, de), vault.resolver(raiz, para))
-    return _reescrever(raiz, {de: para}, ligacoes, puladas)
+    mudadas = _reescrever(raiz, {de: para}, mapa.ligacoes, puladas)
+    if desenhos_mudados is not None:
+        desenhos_mudados += _reescrever_desenhos(raiz, {de: para}, {}, mapa.de_desenhos, puladas)
+    return mudadas
 
 
-def mover_pasta(raiz: Path, de: str, para: str,
-                puladas: list[str] | None = None) -> tuple[dict[str, str], list[str]]:
+def mover_pasta(raiz: Path, de: str, para: str, puladas: list[str] | None = None,
+                desenhos_mudados: list[str] | None = None) -> tuple[dict[str, str], list[str]]:
     """Move a pasta `de` para `para` e conserta os links das notas de dentro.
 
     Devolve (velho -> novo de cada nota movida, notas cujo texto mudou). Link
     por nome curto continua valendo; quem muda é [[Pasta/Nota]] e o link
-    markdown relativo que entra ou sai da pasta.
+    markdown relativo que entra ou sai da pasta. `desenhos_mudados` como no
+    `mover`; os desenhos de dentro da pasta vão junto.
     """
+    from aide.storage import desenhos
+
     origem = vault.resolver(raiz, de, pasta=True)
     destino = vault.resolver(raiz, para, pasta=True)
     if destino == origem or destino.is_relative_to(origem):
@@ -154,9 +235,15 @@ def mover_pasta(raiz: Path, de: str, para: str,
     prefixo = de.rstrip("/") + "/"
     mudancas = {c: para.rstrip("/") + "/" + c[len(prefixo):]
                 for c in indice.caminhos if c.startswith(prefixo)}
-    ligacoes = grafo.mapa(raiz, indice).ligacoes
+    mapa = grafo.mapa(raiz, indice)
+    de_desenhos = {c: para.rstrip("/") + "/" + c[len(prefixo):]
+                   for c in desenhos.indice(raiz).por_caminho.values() if c.startswith(prefixo)}
     vault.mover_pasta(origem, destino)
-    return mudancas, _reescrever(raiz, mudancas, ligacoes, puladas)
+    mudadas = _reescrever(raiz, mudancas, mapa.ligacoes, puladas)
+    if desenhos_mudados is not None:
+        desenhos_mudados += _reescrever_desenhos(raiz, mudancas, de_desenhos, mapa.de_desenhos,
+                                                 puladas)
+    return mudancas, mudadas
 
 
 def ligar(raiz: Path, alvo: str, para: str, puladas: list[str] | None = None) -> list[str]:
