@@ -72,3 +72,18 @@ def test_assinatura_do_arquivo_acompanha_a_mudanca(tmp_path):
     os.utime(arquivo, ns=(1, 1))
     assert previas.assinatura_do_arquivo(arquivo) != primeira
     assert previas.assinatura_do_arquivo(arquivo) == previas.assinatura(b"dois")
+
+
+def test_previa_de_so_da_versao_atual(tmp_path):
+    from aide.storage import desenhos
+
+    dados, cofre = tmp_path / "data", tmp_path / "vault"
+    cofre.mkdir()
+    arquivo = cofre / "Casa.excalidraw"
+    arquivo.write_text(desenhos.vazio())
+    assert previas.previa_de(dados, cofre, "Casa.excalidraw") is None
+    atual = previas.assinatura_do_arquivo(arquivo)
+    previas.guardar(dados, "Casa.excalidraw", atual, PNG)
+    assert previas.previa_de(dados, cofre, "Casa.excalidraw") == atual
+    assert previas.previa_de(dados, cofre, "../fora.excalidraw") is None
+    assert previas.previa_de(dados, cofre, "Nada.excalidraw") is None
