@@ -223,7 +223,7 @@ JS = r"""
     form.hidden = false;
     erro.textContent = "";
     var pasta = naPasta !== undefined ? naPasta : form.dataset.pasta;
-    nome.placeholder = tipo === "nota" ? "nome da nota" : "nome da pasta";
+    nome.placeholder = { nota: "nome da nota", desenho: "nome do desenho" }[tipo] || "nome da pasta";
     nome.setAttribute("aria-label", nome.placeholder);
     nome.value = pasta ? pasta + "/" : "";
     nome.focus();
@@ -232,13 +232,16 @@ JS = r"""
   if (form) {
     document.getElementById("nova-nota").addEventListener("click", function () { pedirNome("nota"); });
     document.getElementById("nova-pasta").addEventListener("click", function () { pedirNome("pasta"); });
-    document.querySelectorAll(".nova-na-pasta").forEach(function (botao) {
-      botao.addEventListener("click", function (e) {
-        // o clique é do botão, não da pasta: ela não abre nem fecha
-        e.preventDefault();
-        e.stopPropagation();
-        pedirNome("nota", botao.dataset.pasta);
-        form.scrollIntoView({ block: "nearest" });
+    document.getElementById("novo-desenho").addEventListener("click", function () { pedirNome("desenho"); });
+    [[".nova-na-pasta", "nota"], [".novo-desenho-na-pasta", "desenho"]].forEach(function (par) {
+      document.querySelectorAll(par[0]).forEach(function (botao) {
+        botao.addEventListener("click", function (e) {
+          // o clique é do botão, não da pasta: ela não abre nem fecha
+          e.preventDefault();
+          e.stopPropagation();
+          pedirNome(par[1], botao.dataset.pasta);
+          form.scrollIntoView({ block: "nearest" });
+        });
       });
     });
     nome.addEventListener("keydown", function (e) {
@@ -249,10 +252,21 @@ JS = r"""
       var caminho = nome.value.trim().replace(/\/+$/, "");
       if (!caminho) { return; }
       if (criando === "nota" && !/\.md$/i.test(caminho)) { caminho += ".md"; }
-      var url = criando === "nota" ? "/api/notas/arquivo" : "/api/notas/pasta";
+      if (criando === "desenho" && !/\.excalidraw$/i.test(caminho)) { caminho += ".excalidraw"; }
+      var url = { nota: "/api/notas/arquivo", desenho: "/api/desenhos/arquivo" }[criando]
+        || "/api/notas/pasta";
       pedir("POST", url, { caminho: caminho }).then(function (r) {
         if (r.ok) {
-          if (criando === "nota") { abrir(caminho); } else { location.reload(); }
+          if (criando === "nota") {
+            abrir(caminho);
+          } else if (criando === "desenho") {
+            // o "Notas" da tela do desenho volta para a nota que estava aberta
+            var aberta = new URLSearchParams(location.search).get("arquivo");
+            location.href = "/desenho?caminho=" + encodeURIComponent(caminho)
+              + (aberta ? "&de=" + encodeURIComponent(aberta) : "");
+          } else {
+            location.reload();
+          }
         } else {
           erroDe(r).then(function (m) { erro.textContent = m; });
         }
