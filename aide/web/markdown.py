@@ -600,15 +600,19 @@ class Citacao:
         return _nota_por_link_markdown(self.alvo, env)[0]
 
 
-def _linha_do_link(linhas: list[str], de: int, ate: int, *marcas: str) -> int:
-    """A linha do arquivo, dentro do bloco, onde o link está escrito. Num
-    parágrafo de várias linhas o bloco começa antes; o contexto mostrado no
-    backlink tem de ser a linha do link, não a primeira do parágrafo."""
+def _linha_do_link(linhas: list[str], de: int, coluna: int, ate: int,
+                   *marcas: str) -> tuple[int, int]:
+    """(linha, coluna depois da marca) do link no arquivo, procurando a partir
+    de onde ficou o link anterior do bloco. Num parágrafo de várias linhas o
+    bloco começa antes; o contexto do backlink e o renomear precisam da linha
+    do link, não da primeira do parágrafo. A coluna faz dois links iguais na
+    mesma linha, ou um igual a um da linha de cima, caírem cada um no seu."""
     for marca in marcas:
         for n in range(de, min(ate, len(linhas))):
-            if marca in linhas[n]:
-                return n
-    return de
+            achado = linhas[n].find(marca, coluna if n == de else 0)
+            if achado >= 0:
+                return n, achado + len(marca)
+    return de, coluna
 
 
 def _link_para_nota(href: str) -> bool:
@@ -639,6 +643,7 @@ def citacoes(texto: str, de_desenho: bool = False) -> list[Citacao]:
             continue
         de = inicio + (bloco.map[0] if bloco.map else 0)
         ate = inicio + (bloco.map[1] if bloco.map else 1)
+        coluna = 0
         for token in bloco.children:
             # anexo e desenho não são nota: no mapa, virariam "nota que não
             # existe", e o "criar" faria Planta.excalidraw.md
@@ -652,7 +657,9 @@ def citacoes(texto: str, de_desenho: bool = False) -> list[Citacao]:
                 tipo, alvo, secao = "wiki", nome, token.meta["secao"]
             elif (token.type == "wikilink" and not ANEXO.search(nome)
                     and not DESENHO.search(nome)):
-                marcas = (token.meta["nome"] or "[[",)
+                # "[[Casa" antes de "Casa": o nome sozinho também aparece dentro
+                # de "[[Projetos/Casa" numa linha acima, no mesmo parágrafo
+                marcas = (("[[" + nome, nome) if nome else ("[[",))
                 tipo, alvo, secao = "wiki", token.meta["nome"], token.meta["secao"]
             elif token.type == "link_open" and _link_para_nota(token.attrGet("href") or ""):
                 href = token.attrGet("href") or ""
@@ -661,8 +668,8 @@ def citacoes(texto: str, de_desenho: bool = False) -> list[Citacao]:
                 tipo, alvo, secao = "md", href, ""
             else:
                 continue
-            linha = _linha_do_link(linhas, de, ate, *marcas)
-            de = linha  # o próximo link do bloco está nesta linha ou depois
+            linha, coluna = _linha_do_link(linhas, de, coluna, ate, *marcas)
+            de = linha  # o próximo link do bloco está daqui em diante
             achadas.append(Citacao(tipo, alvo, secao, linha, linhas[linha].strip()))
     return achadas
 
