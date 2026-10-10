@@ -333,3 +333,91 @@ def test_mover_de_fora_da_pagina_e_recusado(app, vault_dir):
     assert de_fora.post(MOVER, json={"de": "Projetos/Casa.excalidraw",
                                      "para": "X.excalidraw"}).status_code == 403
     assert (vault_dir / "Projetos" / "Casa.excalidraw").exists()
+
+
+# ---------- a prévia em PNG ----------
+
+PREVIA = "/api/desenhos/previa"
+PNG_OK = b"\x89PNG\r\n\x1a\n" + b"x" * 100
+
+
+def _mandar_previa(cliente, assinatura, corpo=PNG_OK, caminho="Projetos/Casa.excalidraw"):
+    return cliente.put(PREVIA, params={"caminho": caminho, "assinatura": assinatura},
+                       content=corpo, headers={"content-type": "image/png"})
+
+
+def test_abrir_diz_a_assinatura_e_que_ainda_nao_ha_previa(cliente):
+    aberto = _abrir(cliente)
+    assert len(aberto["assinatura"]) == 32 and aberto["previa"] is False
+
+
+def test_previa_da_versao_atual_e_guardada_e_servida_sem_cache(cliente, app):
+    assinatura = _abrir(cliente)["assinatura"]
+    assert _mandar_previa(cliente, assinatura).status_code == 200
+    assert _abrir(cliente)["previa"] is True
+    resposta = cliente.get(PREVIA, params={"caminho": "Projetos/Casa.excalidraw"})
+    assert resposta.status_code == 200
+    assert resposta.content == PNG_OK
+    assert resposta.headers["content-type"] == "image/png"
+    assert resposta.headers["cache-control"] == "no-store"
+    assert resposta.headers["content-security-policy"] == "default-src 'none'"
+    # cache não é dado do vault: nada na trilha
+    assert _trilha(app) == []
+
+
+def test_previa_de_outra_versao_e_recusada(cliente):
+    velha = _abrir(cliente)["assinatura"]
+    _salvar(cliente, _cena("nova"), _abrir(cliente)["versao"])
+    assert _mandar_previa(cliente, velha).status_code == 409
+    assert cliente.get(PREVIA, params={"caminho": "Projetos/Casa.excalidraw"}).status_code == 404
+
+
+def test_salvar_devolve_a_assinatura_do_que_ficou_no_disco(cliente, vault_dir):
+    """Com o privado reposto pelo servidor, o texto gravado não é o enviado."""
+    from aide.storage import previas
+
+    arquivo = vault_dir / "Projetos" / "Casa.excalidraw"
+    arquivo.write_text(json.dumps({**json.loads(_cena()), "aide": {"privada": True}}))
+    salvo = _salvar(cliente, _cena("x"), _abrir(cliente)["versao"]).json()
+    assert salvo["assinatura"] == previas.assinatura(arquivo.read_bytes())
+    assert salvo["assinatura"] != previas.assinatura(_cena("x").encode())
+
+
+@pytest.mark.parametrize("corpo,status", [(b"GIF89a....", 415), (b"<svg onload=1>", 415)])
+def test_previa_so_png(cliente, corpo, status):
+    assinatura = _abrir(cliente)["assinatura"]
+    assert _mandar_previa(cliente, assinatura, corpo).status_code == status
+
+
+def test_previa_de_desenho_que_nao_existe_ou_fora_do_vault(cliente):
+    assert _mandar_previa(cliente, "a" * 32, caminho="Nada.excalidraw").status_code == 404
+    assert _mandar_previa(cliente, "a" * 32, caminho="../x.excalidraw").status_code == 400
+    assert _mandar_previa(cliente, "../../x", caminho="Projetos/Casa.excalidraw").status_code in (
+        400, 409)
+
+
+def test_previa_grande_demais_e_413(cliente, monkeypatch):
+    from aide.storage import previas
+
+    monkeypatch.setattr(previas, "TAMANHO_MAXIMO", 50)
+    assinatura = _abrir(cliente)["assinatura"]
+    assert _mandar_previa(cliente, assinatura).status_code == 413
+
+
+def test_apagar_e_mover_tiram_a_previa(cliente, app):
+    from pathlib import Path
+
+    pasta = Path(app.state.config.data_dir) / "previas-desenho"
+    _mandar_previa(cliente, _abrir(cliente)["assinatura"])
+    assert list(pasta.glob("*.png"))
+    cliente.post(MOVER, json={"de": "Projetos/Casa.excalidraw", "para": "Casa.excalidraw"})
+    assert not list(pasta.glob("*.png"))
+    _mandar_previa(cliente, _abrir(cliente, "Casa.excalidraw")["assinatura"],
+                   caminho="Casa.excalidraw")
+    cliente.delete(URL, params={"caminho": "Casa.excalidraw"})
+    assert not list(pasta.glob("*.png"))
+
+
+def test_previa_de_fora_da_pagina_e_recusada(app):
+    de_fora = TestClient(app, base_url=LOCAL, headers={"origin": "http://evil.com"})
+    assert _mandar_previa(de_fora, "a" * 32).status_code == 403
