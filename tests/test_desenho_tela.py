@@ -323,3 +323,14 @@ def test_link_para_o_que_falta_pergunta_antes_de_criar(cliente):
     criar = JS[JS.index('botaoCriar.addEventListener("click"'):]
     assert criar.index('pedir("POST"') < criar.index("sair(hrefDe(")
     assert "resposta.status !== 409" in criar
+
+
+def test_link_da_pagina_so_sai_para_a_mesma_origem():
+    """"/\\t/site" passa no startsWith("/"), mas o navegador tira o tab e
+    lê "//site": outro servidor, na mesma aba."""
+    from aide.web.desenho_script import JS
+
+    abrir = JS[JS.index("function abrirLink("):JS.index("async function irPeloVault(")]
+    pagina = abrir[abrir.index('if (link.startsWith("/")) {'):]
+    assert pagina.index("url.origin !== location.origin") < pagina.index("sair(")
+    assert "sair(link)" not in abrir
