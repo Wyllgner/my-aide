@@ -370,8 +370,12 @@ def notas_na_lixeira(vault_dir) -> int:
     from pathlib import Path
 
     lixeira = Path(vault_dir) / ".trash"
-    # rglob: uma pasta apagada vai inteira para lá, com as notas dentro
-    return len(list(lixeira.rglob("*.md"))) if lixeira.exists() else 0
+    # rglob: uma pasta apagada vai inteira para lá, com as notas e os
+    # desenhos dentro; desenho fora da conta sumiria sem aviso
+    if not lixeira.exists():
+        return 0
+    return sum(1 for p in lixeira.rglob("*")
+               if p.suffix.lower() in (".md", ".excalidraw") and p.is_file())
 
 
 def gasto_fora_dos_tetos(conn, config, agora: datetime) -> list[tuple[str, int]]:
