@@ -37,6 +37,8 @@ let timer = null;
 let salvando = false;
 let deNovo = false;
 let conflito = null;
+// depois de apagar, nada mais é salvo: o salvamento recriaria o desenho
+let apagado = false;
 // a caixa mudou e o servidor ainda não confirmou: vai explícito no próximo
 // salvamento. Sem ele, o servidor mantém o que está no disco
 let privadaPedida = null;
@@ -69,7 +71,8 @@ function atual() {
 }
 
 function pendente() {
-  return api !== null && conflito === null && (atual() !== salvo || privadaPedida !== null);
+  return api !== null && !apagado && conflito === null
+    && (atual() !== salvo || privadaPedida !== null);
 }
 
 function pedir(metodo, url, corpo) {
@@ -163,6 +166,48 @@ caixaPrivada.addEventListener("change", () => {
   salvar();
 });
 
+// apagar: como nas notas, o primeiro clique arma e o segundo manda para a
+// lixeira do vault; sem o segundo em 4 s, desarma
+const botaoApagar = document.getElementById("apagar");
+const rotuloApagar = botaoApagar.querySelector(".rotulo");
+let armado = null;
+
+function desarmar() {
+  clearTimeout(armado);
+  armado = null;
+  rotuloApagar.textContent = "apagar";
+  delete botaoApagar.dataset.armado;
+}
+
+botaoApagar.addEventListener("keydown", (evento) => {
+  if (evento.key === "Escape") desarmar();
+});
+
+botaoApagar.addEventListener("click", async () => {
+  if (!armado) {
+    rotuloApagar.textContent = "confirmar";
+    botaoApagar.dataset.armado = "1";
+    armado = setTimeout(desarmar, 4000);
+    return;
+  }
+  desarmar();
+  apagado = true;
+  clearTimeout(timer);
+  try {
+    const resposta = await fetch("/api/desenhos/arquivo?caminho=" + encodeURIComponent(caminho),
+                                 { method: "DELETE", headers: { "X-Aide": "1" } });
+    if (!resposta.ok) {
+      const dados = await resposta.json().catch(() => ({}));
+      throw new Error(dados.detail || "não consegui apagar");
+    }
+    // volta para onde o "Notas" da barra levaria
+    location.href = document.querySelector(".desenho-barra a.botao").getAttribute("href");
+  } catch (e) {
+    apagado = false;
+    avisar(e.message === "Failed to fetch" ? "sem conexão com o my-aide" : e.message, true);
+  }
+});
+
 // O corretor do navegador pode mandar o texto para fora (o "corretor
 // avançado" do Chrome usa o Google). Em desenho privado, desligado em todo
 // campo de texto do editor, como nas notas privadas. O Excalidraw cria o
@@ -251,8 +296,9 @@ async function abrirBiblioteca() {
 }
 
 window.addEventListener("beforeunload", (evento) => {
-  if (salvando || conflito !== null || pendente() || bibliotecaSalvando
-      || bibliotecaAgendada) {
+  // apagado, o desenho não tem mais o que perder; a biblioteca ainda tem
+  const desenhoPorSalvar = !apagado && (salvando || conflito !== null || pendente());
+  if (desenhoPorSalvar || bibliotecaSalvando || bibliotecaAgendada) {
     evento.preventDefault();
     evento.returnValue = "";
   }

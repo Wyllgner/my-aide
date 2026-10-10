@@ -51,6 +51,9 @@ def pagina(caminho: str, voltar: str) -> str:
   <span id="desenho-estado" class="desenho-estado" role="status" aria-live="polite">abrindo…</span>
   <label class="privada" title="privado: o texto do desenho não vai para o modelo nem para a OpenAI">
     <input type="checkbox" id="privada" disabled>{icone("privada", 15)}<span>privado</span></label>
+  <button type="button" id="apagar" class="botao botao-perigo"
+    title="mandar para a lixeira do vault (pede um segundo clique)">
+    {icone("lixeira", 15)}<span class="rotulo">apagar</span></button>
 </header>
 <div id="conflito" class="conflito desenho-conflito" hidden>
   <span>Este desenho mudou fora daqui desde que você abriu.</span>

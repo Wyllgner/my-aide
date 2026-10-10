@@ -186,3 +186,20 @@ def test_procurar_bibliotecas_escondido():
     from aide.web.estilo import CSS
 
     assert ".library-menu-browse-button {\n  display: none; }" in CSS
+
+
+def test_apagar_pede_dois_cliques_e_para_de_salvar():
+    """Um salvamento depois de apagar recriaria o desenho."""
+    from aide.web.desenho_script import JS
+
+    clique = JS[JS.index('botaoApagar.addEventListener("click"'):]
+    assert clique.index("if (!armado)") < clique.index('method: "DELETE"')
+    assert clique.index("apagado = true;") < clique.index('method: "DELETE"')
+    assert 'headers: { "X-Aide": "1" }' in clique
+    assert "api !== null && !apagado" in JS
+
+
+def test_botao_apagar_na_barra(cliente):
+    html = _tela(cliente).text
+    barra = html[html.index('<header class="desenho-barra">'):html.index("</header>")]
+    assert 'id="apagar" class="botao botao-perigo"' in barra
