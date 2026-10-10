@@ -36,6 +36,11 @@ def v(raiz):
     return visao.montar(raiz, AGORA, dias=7)
 
 
+def test_desenho_que_falta_conta_como_quebrado(raiz):
+    (raiz / "Solta2.md").write_text("[[Fachada.excalidraw]]")
+    assert visao.montar(raiz, AGORA, dias=7).quebrados == 2
+
+
 def test_contagens(v):
     assert v.notas == 5
     assert v.quebrados == 1

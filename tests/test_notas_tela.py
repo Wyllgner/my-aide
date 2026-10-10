@@ -292,6 +292,51 @@ def test_quebrado_por_link_markdown_mostra_o_nome_de_verdade(cliente, raiz):
     assert "<strong>foto" not in lista and 'data-caminho="Inbox/foto' not in lista
 
 
+def test_desenho_que_falta_entra_na_lista_de_quebrados(cliente, raiz):
+    (raiz / "Inbox" / "Ideia.md").write_text("[[Fachada.excalidraw]] e [[Fornecedores]]")
+    (raiz / "Projetos" / "Casa" / "Obra.md").write_text("![[Inbox/Fachada.excalidraw|300]]")
+    html = cliente.get("/notas?quebrados=1&arquivo=Inbox/Ideia.md").text
+    assert "2 links quebrados</span></a>" in html
+    assert "1 nota faltando · 1 desenho faltando · 3 citações" in html
+    assert "<strong>Fachada.excalidraw</strong>" in html
+    # nasce como desenho, na pasta de quem citou, e não como Fachada.excalidraw.md
+    assert ('data-caminho="Inbox/Fachada.excalidraw" data-tipo="desenho"'
+            ' data-de="Inbox/Ideia.md"') in html
+    assert "Fachada.excalidraw.md" not in html
+
+
+def test_desenho_quebrado_nao_sugere_ligar_a_nota(cliente, raiz):
+    """"ligar" troca link de nota; ligar um desenho a uma nota quebraria o link."""
+    (raiz / "Inbox" / "Ideiaa.md").write_text("x")
+    (raiz / "Inbox" / "Outra.md").write_text("[[Ideia.excalidraw]]")
+    html = cliente.get("/notas?quebrados=1").text
+    assert "ligar-quebrado" not in html
+
+
+def test_desenho_quebrado_com_nome_invalido_nao_ganha_botao(cliente, raiz):
+    (raiz / "Inbox" / "Ideia.md").write_text("[[../fora.excalidraw]]")
+    html = cliente.get("/notas?quebrados=1").text
+    assert "criar-quebrado" not in html
+    assert "nome que não pode virar arquivo" in html
+
+
+def test_desenho_que_existe_nao_e_quebrado(cliente, raiz):
+    from aide.storage import desenhos
+
+    (raiz / "Projetos" / "Casa" / "Planta.excalidraw").write_text(desenhos.vazio())
+    (raiz / "Inbox" / "Ideia.md").write_text("[[Planta.excalidraw]]")
+    assert "aviso-quebrados" not in _tela(cliente)
+
+
+def test_criar_desenho_quebrado_vai_pela_api_de_desenhos():
+    from aide.web.script import JS
+
+    criar = JS[JS.index('document.querySelectorAll(".criar-quebrado")'):]
+    criar = criar[:criar.index("// ---------- ligar")]
+    assert 'desenho ? "/api/desenhos/arquivo" : "/api/notas/arquivo"' in criar
+    assert '"/desenho?caminho=" + encodeURIComponent(caminho)' in criar
+
+
 def test_nota_enorme_nao_abre_no_editor(cliente, raiz):
     """Um export de 3 MB jogado no vault não pode travar a página."""
     (raiz / "Inbox" / "Export.md").write_text("[[Telhado]] " + "x" * (3 * 1024 * 1024))

@@ -234,7 +234,8 @@ def _visao_geral(raiz: Path, agora: datetime, indice: links.Indice, conn=None) -
         _indicador("Notas", str(v.notas), formato.plural(v.palavras, "palavra")),
         _indicador("Ligações", str(v.ligacoes), "entre notas diferentes"),
         _indicador("Órfãs", str(len(v.orfas)), "sem link para nem de ninguém"),
-        _indicador("Links quebrados", str(v.quebrados), "apontam para nota que não existe",
+        _indicador("Links quebrados", str(v.quebrados),
+                   "apontam para nota ou desenho que não existe",
                    alerta=bool(v.quebrados)),
         _indicador("Tags", str(len(v.tags)), "do frontmatter e #do texto"),
     ])
@@ -307,25 +308,38 @@ def _quebrados(raiz: Path, quebrados: list[grafo.Ligacao], caminhos: list[str] |
         por_alvo.setdefault(markdown.chave_link(nome), []).append(lig)
     if not por_alvo:
         return ('<div class="quebrados-topo"><p class="eyebrow">Links quebrados</p>'
-                '<p class="quebrados-explica">Nenhum: todo [[link]] leva a uma nota.</p></div>')
+                '<p class="quebrados-explica">Nenhum: todo [[link]] leva a uma nota ou desenho.'
+                '</p></div>')
     citacoes = len(quebrados)
+    faltam_desenhos = sum(1 for chave in por_alvo if markdown.DESENHO.search(chave))
+    faltam_notas = len(por_alvo) - faltam_desenhos
+    faltando = " · ".join(p for p in (
+        formato.plural(faltam_notas, "nota faltando", "notas faltando") if faltam_notas else "",
+        formato.plural(faltam_desenhos, "desenho faltando", "desenhos faltando")
+        if faltam_desenhos else "") if p)
     topo = ('<div class="quebrados-topo"><p class="eyebrow">Links quebrados</p>'
-            f'<p class="quebrados-resumo">{formato.plural(len(por_alvo), "nota faltando", "notas faltando")}'
+            f'<p class="quebrados-resumo">{faltando}'
             f' · {formato.plural(citacoes, "citação", "citações")}</p>'
-            '<p class="quebrados-explica">Links para notas que ainda não existem. Crie a nota,'
-            ' ligue a uma parecida que já existe, ou abra quem cita para corrigir.</p></div>')
+            '<p class="quebrados-explica">Links para notas ou desenhos que ainda não existem.'
+            ' Crie, ligue a uma nota parecida que já existe, ou abra quem cita para'
+            ' corrigir.</p></div>')
     itens = ""
     for chave in sorted(por_alvo, key=lambda k: (-len(por_alvo[k]), k)):
         ligs = por_alvo[chave]
         origens = list(dict.fromkeys(lig.origem for lig in ligs))
-        novo = _caminho_novo(raiz, ligs[0].citacao.caminho_pedido(ligs[0].origem))
+        e_desenho = bool(markdown.DESENHO.search(chave))
+        novo = _caminho_novo(raiz, ligs[0].citacao.caminho_pedido(ligs[0].origem), e_desenho)
         alvo = (novo or ligs[0].citacao.alvo).rpartition("/")[2].removesuffix(".md")
         citam = "".join(_onde_cita(o, [lig for lig in ligs if lig.origem == o])
                         for o in origens)
         pasta = novo.rpartition("/")[0] if novo else ""
+        # o desenho nasce pela API de desenhos e abre na tela dele, voltando
+        # para a primeira nota que o cita
+        tipo = (f' data-tipo="desenho" data-de="{escape(origens[0])}"' if e_desenho else "")
         botao = (f'<button type="button" class="botao-fraco criar-quebrado"'
-                 f' data-caminho="{escape(novo)}" title="criar {escape(novo)}">'
-                 f'{icone("nova-nota", 14)}<span>criar</span></button>' if novo else "")
+                 f' data-caminho="{escape(novo)}"{tipo} title="criar {escape(novo)}">'
+                 f'{icone("desenho" if e_desenho else "nova-nota", 14)}<span>criar</span></button>'
+                 if novo else "")
         onde = (f'<span class="onde">nasce em {escape(pasta + "/" if pasta else "raiz do vault")}</span>'
                 if novo else '<span class="onde">nome que não pode virar arquivo</span>')
         vezes = formato.plural(len(origens), "nota cita", "notas citam")
@@ -334,7 +348,9 @@ def _quebrados(raiz: Path, quebrados: list[grafo.Ligacao], caminhos: list[str] |
             f' data-para="{escape(c)}" title="trocar o link por [[{escape(c.removesuffix(".md"))}]]'
             f' nas notas que citam">{icone("quebrado", 13)}<span>ligar a'
             f' <strong>{escape(c.rpartition("/")[2].removesuffix(".md"))}</strong></span></button>'
-            for c in _parecidas(alvo, caminhos or []))
+            # "ligar" troca link de nota; desenho com nome errado se corrige
+            # abrindo quem cita
+            for c in ([] if e_desenho else _parecidas(alvo, caminhos or [])))
         sugestao = (f'<div class="quebrado-sugestao"><span class="onde">parecida com:</span>'
                     f'{sugestoes}</div>' if sugestoes else "")
         itens += (f'<div class="quebrado-item"><div class="quebrado-alvo">'
@@ -380,10 +396,13 @@ def _onde_cita(origem: str, ligs: list[grafo.Ligacao]) -> str:
             f'</span></li>')
 
 
-def _caminho_novo(raiz: Path, caminho: str) -> str | None:
+def _caminho_novo(raiz: Path, caminho: str, desenho: bool = False) -> str | None:
     """O caminho, se ele pode virar arquivo no vault; senão None."""
     try:
-        vault.resolver(raiz, caminho)
+        if desenho:
+            desenhos.resolver(raiz, caminho)
+        else:
+            vault.resolver(raiz, caminho)
     except vault.ForaDoVault:
         return None
     return caminho
@@ -405,7 +424,7 @@ def _grafo_local(mapa: grafo.Mapa, indice: links.Indice, aberto: str) -> str:
 
 def _editor(raiz: Path, aberto: str, agora: datetime, indice: links.Indice,
             modo: str = "dividido", entradas: list | None = None, local: str = "",
-            previa_de=None) -> str:
+            previa_de=None, indice_desenhos=None) -> str:
     """O editor da nota aberta.
 
     Corretor desligado em nota privada: o "corretor avançado" do Chrome manda
@@ -479,7 +498,7 @@ def _editor(raiz: Path, aberto: str, agora: datetime, indice: links.Indice,
 <textarea id="editor" spellcheck="{"false" if privada else "true"}" data-caminho="{escape(aberto)}"
   data-versao="{escape(str(arquivo.stat().st_mtime_ns))}">
 {escape(texto)}</textarea></div>
-<article id="previa" class="previa">{markdown.renderizar(texto, aberto, indice, anexos.indice(raiz), desenhos.indice(raiz), previa_de)}</article>
+<article id="previa" class="previa">{markdown.renderizar(texto, aberto, indice, anexos.indice(raiz), indice_desenhos or desenhos.indice(raiz), previa_de)}</article>
 </div>
 <div class="ao-redor">{_backlinks(entradas or [])}{local}</div>"""
 
@@ -496,8 +515,8 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
     itens = vault.arvore(raiz)
     indice = links.indice(raiz, itens)
     # para o [[ sugerir desenhos também
-    caminhos_de_desenho = sorted(desenhos.indice(raiz, itens).por_caminho.values(),
-                                 key=str.casefold)
+    indice_desenhos = desenhos.indice(raiz, itens)
+    caminhos_de_desenho = sorted(indice_desenhos.por_caminho.values(), key=str.casefold)
     aberto = _escolher(ctx, raiz, arquivo, nota, indice)
     if aberto:
         # antes de mostrar: a caixa "privada" lê o frontmatter
@@ -520,9 +539,9 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
     if tag:
         resumo += f" · tag: #{tag}"
 
-    mapa = grafo.mapa(raiz, indice)
+    mapa = grafo.mapa(raiz, indice, indice_desenhos)
     entradas = mapa.entradas(aberto) if aberto else []
-    quebrados_todos = mapa.quebrados()
+    quebrados_todos = mapa.quebrados() + mapa.desenhos_quebrados()
     voltar = (f'<a class="limpar" href="{escape(_href(aberto)) if aberto else "/notas"}">'
               f'voltar às pastas</a>')
 
@@ -592,7 +611,8 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
 
         corpo = _editor(raiz, aberto, agora, indice, _modo(modo), entradas,
                         _grafo_local(mapa, indice, aberto),
-                        partial(previas.previa_de, Path(ctx.config.data_dir), raiz))
+                        partial(previas.previa_de, Path(ctx.config.data_dir), raiz),
+                        indice_desenhos)
     else:
         corpo = '<p class="vazio">Escolha uma nota à esquerda ou crie uma nova.</p>'
 

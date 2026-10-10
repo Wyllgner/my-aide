@@ -452,9 +452,19 @@ JS = r"""
   document.querySelectorAll(".criar-quebrado").forEach(function (botao) {
     botao.addEventListener("click", function () {
       var caminho = botao.dataset.caminho;
+      var desenho = botao.dataset.tipo === "desenho";
       botao.disabled = true;
-      pedir("POST", "/api/notas/arquivo", { caminho: caminho }).then(function (r) {
-        if (r.ok || r.status === 409) { abrir(caminho); return; }
+      pedir("POST", desenho ? "/api/desenhos/arquivo" : "/api/notas/arquivo",
+            { caminho: caminho }).then(function (r) {
+        if (r.ok || r.status === 409) {
+          if (desenho) {
+            location.href = "/desenho?caminho=" + encodeURIComponent(caminho)
+              + "&de=" + encodeURIComponent(botao.dataset.de || "");
+          } else {
+            abrir(caminho);
+          }
+          return;
+        }
         botao.disabled = false;
         erroDe(r).then(function (m) { botao.textContent = m; });
       });
