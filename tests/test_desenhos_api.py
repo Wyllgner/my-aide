@@ -612,3 +612,20 @@ def test_link_que_nao_e_do_vault_e_recusado(cliente, alvo):
 
 def test_link_de_desenho_fora_do_vault_e_recusado(cliente):
     assert _link(cliente, "[[Telhado]]", caminho="../fora.excalidraw").status_code == 400
+
+
+def test_renomear_nota_conserta_o_link_do_desenho_e_audita(cliente, com_notas, app):
+    import json as json_
+
+    arquivo = com_notas / "Projetos" / "Casa.excalidraw"
+    dados = json_.loads(arquivo.read_text())
+    dados["elements"] = [{"type": "rectangle", "id": "a", "link": "[[Telhado]]"}]
+    arquivo.write_text(json_.dumps(dados))
+    resposta = cliente.post("/api/notas/mover", json={"de": "Projetos/Telhado.md",
+                                                      "para": "Projetos/Cobertura.md"})
+    assert resposta.status_code == 200, resposta.text
+    assert resposta.json()["desenhos_atualizados"] == ["Projetos/Casa.excalidraw"]
+    assert json_.loads(arquivo.read_text())["elements"][0]["link"] == "[[Cobertura]]"
+    trilha = app.state.conn_factory().execute(
+        "SELECT args_json FROM audit WHERE tool = 'notas.mover'").fetchone()[0]
+    assert json_.loads(trilha)["desenhos_atualizados"] == ["Projetos/Casa.excalidraw"]

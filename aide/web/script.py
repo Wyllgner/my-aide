@@ -39,8 +39,10 @@ JS = r"""
     var pulou = d.links_nao_atualizados || [];
     var partes = [];
     if (n) { partes.push(n === 1 ? "1 nota teve o link atualizado" : n + " notas tiveram o link atualizado"); }
+    var nd = (d.desenhos_atualizados || []).length;
+    if (nd) { partes.push(nd === 1 ? "1 desenho teve o link atualizado" : nd + " desenhos tiveram o link atualizado"); }
     if (pulou.length) {
-      partes.push("não consegui atualizar o link em " + pulou.join(", ") + " (arquivo fora de UTF-8 ou sem permissão)");
+      partes.push("não consegui atualizar o link em " + pulou.join(", ") + " (arquivo ilegível ou sem permissão)");
     }
     try {
       sessionStorage.setItem("aide.notas.aviso", partes.join(" · "));
