@@ -725,11 +725,12 @@ def test_a_web_so_pode_calar_a_trilha_porque_as_telas_nao_escrevem(app):
     escrita = {rota.path for rota in app.routes
                if getattr(rota, "methods", set()) - {"GET", "HEAD"}}
     # /api/notas/anexo e /api/notas/ligar auditam também (test_anexos, test_notas_api);
-    # os desenhos, em test_desenhos_api
+    # os desenhos, em test_desenhos_api. /api/desenhos/previa é a exceção de
+    # propósito: grava cache fora do vault (data/previas-desenho), não dado seu
     assert escrita == {"/api/notas/arquivo", "/api/notas/pasta", "/api/notas/mover",
                        "/api/notas/mover-pasta", "/api/notas/anexo", "/api/notas/ligar",
                        "/api/desenhos/arquivo", "/api/desenhos/biblioteca",
-                       "/api/desenhos/mover"}
+                       "/api/desenhos/mover", "/api/desenhos/previa"}
 
 
 # ---------- a janela antiga ----------

@@ -5,8 +5,9 @@ que não veio desta página, e `desenhos.resolver` recusa todo caminho que não
 seja um desenho comum dentro do vault. O conteúdo é conferido por
 `desenhos.validar` antes de chegar ao disco.
 
-Toda escrita entra na auditoria com `actor="web"`: o caminho e, quando muda,
-a marcação de privado — nunca o desenho, que pode ter texto privado dentro.
+Toda escrita no vault entra na auditoria com `actor="web"`: o caminho e,
+quando muda, a marcação de privado — nunca o desenho, que pode ter texto
+privado dentro. A prévia em PNG não: é cache fora do vault (`previas.py`).
 """
 
 from __future__ import annotations
@@ -14,13 +15,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from aide.storage import desenhos, vault
+from aide.storage import desenhos, previas, vault
 from aide.web.notas_api import versao
 
 
 def instalar(app) -> None:
-    from fastapi import Body, HTTPException, Query
-    from fastapi.responses import JSONResponse
+    from fastapi import Body, HTTPException, Query, Request
+    from fastapi.responses import FileResponse, JSONResponse
 
     config = app.state.config
 
@@ -40,6 +41,16 @@ def instalar(app) -> None:
             " VALUES ('web', ?, ?, 'ok', 1)",
             (acao, json.dumps({"caminho": caminho, **extra}, ensure_ascii=False)))
 
+    def dados_dir() -> Path:
+        return Path(config.data_dir)
+
+    def com_previa(caminho: str, arquivo: Path) -> dict:
+        """A assinatura do arquivo como está no disco, e se já há prévia dela:
+        a página gera a que falta depois de salvar ou ao abrir."""
+        assinatura = previas.assinatura_do_arquivo(arquivo)
+        return {"assinatura": assinatura,
+                "previa": previas.achar(dados_dir(), caminho, assinatura) is not None}
+
     def ler(arquivo: Path) -> tuple[str, dict]:
         """O desenho do disco, ou o erro que a página sabe mostrar: um arquivo
         posto por fora pode ser grande demais, binário ou JSON torto."""
@@ -55,7 +66,7 @@ def instalar(app) -> None:
         arquivo = local(caminho)
         texto, dados = ler(arquivo)
         return {"caminho": caminho, "texto": texto, "versao": versao(arquivo),
-                "privada": desenhos.privado(dados)}
+                "privada": desenhos.privado(dados), **com_previa(caminho, arquivo)}
 
     @app.put("/api/desenhos/arquivo")
     def salvar(caminho: str = Body(...), texto: str = Body(...),
@@ -83,7 +94,10 @@ def instalar(app) -> None:
         dados = desenhos.gravar(arquivo, texto, privada=antes if privada is None else privada)
         depois = desenhos.privado(dados)
         auditar("desenhos.salvar", caminho, **({"privada": depois} if depois != antes else {}))
-        return {"caminho": caminho, "versao": versao(arquivo), "privada": depois}
+        # a assinatura é do que ficou no disco: com a marcação de privado
+        # reposta, o texto gravado não é o que a página mandou
+        return {"caminho": caminho, "versao": versao(arquivo), "privada": depois,
+                **com_previa(caminho, arquivo)}
 
     @app.post("/api/desenhos/arquivo", status_code=201)
     def criar(caminho: str = Body(..., embed=True)) -> dict:
@@ -101,6 +115,7 @@ def instalar(app) -> None:
         if not arquivo.is_file():
             raise HTTPException(404, "desenho não encontrado")
         destino = vault.para_lixeira(raiz(), arquivo)
+        previas.limpar(dados_dir(), caminho)
         auditar("desenhos.apagar", caminho)
         return {"caminho": caminho, "lixeira": destino.name if destino else None}
 
@@ -117,8 +132,56 @@ def instalar(app) -> None:
             vault.mover(origem, destino)
         except FileExistsError:
             raise HTTPException(409, "já existe um desenho com esse nome") from None
+        # no lugar novo, a próxima abertura gera a prévia de novo
+        previas.limpar(dados_dir(), de)
         auditar("desenhos.mover", de, para=para)
         return {"caminho": para, "versao": versao(destino)}
+
+    # ---------- a prévia em PNG, para ![[desenho.excalidraw]] numa nota ----------
+
+    @app.get("/api/desenhos/previa")
+    def previa(caminho: str = Query(...)):
+        """A prévia da versão que está no disco; 404 se ela ainda não foi gerada.
+        Imagem, com CSP fechada e sem cache: o desenho pode ser privado."""
+        arquivo = local(caminho)
+        if not arquivo.is_file():
+            raise HTTPException(404, "desenho não encontrado")
+        png = previas.achar(dados_dir(), caminho, previas.assinatura_do_arquivo(arquivo))
+        if png is None:
+            raise HTTPException(404, "sem prévia desta versão")
+        return FileResponse(png, media_type="image/png", headers={
+            "content-security-policy": "default-src 'none'", "cache-control": "no-store"})
+
+    async def guardar_previa(request, caminho: str = Query(...),
+                             assinatura: str = Query(...)):
+        """O PNG que a página exportou. Só para a versão que está no disco: a
+        assinatura tem de bater, senão é uma prévia velha (ou outra coisa)."""
+        arquivo = local(caminho)
+        if not arquivo.is_file():
+            raise HTTPException(404, "desenho não encontrado")
+        if not previas.ASSINATURA.fullmatch(assinatura):
+            raise HTTPException(400, "assinatura inválida")
+        if assinatura != previas.assinatura_do_arquivo(arquivo):
+            raise HTTPException(409, "o desenho mudou; esta prévia é de outra versão")
+        # contado enquanto chega: o limite vale mesmo sem Content-Length
+        partes, total = [], 0
+        async for pedaco in request.stream():
+            total += len(pedaco)
+            if total > previas.TAMANHO_MAXIMO:
+                raise HTTPException(413, "prévia grande demais")
+            partes.append(pedaco)
+        try:
+            previas.guardar(dados_dir(), caminho, assinatura, b"".join(partes))
+        except previas.PreviaInvalida as erro:
+            raise HTTPException(415, str(erro)) from None
+        # de quebra, tira as prévias de desenhos que sumiram por fora
+        previas.podar(dados_dir(), desenhos.indice(raiz()).por_caminho.values())
+        return {"caminho": caminho, "assinatura": assinatura}
+
+    # a anotação vira texto com o `from __future__`, e o Request daqui de
+    # dentro não seria achado: como no anexo das notas
+    guardar_previa.__annotations__["request"] = Request
+    app.put("/api/desenhos/previa")(guardar_previa)
 
     # ---------- a biblioteca de formas (uma só, Biblioteca.excalidrawlib) ----------
 
