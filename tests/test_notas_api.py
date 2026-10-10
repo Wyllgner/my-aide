@@ -503,3 +503,31 @@ def test_previa_ao_salvar_ja_liga_o_desenho(cliente, vault_dir):
     html = resposta.json()["html"]
     assert 'class="wikilink desenho" href="/desenho?caminho=Inbox/Planta.excalidraw' in html
     assert 'class="wikilink desenho quebrado"' in html
+
+
+def test_pasta_apagada_ou_movida_leva_as_previas_dos_desenhos(cliente, app, vault_dir):
+    from pathlib import Path
+
+    from aide.storage import desenhos, previas
+
+    dados = Path(app.state.config.data_dir)
+    png = previas.PNG + b"x"
+    for nome in ("Planta", "Corte"):
+        arquivo = vault_dir / "Inbox" / f"{nome}.excalidraw"
+        arquivo.write_text(desenhos.vazio())
+        previas.guardar(dados, f"Inbox/{nome}.excalidraw",
+                        previas.assinatura_do_arquivo(arquivo), png)
+    (vault_dir / "Fica.excalidraw").write_text(desenhos.vazio())
+    previas.guardar(dados, "Fica.excalidraw",
+                    previas.assinatura_do_arquivo(vault_dir / "Fica.excalidraw"), png)
+
+    cliente.post("/api/notas/mover-pasta", json={"de": "Inbox", "para": "Arquivo"})
+    assert previas.previa_de(dados, vault_dir, "Inbox/Planta.excalidraw") is None
+    assert len(list((dados / previas.PASTA).glob("*.png"))) == 1
+
+    previas.guardar(dados, "Arquivo/Corte.excalidraw",
+                    previas.assinatura_do_arquivo(vault_dir / "Arquivo" / "Corte.excalidraw"), png)
+    cliente.delete("/api/notas/pasta", params={"caminho": "Arquivo"})
+    # só sobra a do desenho que continua no vault
+    assert previas.previa_de(dados, vault_dir, "Fica.excalidraw") is not None
+    assert len(list((dados / previas.PASTA).glob("*.png"))) == 1
