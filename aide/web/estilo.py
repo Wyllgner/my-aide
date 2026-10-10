@@ -575,6 +575,10 @@ button.atalho-visao { width: 100%; border: 0; background: none; font: inherit; f
 .desenho-nome { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
   white-space: nowrap; font-size: 14px; }
 .desenho-pasta { color: var(--muted); }
+.desenho-renomear { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.desenho-renomear input { flex: 1; min-width: 0; font: inherit; font-size: 14px; height: 32px;
+  padding: 0 10px; border: 1px solid var(--borda); border-radius: var(--r-inner); }
+.desenho-renomear .dica { font-size: 12px; color: var(--faint); white-space: nowrap; }
 .desenho-estado { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
 .desenho-estado.erro { color: var(--accent); }
 .desenho-editor { flex: 1; min-height: 0; position: relative; }
