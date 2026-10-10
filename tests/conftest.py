@@ -30,9 +30,11 @@ def sem_rede(monkeypatch):
 
 
 @pytest.fixture
-def config():
-    """Config do projeto, com as credenciais reais neutralizadas."""
+def config(tmp_path):
+    """Config do projeto, com as credenciais reais neutralizadas e `data/`
+    numa pasta temporária: teste nenhum escreve nem apaga nos dados reais."""
     cfg = load_config()
+    object.__setattr__(cfg, "data_dir", tmp_path / "data")
     object.__setattr__(cfg.telegram, "enabled", False)
     object.__setattr__(cfg.telegram, "token", None)
     object.__setattr__(cfg.telegram, "allowed_chat_ids", ())
