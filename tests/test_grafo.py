@@ -79,8 +79,8 @@ def test_arquivo_mudado_e_lido_de_novo(raiz):
 def test_arquivo_sem_mudanca_nao_e_relido(raiz, monkeypatch):
     grafo.mapa(raiz)
     lidos = []
-    original = grafo.citacoes
-    monkeypatch.setattr(grafo, "citacoes", lambda t: lidos.append(t) or original(t))
+    original = grafo.citacoes_separadas
+    monkeypatch.setattr(grafo, "citacoes_separadas", lambda t: lidos.append(t) or original(t))
     grafo.mapa(raiz)
     assert lidos == []
 
@@ -133,3 +133,53 @@ def test_link_markdown_para_secao_da_propria_nota_entra():
 ])
 def test_caminho_que_o_link_pede(texto, origem, pedido):
     assert citacoes(texto)[0].caminho_pedido(origem) == pedido
+
+
+# ---------- desenhos ----------
+
+@pytest.fixture
+def com_desenhos(raiz):
+    from aide.storage import desenhos
+
+    (raiz / "Projetos/Casa/Planta.excalidraw").write_text(desenhos.vazio())
+    (raiz / "Inbox/Ideias.md").write_text(
+        "a [[Planta.excalidraw]] e [[Telhado]]\n\n![[Projetos/Casa/Planta.excalidraw|400]]"
+        "\n\n[[Sumido.excalidraw]]")
+    return raiz
+
+
+def test_link_de_desenho_fica_fora_das_ligacoes_entre_notas(com_desenhos):
+    mapa = grafo.mapa(com_desenhos)
+    assert all(not lig.citacao.alvo.endswith(".excalidraw") for lig in mapa.ligacoes)
+    assert [lig.citacao.alvo for lig in mapa.entradas("Projetos/Casa/Telhado.md")
+            if lig.origem == "Inbox/Ideias.md"] == ["Telhado"]
+
+
+def test_quem_cita_o_desenho_com_a_linha(com_desenhos):
+    citam = grafo.mapa(com_desenhos).citam_desenho("Projetos/Casa/Planta.excalidraw")
+    assert [(lig.origem, lig.citacao.linha) for lig in citam] == [
+        ("Inbox/Ideias.md", 0), ("Inbox/Ideias.md", 2)]
+
+
+def test_desenho_que_nao_existe_e_quebrado_a_parte(com_desenhos):
+    mapa = grafo.mapa(com_desenhos)
+    assert [lig.citacao.alvo for lig in mapa.desenhos_quebrados()] == ["Sumido.excalidraw"]
+    # a lista de quebrados das notas não muda
+    assert [lig.citacao.alvo for lig in mapa.quebrados()] == ["Fornecedores"]
+
+
+def test_caminho_pedido_do_desenho_nao_ganha_md():
+    from aide.web.markdown import Citacao
+
+    assert Citacao("wiki", "Sumido.excalidraw", "", 0).caminho_pedido(
+        "Inbox/Ideias.md") == "Inbox/Sumido.excalidraw"
+    assert Citacao("wiki", "Outra/Sumido.excalidraw", "", 0).caminho_pedido(
+        "Inbox/Ideias.md") == "Outra/Sumido.excalidraw"
+
+
+def test_citacoes_separadas_numa_passada_so():
+    from aide.web.markdown import citacoes_separadas
+
+    notas, de_desenhos = citacoes_separadas("[[A]] [[B.excalidraw]]\n[[C]] ![[foto.png]]")
+    assert [c.alvo for c in notas] == ["A", "C"]
+    assert [(c.alvo, c.linha) for c in de_desenhos] == [("B.excalidraw", 0)]
