@@ -223,3 +223,58 @@ def test_arquivo_novo_sem_marcacao_nasce_normal(raiz):
     caminho = desenhos.resolver(raiz, "Novo.excalidraw")
     desenhos.gravar(caminho, _do_editor())
     assert not desenhos.privado(desenhos.ler(caminho)[1])
+
+
+# ---------- a biblioteca de formas ----------
+
+def _biblioteca(*itens) -> str:
+    return json.dumps({"type": "excalidrawlib", "version": 2, "source": "x",
+                       "libraryItems": list(itens)})
+
+
+def _forma(id_="f1") -> dict:
+    return {"id": id_, "status": "unpublished", "created": 1,
+            "elements": [{"id": "e", "type": "rectangle"}]}
+
+
+def test_biblioteca_que_nao_existe_e_a_vazia(raiz):
+    _texto, dados = desenhos.ler_biblioteca(raiz)
+    assert dados["libraryItems"] == []
+    assert not (raiz / desenhos.BIBLIOTECA).exists()
+
+
+def test_biblioteca_grava_na_raiz_so_para_o_dono_e_le_de_volta(raiz):
+    desenhos.gravar_biblioteca(raiz, _biblioteca(_forma()))
+    arquivo = raiz / "Biblioteca.excalidrawlib"
+    assert arquivo.stat().st_mode & 0o777 == 0o600
+    assert desenhos.ler_biblioteca(raiz)[1]["libraryItems"][0]["id"] == "f1"
+
+
+@pytest.mark.parametrize("texto", [
+    "{}", "[]", desenhos.vazio(), '{"type": "excalidrawlib"}',
+    '{"type": "excalidrawlib", "libraryItems": {}}',
+    '{"type": "excalidrawlib", "libraryItems": [{"id": "a"}]}',
+    '{"type": "excalidrawlib", "libraryItems": [{"elements": [1]}]}',
+    '{"type": "excalidrawlib", "libraryItems": [], "x": NaN}',
+])
+def test_biblioteca_torta_e_recusada(raiz, texto):
+    with pytest.raises(DesenhoInvalido):
+        desenhos.gravar_biblioteca(raiz, texto)
+    assert not (raiz / desenhos.BIBLIOTECA).exists()
+
+
+def test_biblioteca_grande_demais(raiz, monkeypatch):
+    monkeypatch.setattr(desenhos, "TAMANHO_BIBLIOTECA", 50)
+    with pytest.raises(DesenhoInvalido, match="grande"):
+        desenhos.gravar_biblioteca(raiz, _biblioteca(_forma()))
+
+
+def test_biblioteca_que_virou_link_simbolico_nao_e_lida_nem_gravada(raiz, tmp_path):
+    fora = tmp_path / "fora.excalidrawlib"
+    fora.write_text(_biblioteca())
+    (raiz / desenhos.BIBLIOTECA).symlink_to(fora)
+    with pytest.raises(ForaDoVault):
+        desenhos.ler_biblioteca(raiz)
+    with pytest.raises(ForaDoVault):
+        desenhos.gravar_biblioteca(raiz, _biblioteca(_forma()))
+    assert fora.read_text() == _biblioteca()
