@@ -1231,6 +1231,20 @@ JS = r"""
     if (!alvo) { return; }
     var pasta = caminho.lastIndexOf("/") >= 0 ? caminho.slice(0, caminho.lastIndexOf("/")) : "";
     var novo = (alvo.indexOf("/") >= 0 || !pasta ? alvo : pasta + "/" + alvo);
+    if (/\.excalidraw$/i.test(novo)) {
+      // [[Planta.excalidraw]] pede um desenho, não uma nota Planta.excalidraw.md
+      garantirSalvo().then(function () {
+        return pedir("POST", "/api/desenhos/arquivo", { caminho: novo });
+      }).then(function (r) {
+        if (r.ok || r.status === 409) {
+          location.href = "/desenho?caminho=" + encodeURIComponent(novo)
+            + "&de=" + encodeURIComponent(caminho);
+        } else {
+          erroDe(r).then(function (m) { mostrar(m, "erro"); });
+        }
+      }).catch(function (e) { mostrar(e.message, "erro"); });
+      return;
+    }
     if (!/\.md$/i.test(novo)) { novo += ".md"; }
     garantirSalvo().then(function () {
       return pedir("POST", "/api/notas/arquivo", { caminho: novo });
