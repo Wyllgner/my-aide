@@ -117,7 +117,9 @@ def _escolher(ctx, raiz: Path, arquivo: str | None, nota: int | None,
                 return arquivo
         except vault.ForaDoVault:
             pass
-    if nota is not None:
+    # fora do inteiro do SQLite o id não existe (e o sqlite3 levantaria
+    # OverflowError): cai na nota mais recente, como um id que não há
+    if nota is not None and -2**63 <= nota < 2**63:
         row = ctx.conn.execute("SELECT path FROM notes WHERE id = ? AND deleted_at IS NULL",
                                (nota,)).fetchone()
         if row and Path(row["path"]).is_file():
