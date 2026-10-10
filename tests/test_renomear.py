@@ -247,3 +247,61 @@ def test_desenho_que_nao_abre_vai_para_as_puladas(raiz, monkeypatch):
     renomear.mover(raiz, "Projetos/Casa/Telhado.md", "Projetos/Casa/Cobertura.md",
                    puladas, mudados)
     assert puladas == ["Corte.excalidraw"] and mudados == []
+
+
+# ---------- renomear desenho: o link de outros desenhos ----------
+
+def test_renomear_desenho_conserta_o_link_de_outro_desenho(raiz):
+    from aide.storage import desenhos
+
+    (raiz / "Projetos/Casa/Planta.excalidraw").write_text(desenhos.vazio())
+    _desenho(raiz, "Inbox/Ideias.excalidraw", "[[Planta.excalidraw|a planta]]",
+             "Projetos/Casa/Planta.excalidraw", "[[Reunião]]")
+    mudados = []
+    renomear.mover_desenho(raiz, "Projetos/Casa/Planta.excalidraw",
+                           "Projetos/Casa/Corte.excalidraw", desenhos_mudados=mudados)
+    assert mudados == ["Inbox/Ideias.excalidraw"]
+    assert _links(raiz, "Inbox/Ideias.excalidraw") == [
+        "[[Corte.excalidraw|a planta]]", "Corte.excalidraw", "[[Reunião]]"]
+
+
+def test_desenho_movido_refaz_os_proprios_links(raiz):
+    from aide.storage import desenhos
+
+    (raiz / "Projetos/Casa/Planta.excalidraw").write_text(desenhos.vazio())
+    _desenho(raiz, "Projetos/Casa/Corte.excalidraw", "Telhado.md", "[[Corte.excalidraw]]",
+             "[[Planta.excalidraw]]")
+    (raiz / "Inbox" / "Planta.excalidraw").write_text(desenhos.vazio())
+    mudados = []
+    renomear.mover_desenho(raiz, "Projetos/Casa/Corte.excalidraw", "Inbox/Corte.excalidraw",
+                           desenhos_mudados=mudados)
+    assert mudados == ["Inbox/Corte.excalidraw"]
+    # o .md relativo muda de pasta; o link para si mesmo segue o nome; e a
+    # Planta da pasta nova não rouba o link que levava à de Projetos/Casa
+    assert _links(raiz, "Inbox/Corte.excalidraw") == [
+        "../Projetos/Casa/Telhado.md", "[[Corte.excalidraw]]",
+        "[[Projetos/Casa/Planta.excalidraw]]"]
+
+
+def test_mover_pasta_conserta_link_de_desenho_com_caminho(raiz):
+    from aide.storage import desenhos
+
+    (raiz / "Projetos/Casa/Planta.excalidraw").write_text(desenhos.vazio())
+    _desenho(raiz, "Inbox/Ideias.excalidraw", "[[Projetos/Casa/Planta.excalidraw]]")
+    mudados = []
+    renomear.mover_pasta(raiz, "Projetos", "Arquivo", desenhos_mudados=mudados)
+    assert mudados == ["Inbox/Ideias.excalidraw"]
+    assert _links(raiz, "Inbox/Ideias.excalidraw") == ["[[Planta.excalidraw]]"]
+
+
+def test_sem_desenhos_mudados_nao_le_o_mapa(raiz, monkeypatch):
+    """Quem não pede (o mover antigo) não paga a leitura dos desenhos."""
+    from aide.storage import desenhos
+
+    (raiz / "Planta.excalidraw").write_text(desenhos.vazio())
+
+    def proibido(*_a, **_k):
+        raise AssertionError("leu o mapa")
+
+    monkeypatch.setattr(renomear.grafo, "mapa", proibido)
+    renomear.mover_desenho(raiz, "Planta.excalidraw", "Corte.excalidraw")

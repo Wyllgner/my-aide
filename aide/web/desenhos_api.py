@@ -132,7 +132,8 @@ def instalar(app) -> None:
     @app.post("/api/desenhos/mover")
     def mover(de: str = Body(...), para: str = Body(...)) -> dict:
         """Renomeia ou muda de pasta, nunca por cima de outro arquivo, e
-        conserta os [[...excalidraw]] das notas que levavam a ele."""
+        conserta os [[...excalidraw]] das notas e o link dos elementos dos
+        desenhos que levavam a ele."""
         from aide.storage.reconciliacao import sincronizar
         from aide.web import renomear
 
@@ -142,8 +143,9 @@ def instalar(app) -> None:
         if destino.exists():
             raise HTTPException(409, "já existe um desenho com esse nome")
         puladas: list[str] = []
+        desenhos_mudados: list[str] = []
         try:
-            mudadas = renomear.mover_desenho(raiz(), de, para, puladas)
+            mudadas = renomear.mover_desenho(raiz(), de, para, puladas, desenhos_mudados)
         except FileExistsError:
             raise HTTPException(409, "já existe um desenho com esse nome") from None
         conn = app.state.conn_factory()
@@ -153,9 +155,9 @@ def instalar(app) -> None:
         previas.limpar(dados_dir(), de)
         desenhos.mover_marcas(dados_dir(), de, para)
         auditar("desenhos.mover", de, para=para, links_atualizados=mudadas,
-                links_nao_atualizados=puladas)
+                desenhos_atualizados=desenhos_mudados, links_nao_atualizados=puladas)
         return {"caminho": para, "versao": versao(destino), "links_atualizados": mudadas,
-                "links_nao_atualizados": puladas}
+                "desenhos_atualizados": desenhos_mudados, "links_nao_atualizados": puladas}
 
     @app.get("/api/desenhos/link")
     def link(caminho: str = Query(...), alvo: str = Query(..., max_length=2000)) -> dict:
