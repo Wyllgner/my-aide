@@ -203,3 +203,18 @@ def test_botao_apagar_na_barra(cliente):
     html = _tela(cliente).text
     barra = html[html.index('<header class="desenho-barra">'):html.index("</header>")]
     assert 'id="apagar" class="botao botao-perigo"' in barra
+
+
+def test_previa_so_da_versao_salva_e_com_a_marca_da_pagina():
+    """Exportar com mudança por salvar mostraria na nota o que não está no
+    arquivo; e a imagem vai presa à assinatura que o servidor devolveu."""
+    from aide.web.desenho_script import JS
+
+    gerar = JS[JS.index("async function gerarPrevia"):JS.index("function textoDaBiblioteca")]
+    assert "apagado || pendente()) return;" in gerar
+    assert "if (!pendente()) {" in gerar
+    assert '"&assinatura=" + encodeURIComponent(daVersao)' in gerar
+    assert '"X-Aide": "1"' in gerar and 'method: "PUT"' in gerar
+    assert "maxWidthOrHeight: 1600" in gerar
+    # pede depois de salvar e ao abrir, só quando o servidor diz que falta
+    assert JS.count("if (!dados.previa) pedirPrevia(dados.assinatura);") == 2
