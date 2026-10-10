@@ -305,16 +305,64 @@ async function irPeloVault(link) {
     return;
   }
   if (!dados.existe) {
-    avisar((dados.tipo === "desenho" ? "o desenho " : "a nota ") + dados.caminho
-           + " ainda não existe", true);
+    oferecerCriar(dados);
     return;
   }
-  let href = dados.href;
+  sair(hrefDe(dados.tipo, dados.href));
+}
+
+function hrefDe(tipo, href) {
   // de desenho em desenho, o "Notas" continua voltando para a nota de origem
   const de = new URLSearchParams(location.search).get("de");
-  if (dados.tipo === "desenho" && de) href += "&de=" + encodeURIComponent(de);
-  sair(href);
+  return tipo === "desenho" && de ? href + "&de=" + encodeURIComponent(de) : href;
 }
+
+// o link pede o que não existe: como nas notas, dá para criar — mas aqui
+// pergunta antes, porque o clique no link não diz que vai criar arquivo
+const faixaFaltando = document.getElementById("link-faltando");
+const botaoCriar = document.getElementById("link-criar");
+let faltando = null;
+
+function oferecerCriar(dados) {
+  faltando = dados;
+  document.getElementById("link-faltando-texto").textContent =
+    (dados.tipo === "desenho" ? "O desenho " : "A nota ") + dados.caminho + " ainda não existe.";
+  botaoCriar.disabled = false;
+  faixaFaltando.hidden = false;
+  botaoCriar.focus();
+}
+
+function esconderFaltando() {
+  faltando = null;
+  faixaFaltando.hidden = true;
+}
+
+document.getElementById("link-deixar").addEventListener("click", esconderFaltando);
+faixaFaltando.addEventListener("keydown", (evento) => {
+  if (evento.key === "Escape") esconderFaltando();
+});
+
+botaoCriar.addEventListener("click", async () => {
+  if (faltando === null) return;
+  const { tipo, caminho: novo } = faltando;
+  botaoCriar.disabled = true;
+  try {
+    const resposta = await pedir("POST", tipo === "desenho" ? "/api/desenhos/arquivo"
+                                                             : "/api/notas/arquivo", { caminho: novo });
+    // 409: alguém criou no meio; abre o que já existe
+    if (!resposta.ok && resposta.status !== 409) {
+      const dados = await resposta.json().catch(() => ({}));
+      throw new Error(dados.detail || "não consegui criar");
+    }
+  } catch (e) {
+    botaoCriar.disabled = false;
+    avisar(e.message === "Failed to fetch" ? "sem conexão com o my-aide" : e.message, true);
+    return;
+  }
+  esconderFaltando();
+  sair(hrefDe(tipo, tipo === "desenho" ? "/desenho?caminho=" + encodeURIComponent(novo)
+                                       : "/notas?arquivo=" + encodeURIComponent(novo)));
+});
 
 // sai da tela só com tudo salvo; com conflito, ou se o salvamento falhou,
 // fica (o aviso do salvamento já está na barra)

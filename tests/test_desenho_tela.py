@@ -311,3 +311,15 @@ def test_sair_pelo_link_so_com_tudo_salvo():
     sair = sair[:sair.index("\n}\n")]
     assert sair.index("await esperarSalvar();") < sair.index("location.href = href;")
     assert "if (pendente()) return;" in sair
+
+
+def test_link_para_o_que_falta_pergunta_antes_de_criar(cliente):
+    """O clique no link não diz que vai criar arquivo: a faixa pergunta."""
+    from aide.web.desenho_script import JS
+
+    assert re.search(r'<div id="link-faltando"[^>]*\bhidden\b', _tela(cliente).text)
+    vault = JS[JS.index("async function irPeloVault("):JS.index("function hrefDe(")]
+    assert "oferecerCriar(dados);" in vault and "POST" not in vault
+    criar = JS[JS.index('botaoCriar.addEventListener("click"'):]
+    assert criar.index('pedir("POST"') < criar.index("sair(hrefDe(")
+    assert "resposta.status !== 409" in criar
