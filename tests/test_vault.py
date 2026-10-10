@@ -439,3 +439,14 @@ def test_chave_vazia_sem_lista_continua_vazia():
 def test_privada_em_yaml_continua_valendo():
     meta, _ = vault.separar("---\nprivate: true\ntags:\n  - x\n---\n")
     assert vault.privada(meta)
+
+
+def test_arvore_traz_desenho_como_tipo_proprio(tmp_path):
+    (tmp_path / "Projetos").mkdir()
+    (tmp_path / "Projetos" / "Planta.excalidraw").write_text("{}")
+    (tmp_path / "Projetos" / "Planta.excalidrawlib").write_text("{}")
+    (tmp_path / "Biblioteca.excalidrawlib").write_text("{}")
+    pasta = vault.arvore(tmp_path)[0]
+    assert pasta["filhos"] == [{"nome": "Planta", "caminho": "Projetos/Planta.excalidraw",
+                                "tipo": "desenho", "filhos": []}]
+    assert len(vault.arvore(tmp_path)) == 1
