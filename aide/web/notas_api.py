@@ -71,6 +71,13 @@ def instalar(app) -> None:
             raise HTTPException(413, "nota grande demais")
         return texto
 
+    def podar_previas() -> None:
+        """Pasta apagada ou movida leva os desenhos de dentro: as prévias deles
+        (cache em data/) saem já, em vez de esperar a próxima prévia salva."""
+        from aide.storage import desenhos, previas
+
+        previas.podar(Path(config.data_dir), desenhos.indice(raiz()).por_caminho.values())
+
     def previa(texto: str, caminho: str) -> str:
         from aide.storage import anexos, desenhos, links
         from aide.web import markdown
@@ -276,6 +283,7 @@ def instalar(app) -> None:
             atividade.mover(conn, velho, novo)
         for nota in mudadas:
             sincronizar(conn, raiz() / nota)
+        podar_previas()
         auditar("notas.mover_pasta", f"{de} → {para}", links_atualizados=mudadas,
                 links_nao_atualizados=puladas)
         return {"caminho": para, "notas_movidas": movidas, "links_atualizados": mudadas,
@@ -305,6 +313,7 @@ def instalar(app) -> None:
         # os desenhos vão junto; a trilha conta os dois
         desenhos = sum(1 for _ in pasta.rglob("*.excalidraw"))
         destino = vault.para_lixeira(raiz(), pasta)
+        podar_previas()
         auditar("notas.apagar_pasta", caminho, notas=len(notas), desenhos=desenhos)
         return {"caminho": caminho, "lixeira": destino.name if destino else None,
                 "notas": len(notas)}
