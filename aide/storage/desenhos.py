@@ -49,29 +49,37 @@ def vazio() -> str:
     }, ensure_ascii=False, indent=2) + "\n"
 
 
-def validar(texto: str) -> dict:
-    """O desenho lido de `texto`, ou DesenhoInvalido dizendo o porquê."""
+def _json(texto: str, limite: int, nome: str) -> object:
+    """O JSON de `texto`, conferido como o navegador vai ler, ou DesenhoInvalido."""
     if not isinstance(texto, str):
-        raise DesenhoInvalido("o desenho tem de ser texto")
+        raise DesenhoInvalido(f"{nome} tem de ser texto")
     try:
         tamanho = len(texto.encode("utf-8"))
     except UnicodeEncodeError:
         # um surrogate solto ("\ud800") passa pelo JSON do pedido mas não vira
         # UTF-8; sem isto, viraria erro 500 em vez de "desenho inválido"
         raise DesenhoInvalido("texto com caractere inválido") from None
-    if tamanho > TAMANHO_MAXIMO:
-        raise DesenhoInvalido("desenho grande demais")
+    if tamanho > limite:
+        raise DesenhoInvalido(f"{nome} grande demais")
     try:
         # NaN e Infinity o Python aceita e o JSON.parse do navegador não: o
         # arquivo seria gravado e depois não abriria no Excalidraw
-        dados = json.loads(texto, parse_constant=_recusar)
+        return json.loads(texto, parse_constant=_recusar)
     except (ValueError, RecursionError):
         raise DesenhoInvalido("não é JSON") from None
+
+
+def _elementos_validos(elementos) -> bool:
+    return isinstance(elementos, list) and all(
+        isinstance(e, dict) and isinstance(e.get("type"), str) for e in elementos)
+
+
+def validar(texto: str) -> dict:
+    """O desenho lido de `texto`, ou DesenhoInvalido dizendo o porquê."""
+    dados = _json(texto, TAMANHO_MAXIMO, "desenho")
     if not isinstance(dados, dict) or dados.get("type") != "excalidraw":
         raise DesenhoInvalido("não é um desenho do Excalidraw")
-    elementos = dados.get("elements", [])
-    if not isinstance(elementos, list) or not all(
-            isinstance(e, dict) and isinstance(e.get("type"), str) for e in elementos):
+    if not _elementos_validos(dados.get("elements", [])):
         raise DesenhoInvalido("elementos inválidos")
     for campo in ("appState", "files"):
         if not isinstance(dados.get(campo, {}), dict):
@@ -134,4 +142,58 @@ def criar(caminho: Path, texto: str | None = None) -> dict:
     texto = vazio() if texto is None else texto
     dados = validar(texto)
     vault.criar_nota(caminho, texto)
+    return dados
+
+
+# ---------- a biblioteca de formas ----------
+
+# Uma só, na raiz do vault, no formato do excalidraw.com (.excalidrawlib): o
+# que você guarda para reusar vale em todo desenho e abre fora daqui também.
+# O nome é fixo, nunca vem da página.
+BIBLIOTECA = "Biblioteca.excalidrawlib"
+# formas são vetor; uma biblioteca grande do site do Excalidraw tem centenas
+# de KB. O limite cabe no corpo de pedido comum da fronteira (3 MB), mesmo com
+# as aspas escapadas
+TAMANHO_BIBLIOTECA = 1024 * 1024
+
+
+def caminho_biblioteca(vault_dir: Path) -> Path:
+    """Pela mesma porta dos outros arquivos: recusa se virou link simbólico."""
+    return vault.resolver(vault_dir, BIBLIOTECA, extensoes=(".excalidrawlib",))
+
+
+def biblioteca_vazia() -> str:
+    return json.dumps({"type": "excalidrawlib", "version": 2, "source": "my-aide",
+                       "libraryItems": []}, ensure_ascii=False, indent=2) + "\n"
+
+
+def validar_biblioteca(texto: str) -> dict:
+    dados = _json(texto, TAMANHO_BIBLIOTECA, "biblioteca")
+    if not isinstance(dados, dict) or dados.get("type") != "excalidrawlib":
+        raise DesenhoInvalido("não é uma biblioteca do Excalidraw")
+    itens = dados.get("libraryItems")
+    if not isinstance(itens, list) or not all(
+            isinstance(i, dict) and _elementos_validos(i.get("elements")) for i in itens):
+        raise DesenhoInvalido("itens da biblioteca inválidos")
+    return dados
+
+
+def ler_biblioteca(vault_dir: Path) -> tuple[str, dict]:
+    """(texto, biblioteca); a vazia se o arquivo ainda não existe."""
+    caminho = caminho_biblioteca(vault_dir)
+    if not caminho.is_file():
+        texto = biblioteca_vazia()
+        return texto, validar_biblioteca(texto)
+    if caminho.stat().st_size > TAMANHO_BIBLIOTECA:
+        raise DesenhoInvalido("biblioteca grande demais")
+    try:
+        texto = caminho.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        raise DesenhoInvalido("não é texto UTF-8") from None
+    return texto, validar_biblioteca(texto)
+
+
+def gravar_biblioteca(vault_dir: Path, texto: str) -> dict:
+    dados = validar_biblioteca(texto)
+    vault.gravar(caminho_biblioteca(vault_dir), texto)
     return dados

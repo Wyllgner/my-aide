@@ -103,3 +103,43 @@ def instalar(app) -> None:
         destino = vault.para_lixeira(raiz(), arquivo)
         auditar("desenhos.apagar", caminho)
         return {"caminho": caminho, "lixeira": destino.name if destino else None}
+
+    # ---------- a biblioteca de formas (uma só, Biblioteca.excalidrawlib) ----------
+
+    def versao_da_biblioteca() -> str:
+        # "" enquanto o arquivo não existe: a primeira gravação cria
+        try:
+            caminho = desenhos.caminho_biblioteca(raiz())
+        except vault.ForaDoVault as erro:
+            raise HTTPException(400, str(erro)) from None
+        return versao(caminho) if caminho.is_file() else ""
+
+    def ler_biblioteca() -> str:
+        try:
+            return desenhos.ler_biblioteca(raiz())[0]
+        except desenhos.DesenhoInvalido as erro:
+            raise HTTPException(422, f"a biblioteca não abre: {erro}") from None
+        except vault.ForaDoVault as erro:
+            raise HTTPException(400, str(erro)) from None
+
+    @app.get("/api/desenhos/biblioteca")
+    def biblioteca() -> dict:
+        return {"texto": ler_biblioteca(), "versao": versao_da_biblioteca()}
+
+    @app.put("/api/desenhos/biblioteca")
+    def salvar_biblioteca(texto: str = Body(...), versao_lida: str = Body(..., alias="versao")):
+        """Com a versão lida, como os desenhos: outra aba pode ter guardado uma
+        forma no meio, e gravar por cima a apagaria. No 409 a página junta as
+        duas e manda de novo."""
+        try:
+            desenhos.validar_biblioteca(texto)
+        except desenhos.DesenhoInvalido as erro:
+            raise HTTPException(400, str(erro)) from None
+        atual = versao_da_biblioteca()
+        if atual != versao_lida:
+            return JSONResponse(status_code=409, content={
+                "erro": "a biblioteca mudou desde que você abriu",
+                "texto": ler_biblioteca(), "versao": atual})
+        desenhos.gravar_biblioteca(raiz(), texto)
+        auditar("desenhos.biblioteca", desenhos.BIBLIOTECA)
+        return {"versao": versao_da_biblioteca()}
