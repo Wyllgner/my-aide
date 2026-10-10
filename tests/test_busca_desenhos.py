@@ -146,3 +146,16 @@ def test_marcado_no_registro_e_privado_mesmo_sem_marca_no_arquivo(raiz):
 def test_marca_do_arquivo_vai_para_o_registro(raiz):
     _buscar(raiz, "dentista", incluir_privados=False)
     assert desenhos.marcados(raiz.parent / "data") == {"Diário.excalidraw"}
+
+
+# ---------- os links dos elementos ----------
+
+def test_links_dos_elementos_uma_vez_cada_sem_os_apagados(tmp_path):
+    arquivo = tmp_path / "L.excalidraw"
+    arquivo.write_text(_cena(
+        {"type": "rectangle", "id": "a", "link": " [[Telhado]] "},
+        {"type": "rectangle", "id": "b", "link": "[[Telhado]]"},
+        {"type": "rectangle", "id": "c", "link": "[[Velha]]", "isDeleted": True},
+        {"type": "rectangle", "id": "d", "link": None},
+        {"type": "rectangle", "id": "e", "link": "https://x.org"}))
+    assert busca_desenhos.ler(arquivo).links == ("[[Telhado]]", "https://x.org")
