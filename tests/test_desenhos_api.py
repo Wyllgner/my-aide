@@ -285,3 +285,51 @@ def test_biblioteca_de_fora_da_pagina_e_recusada(app, vault_dir):
     de_fora = TestClient(app, base_url=LOCAL, headers={"origin": "http://evil.com"})
     assert de_fora.put(BIB, json={"texto": _bib("a"), "versao": ""}).status_code == 403
     assert not (vault_dir / "Biblioteca.excalidrawlib").exists()
+
+
+# ---------- mover ----------
+
+MOVER = "/api/desenhos/mover"
+
+
+def test_mover_para_outra_pasta_e_audita(cliente, vault_dir, app):
+    resposta = cliente.post(MOVER, json={"de": "Projetos/Casa.excalidraw",
+                                         "para": "Arquivo/Casa.excalidraw"})
+    assert resposta.status_code == 200, resposta.text
+    assert not (vault_dir / "Projetos" / "Casa.excalidraw").exists()
+    assert (vault_dir / "Arquivo" / "Casa.excalidraw").read_text() == desenhos.vazio()
+    assert _trilha(app)[-1] == ("web", "desenhos.mover", {
+        "caminho": "Projetos/Casa.excalidraw", "para": "Arquivo/Casa.excalidraw"})
+
+
+def test_mover_por_cima_de_outro_e_409_e_nada_some(cliente, vault_dir):
+    (vault_dir / "Outro.excalidraw").write_text(_cena("outro"))
+    resposta = cliente.post(MOVER, json={"de": "Projetos/Casa.excalidraw",
+                                         "para": "Outro.excalidraw"})
+    assert resposta.status_code == 409
+    assert (vault_dir / "Outro.excalidraw").read_text() == _cena("outro")
+    assert (vault_dir / "Projetos" / "Casa.excalidraw").exists()
+
+
+def test_mover_o_que_nao_existe_e_404(cliente):
+    assert cliente.post(MOVER, json={"de": "Nada.excalidraw",
+                                     "para": "X.excalidraw"}).status_code == 404
+
+
+@pytest.mark.parametrize("de,para", [
+    ("Projetos/Casa.excalidraw", "../fora.excalidraw"),
+    ("Projetos/Casa.excalidraw", "Projetos/Casa.md"),
+    ("Projetos/Casa.excalidraw", ".trash/Casa.excalidraw"),
+    ("../x.excalidraw", "Casa.excalidraw"),
+    ("Inbox/Nota.md", "Inbox/Nota.excalidraw"),
+])
+def test_mover_so_dentro_do_vault_e_so_desenho(cliente, vault_dir, de, para):
+    assert cliente.post(MOVER, json={"de": de, "para": para}).status_code == 400
+    assert (vault_dir / "Projetos" / "Casa.excalidraw").exists()
+
+
+def test_mover_de_fora_da_pagina_e_recusado(app, vault_dir):
+    de_fora = TestClient(app, base_url=LOCAL, headers={"origin": "http://evil.com"})
+    assert de_fora.post(MOVER, json={"de": "Projetos/Casa.excalidraw",
+                                     "para": "X.excalidraw"}).status_code == 403
+    assert (vault_dir / "Projetos" / "Casa.excalidraw").exists()

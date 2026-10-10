@@ -104,6 +104,22 @@ def instalar(app) -> None:
         auditar("desenhos.apagar", caminho)
         return {"caminho": caminho, "lixeira": destino.name if destino else None}
 
+    @app.post("/api/desenhos/mover")
+    def mover(de: str = Body(...), para: str = Body(...)) -> dict:
+        """Renomeia ou muda de pasta, nunca por cima de outro arquivo. Os links
+        para o desenho ainda não são reescritos aqui (vem com os links)."""
+        origem, destino = local(de), local(para)
+        if not origem.is_file():
+            raise HTTPException(404, "desenho não encontrado")
+        if destino.exists():
+            raise HTTPException(409, "já existe um desenho com esse nome")
+        try:
+            vault.mover(origem, destino)
+        except FileExistsError:
+            raise HTTPException(409, "já existe um desenho com esse nome") from None
+        auditar("desenhos.mover", de, para=para)
+        return {"caminho": para, "versao": versao(destino)}
+
     # ---------- a biblioteca de formas (uma só, Biblioteca.excalidrawlib) ----------
 
     def versao_da_biblioteca() -> str:
