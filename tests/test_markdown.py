@@ -409,3 +409,43 @@ def test_indice_de_desenhos_so_tem_desenho(tmp_path, com_desenhos):
     assert com_desenhos.resolver("Telhado.md") is None
     assert com_desenhos.resolver("Planta.excalidraw", "Projetos/Casa/X.md") == (
         "Projetos/Casa/Planta.excalidraw")
+
+
+# ---------- ![[desenho.excalidraw]] ----------
+
+def _embutido(texto, indice, desenhos, previa_de, origem="Projetos/Casa/Telhado.md"):
+    return markdown.renderizar(texto, origem, indice, None, desenhos, previa_de)
+
+
+def test_desenho_embutido_mostra_a_previa_e_leva_ao_desenho(indice, com_desenhos):
+    html = _embutido("![[Planta.excalidraw]]", indice, com_desenhos, lambda c: "f" * 32)
+    assert ('<a class="desenho-embutido" href="/desenho?caminho=Projetos/Casa/Planta.excalidraw'
+            '&amp;de=Projetos/Casa/Telhado.md" title="Projetos/Casa/Planta.excalidraw">'
+            '<img src="/api/desenhos/previa?caminho=Projetos/Casa/Planta.excalidraw&amp;v='
+            + "f" * 32 + '" alt="Planta" loading="lazy"></a>') in html
+
+
+def test_desenho_embutido_com_largura_e_apelido(indice, com_desenhos):
+    largo = _embutido("![[Planta.excalidraw|400]]", indice, com_desenhos, lambda c: "f" * 32)
+    assert 'width="400"' in largo
+    absurdo = _embutido("![[Planta.excalidraw|99999]]", indice, com_desenhos, lambda c: "f" * 32)
+    assert "width=" not in absurdo
+    nomeado = _embutido("![[Planta.excalidraw|a planta]]", indice, com_desenhos, lambda c: "f" * 32)
+    assert 'alt="a planta"' in nomeado
+
+
+def test_desenho_embutido_sem_previa_convida_a_abrir(indice, com_desenhos):
+    html = _embutido("![[Planta.excalidraw]]", indice, com_desenhos, lambda c: None)
+    assert 'class="desenho-embutido sem-previa"' in html
+    assert "abrir para gerar a prévia" in html and "<img" not in html
+
+
+def test_desenho_embutido_que_nao_existe_fica_quebrado(indice, com_desenhos):
+    html = _embutido("![[Fachada.excalidraw|300]]", indice, com_desenhos, lambda c: "f" * 32)
+    assert 'class="wikilink desenho quebrado"' in html and "<img" not in html
+    assert ">Fachada</a>" in html
+
+
+def test_link_sem_exclamacao_continua_link(indice, com_desenhos):
+    html = _embutido("[[Planta.excalidraw]]", indice, com_desenhos, lambda c: "f" * 32)
+    assert "<img" not in html and 'class="wikilink desenho"' in html

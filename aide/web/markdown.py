@@ -90,7 +90,8 @@ def _wikilink(state, silent: bool) -> bool:
         alvo, _, apelido = dentro.partition("|")
         nome, _, secao = alvo.partition("#")
         token = state.push("wikilink", "", 0)
-        token.meta = {"nome": nome.strip(), "secao": secao.strip(), "apelido": apelido.strip()}
+        token.meta = {"nome": nome.strip(), "secao": secao.strip(), "apelido": apelido.strip(),
+                      "embutido": embutido}
     state.pos = fim + 2
     return True
 
@@ -102,6 +103,8 @@ def _render_wikilink(self, tokens, idx, options, env) -> str:
     if ANEXO.search(nome):
         return _anexo(nome, apelido, env)
     if DESENHO.search(nome):
+        if meta.get("embutido"):
+            return _desenho_embutido(nome, apelido, env)
         return _link_de_desenho(nome, apelido, env)
     destino = env["indice"].resolver(nome, env["origem"]) if nome else env["origem"]
     if destino is None:
@@ -126,11 +129,40 @@ def _link_de_desenho(alvo: str, apelido: str, env) -> str:
         return (f'<a class="wikilink desenho quebrado" role="link" tabindex="0"'
                 f' data-alvo="{escape(alvo)}" title="esse desenho ainda não existe;'
                 f' clique para criar">{texto}</a>')
+    href = _href_do_desenho(caminho, env)
+    return (f'<a class="wikilink desenho" href="{escape(href)}"'
+            f' title="{escape(caminho)}">{texto}</a>')
+
+
+def _href_do_desenho(caminho: str, env) -> str:
     href = "/desenho?caminho=" + quote(caminho, safe="/")
     if env["origem"]:
         href += "&de=" + quote(env["origem"], safe="/")
-    return (f'<a class="wikilink desenho" href="{escape(href)}"'
-            f' title="{escape(caminho)}">{texto}</a>')
+    return href
+
+
+def _desenho_embutido(alvo: str, apelido: str, env) -> str:
+    """![[Planta.excalidraw]]: a prévia em PNG da versão atual, que leva ao
+    desenho. `apelido` numérico é a largura, como nas imagens. Sem prévia
+    (mexido por fora, ou nunca aberto aqui), um aviso que leva ao desenho —
+    abrir gera a prévia."""
+    indice = env.get("desenhos")
+    caminho = indice.resolver(alvo, env["origem"]) if indice else None
+    if caminho is None:
+        return _link_de_desenho(alvo, "" if apelido.isdigit() else apelido, env)
+    nome = escape(alvo.rpartition("/")[2][:-len(".excalidraw")])
+    href = escape(_href_do_desenho(caminho, env))
+    previa_de = env.get("previa_de")
+    assinatura = previa_de(caminho) if previa_de else None
+    if assinatura is None:
+        return (f'<a class="desenho-embutido sem-previa" href="{href}" title="{escape(caminho)}">'
+                f'{nome} · abrir para gerar a prévia</a>')
+    # a assinatura no endereço troca a imagem quando o desenho muda
+    src = (f"/api/desenhos/previa?caminho={quote(caminho, safe='/')}&v={assinatura}")
+    largura = f' width="{int(apelido)}"' if apelido.isdigit() and 0 < int(apelido) <= 4000 else ""
+    rotulo = escape(apelido) if apelido and not apelido.isdigit() else nome
+    return (f'<a class="desenho-embutido" href="{href}" title="{escape(caminho)}">'
+            f'<img src="{escape(src)}" alt="{rotulo}" loading="lazy"{largura}></a>')
 
 
 def _render_link_open(self, tokens, idx, options, env) -> str:
@@ -518,7 +550,7 @@ def _propriedades(meta: dict[str, str], fim: int, origem: str | None = None) -> 
 
 
 def renderizar(texto: str, origem: str | None, indice: Indice, anexos=None,
-               desenhos=None) -> str:
+               desenhos=None, previa_de=None) -> str:
     """O HTML da prévia da nota `origem` (caminho no vault)."""
     meta, _ = vault.separar(texto)
     inicio = vault.inicio_do_corpo(texto)
@@ -526,7 +558,7 @@ def renderizar(texto: str, origem: str | None, indice: Indice, anexos=None,
     # prévia precisa bater com a do arquivo
     corpo = "\n".join(texto.split("\n")[inicio:])
     env = {"origem": origem, "indice": indice, "deslocamento": inicio, "anexos": anexos,
-           "desenhos": desenhos}
+           "desenhos": desenhos, "previa_de": previa_de}
     return _propriedades(meta, inicio, origem) + MOTOR.render(corpo, env)
 
 
