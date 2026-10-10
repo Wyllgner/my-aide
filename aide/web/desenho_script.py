@@ -39,6 +39,8 @@ let deNovo = false;
 let conflito = null;
 // depois de apagar, nada mais é salvo: o salvamento recriaria o desenho
 let apagado = false;
+// depois de renomear, este caminho não existe mais: nada é salvo nele
+let movido = false;
 // a caixa mudou e o servidor ainda não confirmou: vai explícito no próximo
 // salvamento. Sem ele, o servidor mantém o que está no disco
 let privadaPedida = null;
@@ -76,7 +78,7 @@ function atual() {
 }
 
 function pendente() {
-  return api !== null && !apagado && conflito === null
+  return api !== null && !apagado && !movido && conflito === null
     && (atual() !== salvo || privadaPedida !== null);
 }
 
@@ -214,6 +216,53 @@ botaoApagar.addEventListener("click", async () => {
   }
 });
 
+// renomear: o campo troca o nome (e a pasta, se quiser) na barra. Antes de
+// mover, o que estiver por salvar vai para o caminho de agora; depois, a
+// tela reabre no caminho novo. Os links das notas o servidor conserta.
+const formRenomear = document.getElementById("renomear-form");
+const campoRenomear = document.getElementById("renomear-nome");
+const nomeNaBarra = document.getElementById("desenho-nome");
+
+function mostrarRenomear(sim) {
+  formRenomear.hidden = !sim;
+  nomeNaBarra.hidden = sim;
+  if (sim) { campoRenomear.focus(); campoRenomear.select(); }
+}
+
+async function esperarSalvar() {
+  clearTimeout(timer);
+  if (pendente()) await salvar();
+  while (salvando) await new Promise((r) => setTimeout(r, 50));
+}
+
+document.getElementById("renomear").addEventListener("click", () => mostrarRenomear(true));
+campoRenomear.addEventListener("keydown", (evento) => {
+  if (evento.key === "Escape") mostrarRenomear(false);
+});
+
+formRenomear.addEventListener("submit", async (evento) => {
+  evento.preventDefault();
+  const novo = campoRenomear.value.trim().replace(/\.excalidraw$/i, "") + ".excalidraw";
+  if (novo === caminho) { mostrarRenomear(false); return; }
+  if (conflito !== null) {
+    avisar("resolva o conflito antes de renomear", true);
+    return;
+  }
+  try {
+    await esperarSalvar();
+    movido = true;
+    const resposta = await pedir("POST", "/api/desenhos/mover", { de: caminho, para: novo });
+    const dados = await resposta.json().catch(() => ({}));
+    if (!resposta.ok) throw new Error(dados.detail || "não consegui renomear");
+    const de = new URLSearchParams(location.search).get("de");
+    location.replace("/desenho?caminho=" + encodeURIComponent(dados.caminho)
+                     + (de ? "&de=" + encodeURIComponent(de) : ""));
+  } catch (e) {
+    movido = false;
+    avisar(e.message === "Failed to fetch" ? "sem conexão com o my-aide" : e.message, true);
+  }
+});
+
 // O corretor do navegador pode mandar o texto para fora (o "corretor
 // avançado" do Chrome usa o Google). Em desenho privado, desligado em todo
 // campo de texto do editor, como nas notas privadas. O Excalidraw cria o
@@ -344,7 +393,8 @@ async function abrirBiblioteca() {
 
 window.addEventListener("beforeunload", (evento) => {
   // apagado, o desenho não tem mais o que perder; a biblioteca ainda tem
-  const desenhoPorSalvar = !apagado && (salvando || conflito !== null || pendente());
+  const desenhoPorSalvar = !apagado && !movido
+    && (salvando || conflito !== null || pendente());
   if (desenhoPorSalvar || bibliotecaSalvando || bibliotecaAgendada) {
     evento.preventDefault();
     evento.returnValue = "";

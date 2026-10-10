@@ -299,7 +299,8 @@ def test_mover_para_outra_pasta_e_audita(cliente, vault_dir, app):
     assert not (vault_dir / "Projetos" / "Casa.excalidraw").exists()
     assert (vault_dir / "Arquivo" / "Casa.excalidraw").read_text() == desenhos.vazio()
     assert _trilha(app)[-1] == ("web", "desenhos.mover", {
-        "caminho": "Projetos/Casa.excalidraw", "para": "Arquivo/Casa.excalidraw"})
+        "caminho": "Projetos/Casa.excalidraw", "para": "Arquivo/Casa.excalidraw",
+        "links_atualizados": [], "links_nao_atualizados": []})
 
 
 def test_mover_por_cima_de_outro_e_409_e_nada_some(cliente, vault_dir):
@@ -421,3 +422,62 @@ def test_apagar_e_mover_tiram_a_previa(cliente, app):
 def test_previa_de_fora_da_pagina_e_recusada(app):
     de_fora = TestClient(app, base_url=LOCAL, headers={"origin": "http://evil.com"})
     assert _mandar_previa(de_fora, "a" * 32).status_code == 403
+
+
+# ---------- renomear reescreve os links ----------
+
+def test_renomear_reescreve_os_links_das_notas(cliente, vault_dir, app):
+    (vault_dir / "Inbox").mkdir()
+    (vault_dir / "Inbox" / "Obra.md").write_text(
+        "planta: [[Casa.excalidraw]]\n"
+        "grande: ![[Projetos/Casa.excalidraw|300]]\n"
+        "com nome: [[Casa.excalidraw|a casa]]\n"
+        "código: `[[Casa.excalidraw]]`\n")
+    resposta = cliente.post(MOVER, json={"de": "Projetos/Casa.excalidraw",
+                                         "para": "Projetos/Sobrado.excalidraw"})
+    assert resposta.status_code == 200
+    assert resposta.json()["links_atualizados"] == ["Inbox/Obra.md"]
+    assert (vault_dir / "Inbox" / "Obra.md").read_text() == (
+        "planta: [[Sobrado.excalidraw]]\n"
+        "grande: ![[Sobrado.excalidraw|300]]\n"
+        "com nome: [[Sobrado.excalidraw|a casa]]\n"
+        "código: `[[Casa.excalidraw]]`\n")
+    assert _trilha(app)[-1][2]["links_atualizados"] == ["Inbox/Obra.md"]
+
+
+def test_renomear_para_nome_repetido_escreve_o_caminho(cliente, vault_dir):
+    (vault_dir / "Inbox").mkdir()
+    (vault_dir / "Inbox" / "Sobrado.excalidraw").write_text(desenhos.vazio())
+    (vault_dir / "Inbox" / "Obra.md").write_text("ver [[Casa.excalidraw]]\n")
+    cliente.post(MOVER, json={"de": "Projetos/Casa.excalidraw",
+                              "para": "Projetos/Sobrado.excalidraw"})
+    # na pasta da nota há outro Sobrado: o nome curto levaria a ele
+    assert (vault_dir / "Inbox" / "Obra.md").read_text() == (
+        "ver [[Projetos/Sobrado.excalidraw]]\n")
+
+
+def test_desenho_que_chega_nao_rouba_o_link_de_outro(cliente, vault_dir):
+    """[[Planta]] da nota em Inbox levava a Outros/Planta; uma Planta movida
+    para Inbox ganharia o link pela regra da mesma pasta."""
+    for pasta in ("Inbox", "Outros"):
+        (vault_dir / pasta).mkdir(exist_ok=True)
+    (vault_dir / "Outros" / "Planta.excalidraw").write_text(desenhos.vazio())
+    (vault_dir / "Projetos" / "Planta.excalidraw").write_text(desenhos.vazio())
+    (vault_dir / "Inbox" / "Obra.md").write_text("ver [[Outros/Planta.excalidraw]]\n")
+    (vault_dir / "Inbox" / "Ref.md").write_text("e [[Planta.excalidraw]]\n")
+    antes = desenhos.indice(vault_dir).resolver("Planta.excalidraw", "Inbox/Ref.md")
+    cliente.post(MOVER, json={"de": "Projetos/Planta.excalidraw",
+                              "para": "Inbox/Planta.excalidraw"})
+    texto = (vault_dir / "Inbox" / "Ref.md").read_text()
+    depois = desenhos.indice(vault_dir).resolver(texto.split("[[")[1].split("]]")[0],
+                                                "Inbox/Ref.md")
+    assert depois == antes
+
+
+def test_mover_sem_ninguem_citando_nao_mexe_em_nota(cliente, vault_dir):
+    (vault_dir / "Nota.md").write_text("nada de desenho aqui\n")
+    resposta = cliente.post(MOVER, json={"de": "Projetos/Casa.excalidraw",
+                                         "para": "Casa2.excalidraw"})
+    assert resposta.json()["links_atualizados"] == []
+    assert (vault_dir / "Nota.md").read_text() == "nada de desenho aqui\n"
+

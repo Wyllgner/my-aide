@@ -218,3 +218,24 @@ def test_previa_so_da_versao_salva_e_com_a_marca_da_pagina():
     assert "maxWidthOrHeight: 1600" in gerar
     # pede depois de salvar e ao abrir, só quando o servidor diz que falta
     assert JS.count("if (!dados.previa) pedirPrevia(dados.assinatura);") == 2
+
+
+def test_renomear_na_barra_com_o_caminho_sem_extensao(cliente):
+    html = _tela(cliente).text
+    barra = html[html.index('<header class="desenho-barra">'):html.index("</header>")]
+    assert 'id="renomear"' in barra
+    assert '<form id="renomear-form" class="desenho-renomear" hidden>' in barra
+    assert 'id="renomear-nome" value="Projetos/Casa"' in barra
+
+
+def test_renomear_salva_antes_e_para_de_salvar_no_caminho_velho():
+    from aide.web.desenho_script import JS
+
+    envio = JS[JS.index('formRenomear.addEventListener("submit"'):]
+    envio = envio[:envio.index("\n});\n")]
+    assert envio.index("await esperarSalvar();") < envio.index("movido = true;")
+    assert envio.index("movido = true;") < envio.index('"/api/desenhos/mover"')
+    # falhou: volta a salvar onde está
+    assert "movido = false;" in envio[envio.index("catch"):]
+    assert "api !== null && !apagado && !movido" in JS
+    assert 'if (conflito !== null) {' in envio

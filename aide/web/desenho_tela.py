@@ -45,9 +45,17 @@ def pagina(caminho: str, voltar: str) -> str:
 <body class="desenho-corpo">
 <header class="desenho-barra">
   <a class="botao" href="{escape(voltar)}">{icone("notas", 16)}<span>Notas</span></a>
-  <div class="desenho-nome">
+  <div class="desenho-nome" id="desenho-nome">
     {f'<span class="desenho-pasta">{escape(pasta)}/</span>' if pasta != "." else ""}<strong>{escape(nome)}</strong>
   </div>
+  <form id="renomear-form" class="desenho-renomear" hidden>
+    <input id="renomear-nome" value="{escape(caminho.removesuffix(desenhos.EXTENSAO))}"
+      aria-label="novo nome do desenho (com a pasta, se quiser mudar de pasta)" autocomplete="off">
+    <span class="dica">Enter renomeia · Esc cancela</span>
+  </form>
+  <button type="button" id="renomear" class="botao"
+    title="renomear ou mudar de pasta; os links das notas acompanham">
+    {icone("renomear", 15)}<span>renomear</span></button>
   <span id="desenho-estado" class="desenho-estado" role="status" aria-live="polite">abrindo…</span>
   <label class="privada" title="privado: o texto do desenho não vai para o modelo nem para a OpenAI">
     <input type="checkbox" id="privada" disabled>{icone("privada", 15)}<span>privado</span></label>
