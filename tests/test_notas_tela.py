@@ -502,3 +502,58 @@ def test_quebrado_com_nome_parecido_sugere_ligar(cliente, raiz):
     (raiz / "Inbox" / "Ideia.md").write_text("falar com [[Fornecedor]]\n")
     html = cliente.get("/notas?quebrados=1").text
     assert 'class="ligar-quebrado" data-alvo="Fornecedor" data-para="Inbox/Fornecedores.md"' in html
+
+
+# ---------- desenhos na árvore ----------
+
+def _com_desenho(raiz, nome="Projetos/Casa/Planta.excalidraw"):
+    from aide.storage import desenhos
+
+    (raiz / nome).write_text(desenhos.vazio())
+
+
+def test_desenho_aparece_na_arvore_e_abre_a_tela_dele(cliente, raiz):
+    _com_desenho(raiz)
+    html = cliente.get("/notas", params={"arquivo": "Inbox/Ideia.md"}).text
+    assert ('<a class="arquivo desenho" '
+            'href="/desenho?caminho=Projetos/Casa/Planta.excalidraw&amp;de=Inbox/Ideia.md"'
+            ' title="Projetos/Casa/Planta.excalidraw" draggable="false">') in html
+    assert "<span>Planta</span>" in html
+
+
+def test_desenho_sem_nota_aberta_nao_leva_de(cliente, raiz):
+    _com_desenho(raiz, "Solto.excalidraw")
+    html = cliente.get("/notas", params={"geral": "true"}).text
+    assert 'href="/desenho?caminho=Solto.excalidraw"' in html
+
+
+def test_resumo_conta_desenhos_a_parte_e_a_pasta_conta_os_dois(cliente, raiz):
+    _com_desenho(raiz)
+    html = cliente.get("/notas", params={"arquivo": "Inbox/Ideia.md"}).text
+    assert "2 notas" in html and "1 desenho" in html
+    pasta = html[html.index('data-pasta="Projetos/Casa"'):]
+    assert '<span class="conta">2</span>' in pasta[:pasta.index("</summary>")]
+
+
+def test_desenho_nao_vira_destino_de_link_de_nota(cliente, raiz):
+    """[[Planta]] é uma nota que não existe, não o desenho Planta.excalidraw."""
+    from aide.storage import links
+
+    _com_desenho(raiz)
+    (raiz / "Inbox" / "Ideia.md").write_text("ver [[Planta]]")
+    indice = links.indice(raiz)
+    assert indice.resolver("Planta") is None
+    assert "Projetos/Casa/Planta.excalidraw" not in indice.caminhos
+
+
+def test_nome_de_desenho_sai_escapado_na_arvore(cliente, raiz):
+    _com_desenho(raiz, "Plano & 'x'.excalidraw")
+    html = cliente.get("/notas", params={"geral": "true"}).text
+    assert "<span>Plano &amp; &#x27;x&#x27;</span>" in html
+    assert 'title="Plano &amp; &#x27;x&#x27;.excalidraw"' in html
+
+
+def test_desenho_fica_fora_do_arrastar_de_nota():
+    from aide.web.script import JS
+
+    assert '.arquivo[title]:not(.desenho)' in JS

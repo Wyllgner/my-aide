@@ -150,7 +150,8 @@ JS = r"""
     var limparAlvos = function () {
       arvoreArrasto.querySelectorAll(".alvo-soltar").forEach(function (el) { el.classList.remove("alvo-soltar"); });
     };
-    arvoreArrasto.querySelectorAll(".arquivo[title]").forEach(function (a) {
+    // só nota: desenho tem a sua rota de mover
+    arvoreArrasto.querySelectorAll(".arquivo[title]:not(.desenho)").forEach(function (a) {
       a.addEventListener("dragstart", function (e) {
         e.dataTransfer.setData(TIPO_NOTA, a.getAttribute("title"));
         e.dataTransfer.effectAllowed = "move";

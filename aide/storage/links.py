@@ -68,6 +68,9 @@ def indice(vault_dir: Path, arvore: list[dict] | None = None) -> Indice:
             if item["tipo"] == "pasta":
                 visitar(item["filhos"])
                 continue
+            # desenho não é nota: com ele aqui, [[Casa]] acharia Casa.excalidraw
+            if item["tipo"] != "nota":
+                continue
             caminho = item["caminho"]
             por_caminho[chave(caminho)] = caminho
             por_nome.setdefault(chave(item["nome"]), []).append(caminho)

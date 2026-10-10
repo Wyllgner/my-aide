@@ -59,6 +59,8 @@ TRACOS = {
     # duas setas que se encontram no meio: fechar todas as pastas
     "recolher": "M6 3.5l4 4 4-4M6 16.5l4-4 4 4",
     "nota": "M5.5 3h6.5l2.5 2.5V17h-9zM12 3v2.5h2.5",
+    # lápis sobre um traço: desenho do Excalidraw
+    "desenho": "M4 16l.7-3.1 7.6-7.6 2.4 2.4-7.6 7.6zM10.8 6.8l2.4 2.4M11.5 16.5h5",
     "nova-pasta": "M3 5.5h5l1.5 2H17v8.5H3zM10 9.5v4.5M7.75 11.75h4.5",
     "grafo": ("M8 6a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM16.5 8.5a2 2 0 1 1-4 0 2 2 0 0 1 4 0z"
               "M10.5 15a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM7.9 6.6l4.7 1.3M6.6 7.9l1.3 5.2"

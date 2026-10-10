@@ -231,9 +231,10 @@ def relativo_de(vault_dir: Path, caminho: Path) -> str:
 def arvore(vault_dir: Path) -> list[dict]:
     """Pastas e notas, pastas primeiro, em ordem alfabética sem caixa.
 
-    Cada item: {nome, caminho, tipo: "pasta" | "nota", filhos}. Fica de fora o
-    que `resolver` recusaria — oculto, link simbólico, o que não é .md —, para
-    a página nunca oferecer um clique que vai dar erro.
+    Cada item: {nome, caminho, tipo: "pasta" | "nota" | "desenho", filhos}. Fica
+    de fora o que `resolver` recusaria — oculto, link simbólico, o que não é
+    nota (.md) nem desenho (.excalidraw) —, para a página nunca oferecer um
+    clique que vai dar erro.
     """
     def ramo(pasta: Path, prefixo: str) -> list[dict]:
         itens = []
@@ -246,6 +247,9 @@ def arvore(vault_dir: Path) -> list[dict]:
                               "filhos": ramo(filho, caminho + "/")})
             elif filho.suffix.lower() == ".md":
                 itens.append({"nome": filho.stem, "caminho": caminho, "tipo": "nota",
+                              "filhos": []})
+            elif filho.suffix.lower() == ".excalidraw":
+                itens.append({"nome": filho.stem, "caminho": caminho, "tipo": "desenho",
                               "filhos": []})
         return sorted(itens, key=lambda i: (i["tipo"] != "pasta", i["nome"].casefold()))
 
