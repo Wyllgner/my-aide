@@ -449,3 +449,9 @@ def test_desenho_embutido_que_nao_existe_fica_quebrado(indice, com_desenhos):
 def test_link_sem_exclamacao_continua_link(indice, com_desenhos):
     html = _embutido("[[Planta.excalidraw]]", indice, com_desenhos, lambda c: "f" * 32)
     assert "<img" not in html and 'class="wikilink desenho"' in html
+
+
+def test_cada_link_na_sua_linha_no_mesmo_paragrafo():
+    achadas = markdown.citacoes("a [[Projetos/Casa]]\nb [[Casa|apelido]]\nc [[Casa]] e [[Casa]]\n")
+    assert [(c.alvo, c.linha) for c in achadas] == [
+        ("Projetos/Casa", 0), ("Casa", 1), ("Casa", 2), ("Casa", 2)]

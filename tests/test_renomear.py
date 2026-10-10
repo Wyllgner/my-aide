@@ -165,3 +165,13 @@ def test_nota_que_nao_da_para_ler_fica_de_fora_sem_parar_o_resto(raiz):
     assert puladas == ["Velha.md"]
     assert "Inbox/Reunião.md" in mudadas
     assert (raiz / "Velha.md").read_bytes().endswith(b"cita\xe7\xe3o")
+
+
+def test_link_com_caminho_numa_linha_e_curto_na_seguinte(raiz):
+    """O mesmo parágrafo: o nome "Telhado" também está dentro do link com
+    pasta da linha de cima, e o curto era atribuído àquela linha — que o
+    renomear não conseguia trocar, deixando o link quebrado."""
+    (raiz / "Mista.md").write_text("a [[Projetos/Casa/Telhado]]\nb [[Telhado|o telhado]]\n")
+    renomear.mover(raiz, "Projetos/Casa/Telhado.md", "Projetos/Casa/Cobertura.md")
+    # nome único: o renomear encurta o de cima também, como sempre fez
+    assert _ler(raiz, "Mista.md") == "a [[Cobertura]]\nb [[Cobertura|o telhado]]\n"
