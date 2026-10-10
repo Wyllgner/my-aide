@@ -624,9 +624,12 @@ def _link_para_nota(href: str) -> bool:
     return caminho.lower().endswith(".md") and not urlsplit(caminho).scheme
 
 
-def citacoes(texto: str) -> list[Citacao]:
+def citacoes(texto: str, de_desenho: bool = False) -> list[Citacao]:
     """Os links da nota, pelo mesmo parser da prévia: link dentro de bloco de
-    código não conta, e o que a prévia mostra como link é o que vira ligação."""
+    código não conta, e o que a prévia mostra como link é o que vira ligação.
+
+    `de_desenho`: só os [[...excalidraw]] e ![[...excalidraw]], que o mapa de
+    notas deixa de fora — para renomear um desenho sem quebrar quem o cita."""
     inicio = vault.inicio_do_corpo(texto)
     corpo = "\n".join(texto.split("\n")[inicio:])
     linhas = texto.split("\n")
@@ -640,7 +643,14 @@ def citacoes(texto: str) -> list[Citacao]:
             # anexo e desenho não são nota: no mapa, virariam "nota que não
             # existe", e o "criar" faria Planta.excalidraw.md
             nome = token.meta.get("nome", "") if token.type == "wikilink" else ""
-            if (token.type == "wikilink" and not ANEXO.search(nome)
+            if de_desenho:
+                if token.type != "wikilink" or not DESENHO.search(nome):
+                    continue
+                # "[[Casa.excalidraw" e não só o nome: "Casa.excalidraw" também
+                # está dentro de "[[Projetos/Casa.excalidraw", numa linha acima
+                marcas = ("[[" + nome, nome)
+                tipo, alvo, secao = "wiki", nome, token.meta["secao"]
+            elif (token.type == "wikilink" and not ANEXO.search(nome)
                     and not DESENHO.search(nome)):
                 marcas = (token.meta["nome"] or "[[",)
                 tipo, alvo, secao = "wiki", token.meta["nome"], token.meta["secao"]
