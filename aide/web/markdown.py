@@ -576,13 +576,16 @@ class Citacao:
     trecho: str = ""  # o texto dessa linha, para mostrar o link no contexto
 
     def caminho_pedido(self, origem: str) -> str:
-        """O caminho da nota que o link pede, para mostrar e para criar:
-        `[[Fornecedores]]` na pasta de quem cita; `[x](../Nova%20nota.md)`
+        """O caminho da nota (ou do desenho) que o link pede, para mostrar e
+        para criar: `[[Fornecedores]]` na pasta de quem cita; `[x](../Nova%20nota.md)`
         decodificado e relativo à nota, como o Obsidian grava."""
         import posixpath
         from urllib.parse import unquote
 
         pasta = origem.rpartition("/")[0]
+        if self.tipo == "wiki" and DESENHO.search(self.alvo):
+            # o desenho leva a extensão no próprio link
+            return self.alvo if "/" in self.alvo or not pasta else f"{pasta}/{self.alvo}"
         if self.tipo == "md":
             relativo = unquote(self.alvo.partition("#")[0])
             caminho = posixpath.normpath(posixpath.join(pasta, relativo))
@@ -634,10 +637,17 @@ def citacoes(texto: str, de_desenho: bool = False) -> list[Citacao]:
 
     `de_desenho`: só os [[...excalidraw]] e ![[...excalidraw]], que o mapa de
     notas deixa de fora — para renomear um desenho sem quebrar quem o cita."""
+    notas, de_desenhos = citacoes_separadas(texto)
+    return de_desenhos if de_desenho else notas
+
+
+def citacoes_separadas(texto: str) -> tuple[list[Citacao], list[Citacao]]:
+    """(links para notas, links para desenhos), lendo o texto uma vez só."""
     inicio = vault.inicio_do_corpo(texto)
     corpo = "\n".join(texto.split("\n")[inicio:])
     linhas = texto.split("\n")
-    achadas = []
+    notas: list[Citacao] = []
+    de_desenhos: list[Citacao] = []
     for bloco in MOTOR.parse(corpo, {"deslocamento": inicio}):
         if bloco.type != "inline" or not bloco.children:
             continue
@@ -648,30 +658,27 @@ def citacoes(texto: str, de_desenho: bool = False) -> list[Citacao]:
             # anexo e desenho não são nota: no mapa, virariam "nota que não
             # existe", e o "criar" faria Planta.excalidraw.md
             nome = token.meta.get("nome", "") if token.type == "wikilink" else ""
-            if de_desenho:
-                if token.type != "wikilink" or not DESENHO.search(nome):
-                    continue
+            if token.type == "wikilink" and DESENHO.search(nome):
                 # "[[Casa.excalidraw" e não só o nome: "Casa.excalidraw" também
                 # está dentro de "[[Projetos/Casa.excalidraw", numa linha acima
                 marcas = ("[[" + nome, nome)
-                tipo, alvo, secao = "wiki", nome, token.meta["secao"]
-            elif (token.type == "wikilink" and not ANEXO.search(nome)
-                    and not DESENHO.search(nome)):
+                tipo, alvo, secao, lista = "wiki", nome, token.meta["secao"], de_desenhos
+            elif token.type == "wikilink" and not ANEXO.search(nome):
                 # "[[Casa" antes de "Casa": o nome sozinho também aparece dentro
                 # de "[[Projetos/Casa" numa linha acima, no mesmo parágrafo
                 marcas = (("[[" + nome, nome) if nome else ("[[",))
-                tipo, alvo, secao = "wiki", token.meta["nome"], token.meta["secao"]
+                tipo, alvo, secao, lista = "wiki", nome, token.meta["secao"], notas
             elif token.type == "link_open" and _link_para_nota(token.attrGet("href") or ""):
                 href = token.attrGet("href") or ""
                 # o href como foi escrito, se der; senão o primeiro "](" do bloco
                 marcas = (f"]({href}", "](")
-                tipo, alvo, secao = "md", href, ""
+                tipo, alvo, secao, lista = "md", href, "", notas
             else:
                 continue
             linha, coluna = _linha_do_link(linhas, de, coluna, ate, *marcas)
             de = linha  # o próximo link do bloco está daqui em diante
-            achadas.append(Citacao(tipo, alvo, secao, linha, linhas[linha].strip()))
-    return achadas
+            lista.append(Citacao(tipo, alvo, secao, linha, linhas[linha].strip()))
+    return notas, de_desenhos
 
 
 # ---------- tags ----------
