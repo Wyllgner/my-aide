@@ -560,3 +560,55 @@ def test_registro_ilegivel_conta_tudo_como_privado(cliente, app):
     registro.parent.mkdir(parents=True, exist_ok=True)
     registro.write_text("{ torto")
     assert _abrir(cliente)["privada"] is True
+
+
+# ---------- o link de um elemento do desenho ----------
+
+def _link(cliente, alvo, caminho="Projetos/Casa.excalidraw"):
+    return cliente.get("/api/desenhos/link", params={"caminho": caminho, "alvo": alvo})
+
+
+@pytest.fixture
+def com_notas(vault_dir):
+    (vault_dir / "Projetos" / "Telhado.md").write_text("# Calhas\n")
+    (vault_dir / "Inbox").mkdir()
+    (vault_dir / "Inbox" / "Telhado.md").write_text("outro")
+    (vault_dir / "Inbox" / "Reunião.md").write_text("x")
+    return vault_dir
+
+
+def test_link_leva_a_nota_da_pasta_do_desenho_primeiro(cliente, com_notas):
+    dados = _link(cliente, "[[Telhado#Calhas|calhas]]").json()
+    assert dados == {"tipo": "nota", "existe": True, "caminho": "Projetos/Telhado.md",
+                     "href": "/notas?arquivo=Projetos/Telhado.md#s-calhas"}
+
+
+def test_link_markdown_relativo_ao_desenho(cliente, com_notas):
+    dados = _link(cliente, "../Inbox/Reuni%C3%A3o.md").json()
+    assert dados["caminho"] == "Inbox/Reunião.md"
+
+
+def test_link_para_outro_desenho(cliente, vault_dir):
+    (vault_dir / "Planta.excalidraw").write_text(desenhos.vazio())
+    dados = _link(cliente, "[[Planta.excalidraw]]").json()
+    assert dados == {"tipo": "desenho", "existe": True, "caminho": "Planta.excalidraw",
+                     "href": "/desenho?caminho=Planta.excalidraw"}
+
+
+@pytest.mark.parametrize("alvo, tipo, pedido", [
+    ("[[Nova ideia]]", "nota", "Projetos/Nova ideia.md"),
+    ("Base/Nova", "nota", "Base/Nova.md"),
+    ("[[Corte.excalidraw]]", "desenho", "Projetos/Corte.excalidraw"),
+])
+def test_link_para_o_que_nao_existe_diz_o_caminho_que_pede(cliente, alvo, tipo, pedido):
+    assert _link(cliente, alvo).json() == {"tipo": tipo, "existe": False, "caminho": pedido}
+
+
+@pytest.mark.parametrize("alvo", ["https://x.org", "javascript:alert(1)", "[[foto.png]]",
+                                  "../../fora.md", "[[.obsidian/app]]", "[[../../fora]]"])
+def test_link_que_nao_e_do_vault_e_recusado(cliente, alvo):
+    assert _link(cliente, alvo).status_code == 422
+
+
+def test_link_de_desenho_fora_do_vault_e_recusado(cliente):
+    assert _link(cliente, "[[Telhado]]", caminho="../fora.excalidraw").status_code == 400
