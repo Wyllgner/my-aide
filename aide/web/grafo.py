@@ -58,6 +58,9 @@ class Mapa:
     # desenho -> nota, pelos links dos elementos; só os que levam a uma nota
     # que existe (o desenho não tem linha para mostrar link quebrado)
     de_desenhos: list[Ligacao] = field(default_factory=list)
+    # desenho -> desenho, pelo mesmo link dos elementos; também só os que
+    # existem
+    entre_desenhos: list[Ligacao] = field(default_factory=list)
 
     def entradas(self, caminho: str) -> list[Ligacao]:
         """Quem aponta para `caminho`, sem contar a própria nota."""
@@ -138,18 +141,20 @@ def mapa(vault_dir: Path, indice: links.Indice | None = None, desenhos=None) -> 
         for citacao in leitura.desenhos:
             resultado.desenhos.append(
                 Ligacao(origem, desenhos.resolver(citacao.alvo, origem), citacao))
-    resultado.de_desenhos = _de_desenhos(vault_dir, indice, desenhos)
+    resultado.de_desenhos, resultado.entre_desenhos = _de_desenhos(vault_dir, indice, desenhos)
     return resultado
 
 
-def _de_desenhos(vault_dir: Path, indice: links.Indice, desenhos) -> list[Ligacao]:
-    """O link de cada elemento resolvido como um [[link]] numa nota da pasta
-    do desenho. A leitura do desenho fica no cache da busca (mtime)."""
+def _de_desenhos(vault_dir: Path, indice: links.Indice,
+                 desenhos) -> tuple[list[Ligacao], list[Ligacao]]:
+    """(para notas, para desenhos): o link de cada elemento resolvido como um
+    [[link]] numa nota da pasta do desenho. A leitura do desenho fica no
+    cache da busca (mtime)."""
     from aide.storage import busca_desenhos
     from aide.storage import desenhos as desenhos_
     from aide.web.markdown import DESENHO, citacao_do_link
 
-    achadas = []
+    para_notas, para_desenhos = [], []
     for origem in desenhos.por_caminho.values():
         try:
             leitura = busca_desenhos.ler(desenhos_.resolver(vault_dir, origem))
@@ -157,9 +162,12 @@ def _de_desenhos(vault_dir: Path, indice: links.Indice, desenhos) -> list[Ligaca
             continue
         for link in leitura.links:
             citacao = citacao_do_link(link)
-            if citacao is None or citacao.tipo == "wiki" and DESENHO.search(citacao.alvo):
+            if citacao is None:
                 continue
-            destino = citacao.destino(origem, indice)
+            if citacao.tipo == "wiki" and DESENHO.search(citacao.alvo):
+                destino, lista = desenhos.resolver(citacao.alvo, origem), para_desenhos
+            else:
+                destino, lista = citacao.destino(origem, indice), para_notas
             if destino is not None:
-                achadas.append(Ligacao(origem, destino, replace(citacao, trecho=link)))
-    return achadas
+                lista.append(Ligacao(origem, destino, replace(citacao, trecho=link)))
+    return para_notas, para_desenhos

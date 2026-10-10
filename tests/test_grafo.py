@@ -212,3 +212,18 @@ def test_desenho_que_cita_nota_pelo_link_do_elemento(raiz):
     assert mapa.desenhos_que_citam("Solta.md") == []
     # o mapa entre notas (visão geral, assessor, renomear) não muda
     assert all(not lig.origem.endswith(".excalidraw") for lig in mapa.ligacoes)
+
+
+def test_desenho_que_leva_a_outro_desenho_fica_a_parte(raiz):
+    from aide.storage import desenhos
+
+    (raiz / "Projetos/Casa/Planta.excalidraw").write_text(desenhos.vazio())
+    _desenho_com_links(raiz / "Projetos/Casa/Corte.excalidraw", "[[Planta.excalidraw]]",
+                       "Planta.excalidraw", "[[Sumido.excalidraw]]", "[[Telhado]]")
+    mapa = grafo.mapa(raiz)
+    assert [(lig.origem, lig.destino, lig.citacao.trecho) for lig in mapa.entre_desenhos] == [
+        ("Projetos/Casa/Corte.excalidraw", "Projetos/Casa/Planta.excalidraw",
+         "[[Planta.excalidraw]]"),
+        ("Projetos/Casa/Corte.excalidraw", "Projetos/Casa/Planta.excalidraw",
+         "Planta.excalidraw")]
+    assert [lig.destino for lig in mapa.de_desenhos] == ["Projetos/Casa/Telhado.md"]
