@@ -183,3 +183,32 @@ def test_citacoes_separadas_numa_passada_so():
     notas, de_desenhos = citacoes_separadas("[[A]] [[B.excalidraw]]\n[[C]] ![[foto.png]]")
     assert [c.alvo for c in notas] == ["A", "C"]
     assert [(c.alvo, c.linha) for c in de_desenhos] == [("B.excalidraw", 0)]
+
+
+def _desenho_com_links(arquivo, *links_, apagado=None):
+    import json
+
+    from aide.storage import desenhos
+
+    dados = json.loads(desenhos.vazio())
+    dados["elements"] = [{"type": "rectangle", "id": f"e{i}", "link": link}
+                         for i, link in enumerate(links_)]
+    if apagado:
+        dados["elements"].append({"type": "rectangle", "id": "x", "link": apagado,
+                                  "isDeleted": True})
+    arquivo.write_text(json.dumps(dados))
+
+
+def test_desenho_que_cita_nota_pelo_link_do_elemento(raiz):
+    _desenho_com_links(raiz / "Projetos/Casa/Corte.excalidraw", "[[Telhado#Calhas]]",
+                       "../../Inbox/Reuni%C3%A3o.md", "[[Sumida]]", "https://x.org",
+                       "[[Outro.excalidraw]]", apagado="[[Solta]]")
+    mapa = grafo.mapa(raiz)
+    assert [(lig.origem, lig.citacao.trecho) for lig in
+            mapa.desenhos_que_citam("Projetos/Casa/Telhado.md")] == [
+        ("Projetos/Casa/Corte.excalidraw", "[[Telhado#Calhas]]")]
+    assert [lig.origem for lig in mapa.desenhos_que_citam("Inbox/Reunião.md")] == [
+        "Projetos/Casa/Corte.excalidraw"]
+    assert mapa.desenhos_que_citam("Solta.md") == []
+    # o mapa entre notas (visão geral, assessor, renomear) não muda
+    assert all(not lig.origem.endswith(".excalidraw") for lig in mapa.ligacoes)

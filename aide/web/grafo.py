@@ -13,7 +13,7 @@ mudar: criar a nota "Fornecedores" conserta o [[Fornecedores]] de outra.
 from __future__ import annotations
 
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from aide.storage import links, vault
@@ -55,6 +55,9 @@ class Mapa:
     # nota -> desenho, à parte: quem conta notas, ligações e órfãs (a visão
     # geral, o assessor, o renomear de nota) não vê desenho como nota
     desenhos: list[Ligacao] = field(default_factory=list)
+    # desenho -> nota, pelos links dos elementos; só os que levam a uma nota
+    # que existe (o desenho não tem linha para mostrar link quebrado)
+    de_desenhos: list[Ligacao] = field(default_factory=list)
 
     def entradas(self, caminho: str) -> list[Ligacao]:
         """Quem aponta para `caminho`, sem contar a própria nota."""
@@ -73,6 +76,10 @@ class Mapa:
 
     def desenhos_quebrados(self) -> list[Ligacao]:
         return [lig for lig in self.desenhos if lig.destino is None]
+
+    def desenhos_que_citam(self, caminho: str) -> list[Ligacao]:
+        """Os desenhos com um elemento que leva à nota `caminho`."""
+        return [lig for lig in self.de_desenhos if lig.destino == caminho]
 
 
 def ler(arquivo: Path) -> Leitura:
@@ -131,4 +138,28 @@ def mapa(vault_dir: Path, indice: links.Indice | None = None, desenhos=None) -> 
         for citacao in leitura.desenhos:
             resultado.desenhos.append(
                 Ligacao(origem, desenhos.resolver(citacao.alvo, origem), citacao))
+    resultado.de_desenhos = _de_desenhos(vault_dir, indice, desenhos)
     return resultado
+
+
+def _de_desenhos(vault_dir: Path, indice: links.Indice, desenhos) -> list[Ligacao]:
+    """O link de cada elemento resolvido como um [[link]] numa nota da pasta
+    do desenho. A leitura do desenho fica no cache da busca (mtime)."""
+    from aide.storage import busca_desenhos
+    from aide.storage import desenhos as desenhos_
+    from aide.web.markdown import DESENHO, citacao_do_link
+
+    achadas = []
+    for origem in desenhos.por_caminho.values():
+        try:
+            leitura = busca_desenhos.ler(desenhos_.resolver(vault_dir, origem))
+        except (vault.ForaDoVault, OSError):
+            continue
+        for link in leitura.links:
+            citacao = citacao_do_link(link)
+            if citacao is None or citacao.tipo == "wiki" and DESENHO.search(citacao.alvo):
+                continue
+            destino = citacao.destino(origem, indice)
+            if destino is not None:
+                achadas.append(Ligacao(origem, destino, replace(citacao, trecho=link)))
+    return achadas
