@@ -174,6 +174,18 @@ def _busca(ctx, raiz: Path, busca: str, aberto: str | None) -> str:
                   f'{escape(quote(busca))}"{atual}>{escape(a.get("title") or relativo)}'
                   f'<span class="onde">{escape(relativo)}</span>{trecho}</a>')
         quantos += 1
+    # os desenhos depois das notas, lidos dos arquivos (não estão no banco)
+    from aide.storage import busca_desenhos
+
+    de = "&amp;de=" + escape(quote(aberto, safe="/")) if aberto else ""
+    for d in busca_desenhos.buscar(raiz, busca, incluir_privados=ctx.ver_privado):
+        trecho = (f'<span class="trecho">{_trecho(d["trecho"], termos)}</span>'
+                  if d["trecho"] else "")
+        itens += (f'<a class="arquivo achado desenho" href="/desenho?caminho='
+                  f'{escape(quote(d["caminho"], safe="/"))}{de}">'
+                  f'{icone("desenho", 13)}{escape(d["titulo"])}'
+                  f'<span class="onde">{escape(d["caminho"])}</span>{trecho}</a>')
+        quantos += 1
     topo = f'<p class="eyebrow">{formato.plural(quantos, "resultado")}</p>'
     return topo + itens if itens else '<p class="vazio">Nada encontrado.</p>'
 
