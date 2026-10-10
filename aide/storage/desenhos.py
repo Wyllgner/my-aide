@@ -118,6 +118,28 @@ def privado(dados: dict) -> bool:
     return dados.get("aide", {}).get("privada", False) is True
 
 
+def texto_de(dados: dict) -> str:
+    """O que está escrito no desenho, um trecho por linha: as caixas de texto
+    (inclusive o rótulo dentro de uma forma, que é um texto preso a ela) e o
+    nome dos frames. Elemento apagado fica no arquivo até o Excalidraw limpar;
+    não conta."""
+    trechos = []
+    for elemento in dados.get("elements", []):
+        if elemento.get("isDeleted") is True:
+            continue
+        if elemento.get("type") == "text":
+            # o originalText é o que você digitou; o text vem quebrado na
+            # largura da caixa
+            escrito = elemento.get("originalText") or elemento.get("text")
+        elif elemento.get("type") in ("frame", "magicframe"):
+            escrito = elemento.get("name")
+        else:
+            continue
+        if isinstance(escrito, str) and escrito.strip():
+            trechos.append(escrito.strip())
+    return "\n".join(trechos)
+
+
 def gravar(caminho: Path, texto: str, privada: bool | None = None) -> dict:
     """Confere e grava por cima, de uma vez (`vault.gravar`). Devolve o desenho.
 
