@@ -77,8 +77,13 @@ def instalar(app) -> None:
 
         # uma varredura da pasta serve aos dois índices
         arvore = vault.arvore(raiz())
+        from functools import partial
+
+        from aide.storage import previas
+
         return markdown.renderizar(texto, caminho, links.indice(raiz(), arvore),
-                                   anexos.indice(raiz()), desenhos.indice(raiz(), arvore))
+                                   anexos.indice(raiz()), desenhos.indice(raiz(), arvore),
+                                   partial(previas.previa_de, Path(config.data_dir), raiz()))
 
     @app.get("/api/notas/anexo")
     def anexo(caminho: str = Query(...)):

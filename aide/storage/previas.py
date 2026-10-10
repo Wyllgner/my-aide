@@ -121,3 +121,16 @@ def podar(data_dir: Path, vivos: Iterable[str]) -> None:
     for arquivo in pasta.glob("*.png"):
         if arquivo.name.partition("-")[0] not in prefixos:
             arquivo.unlink(missing_ok=True)
+
+
+def previa_de(data_dir: Path, vault_dir: Path, caminho: str) -> str | None:
+    """A assinatura da versão atual do desenho, se ela já tem prévia; senão
+    None. Pela mesma porta dos desenhos (nada de `..` nem link simbólico)."""
+    from aide.storage import desenhos, vault
+
+    try:
+        arquivo = desenhos.resolver(vault_dir, caminho)
+        atual = assinatura_do_arquivo(arquivo)
+    except (vault.ForaDoVault, OSError):
+        return None
+    return atual if achar(data_dir, caminho, atual) is not None else None

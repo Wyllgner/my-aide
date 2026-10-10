@@ -591,4 +591,12 @@ button.atalho-visao { width: 100%; border: 0; background: none; font: inherit; f
    volta (baixar a biblioteca escolhida) a CSP barra: o caminho não leva a nada */
 .desenho-editor .excalidraw .library-menu-control-buttons .library-menu-browse-button {
   display: none; }
+
+/* ![[desenho.excalidraw]] na nota: a prévia leva ao desenho */
+.desenho-embutido { display: inline-block; max-width: 100%; border: 1px solid var(--line);
+  border-radius: var(--r-inner); background: #fff; line-height: 0; }
+.desenho-embutido img { max-width: 100%; height: auto; border-radius: var(--r-inner); }
+.desenho-embutido:hover { border-color: var(--faint); }
+.desenho-embutido.sem-previa { line-height: 1.4; padding: 10px 14px; font-size: 13px;
+  color: var(--muted); background: var(--line-soft); }
 """

@@ -404,7 +404,8 @@ def _grafo_local(mapa: grafo.Mapa, indice: links.Indice, aberto: str) -> str:
 
 
 def _editor(raiz: Path, aberto: str, agora: datetime, indice: links.Indice,
-            modo: str = "dividido", entradas: list | None = None, local: str = "") -> str:
+            modo: str = "dividido", entradas: list | None = None, local: str = "",
+            previa_de=None) -> str:
     """O editor da nota aberta.
 
     Corretor desligado em nota privada: o "corretor avançado" do Chrome manda
@@ -478,7 +479,7 @@ def _editor(raiz: Path, aberto: str, agora: datetime, indice: links.Indice,
 <textarea id="editor" spellcheck="{"false" if privada else "true"}" data-caminho="{escape(aberto)}"
   data-versao="{escape(str(arquivo.stat().st_mtime_ns))}">
 {escape(texto)}</textarea></div>
-<article id="previa" class="previa">{markdown.renderizar(texto, aberto, indice, anexos.indice(raiz), desenhos.indice(raiz))}</article>
+<article id="previa" class="previa">{markdown.renderizar(texto, aberto, indice, anexos.indice(raiz), desenhos.indice(raiz), previa_de)}</article>
 </div>
 <div class="ao-redor">{_backlinks(entradas or [])}{local}</div>"""
 
@@ -582,8 +583,13 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
     elif geral:
         corpo = _visao_geral(raiz, agora, indice, ctx.conn)
     elif aberto:
+        from functools import partial
+
+        from aide.storage import previas
+
         corpo = _editor(raiz, aberto, agora, indice, _modo(modo), entradas,
-                        _grafo_local(mapa, indice, aberto))
+                        _grafo_local(mapa, indice, aberto),
+                        partial(previas.previa_de, Path(ctx.config.data_dir), raiz))
     else:
         corpo = '<p class="vazio">Escolha uma nota à esquerda ou crie uma nova.</p>'
 
