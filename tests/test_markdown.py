@@ -455,3 +455,32 @@ def test_cada_link_na_sua_linha_no_mesmo_paragrafo():
     achadas = markdown.citacoes("a [[Projetos/Casa]]\nb [[Casa|apelido]]\nc [[Casa]] e [[Casa]]\n")
     assert [(c.alvo, c.linha) for c in achadas] == [
         ("Projetos/Casa", 0), ("Casa", 1), ("Casa", 2), ("Casa", 2)]
+
+
+# ---------- o link de um elemento do desenho ----------
+
+@pytest.mark.parametrize("link, esperado", [
+    ("[[Telhado]]", ("wiki", "Telhado", "")),
+    (" [[Casa/Telhado#Calhas|as calhas]] ", ("wiki", "Casa/Telhado", "Calhas")),
+    ("Telhado", ("wiki", "Telhado", "")),
+    ("Telhado#Calhas", ("wiki", "Telhado", "Calhas")),
+    ("../Inbox/Reuni%C3%A3o.md", ("md", "../Inbox/Reuni%C3%A3o.md", "")),
+    ("[[Planta.excalidraw]]", ("wiki", "Planta.excalidraw", "")),
+    ("Planta.excalidraw", ("wiki", "Planta.excalidraw", "")),
+])
+def test_link_do_desenho_que_leva_ao_vault(link, esperado):
+    from aide.web.markdown import citacao_do_link
+
+    citacao = citacao_do_link(link)
+    assert (citacao.tipo, citacao.alvo, citacao.secao) == esperado
+
+
+@pytest.mark.parametrize("link", [
+    "", "   ", "https://x.org", "javascript:alert(1)", "mailto:a@b.c", "//x.org/a",
+    "/notas?arquivo=A.md", "#topo", "[[]]", "[[foto.png]]", "foto.png", "[[a]]b]]",
+    "\\\\servidor\\pasta", "data:text/html,oi",
+])
+def test_link_do_desenho_que_nao_e_do_vault(link):
+    from aide.web.markdown import citacao_do_link
+
+    assert citacao_do_link(link) is None
