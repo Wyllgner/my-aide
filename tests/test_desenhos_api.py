@@ -481,3 +481,82 @@ def test_mover_sem_ninguem_citando_nao_mexe_em_nota(cliente, vault_dir):
     assert resposta.json()["links_atualizados"] == []
     assert (vault_dir / "Nota.md").read_text() == "nada de desenho aqui\n"
 
+
+
+# ---------- o privado que não se perde (desenhos.marcados) ----------
+
+def _sem_marca_no_arquivo(vault_dir, caminho="Projetos/Casa.excalidraw"):
+    """O que o Obsidian ou o excalidraw.com fazem ao salvar: a chave "aide" some."""
+    arquivo = vault_dir / caminho
+    arquivo.write_text(_cena("editado no Obsidian"))
+    import os
+
+    os.utime(arquivo, ns=(arquivo.stat().st_mtime_ns + 10**9,) * 2)
+
+
+def test_privado_continua_depois_de_editado_por_fora(cliente, vault_dir, app):
+    _salvar(cliente, _cena(), _abrir(cliente)["versao"], privada=True)
+    _sem_marca_no_arquivo(vault_dir)
+    assert _abrir(cliente)["privada"] is True
+    # e o próximo salvamento daqui devolve a marcação ao arquivo
+    _salvar(cliente, _cena("de novo"), _abrir(cliente)["versao"])
+    assert json.loads((vault_dir / "Projetos" / "Casa.excalidraw").read_text())["aide"] == {
+        "privada": True}
+
+
+def test_registro_fica_em_data_so_com_o_dono(cliente, app):
+    from pathlib import Path
+
+    _salvar(cliente, _cena(), _abrir(cliente)["versao"], privada=True)
+    registro = Path(app.state.config.data_dir) / desenhos.MARCAS
+    assert json.loads(registro.read_text()) == ["Projetos/Casa.excalidraw"]
+    assert registro.stat().st_mode & 0o777 == 0o600
+
+
+def test_so_a_caixa_tira_o_privado(cliente, vault_dir):
+    _salvar(cliente, _cena(), _abrir(cliente)["versao"], privada=True)
+    _sem_marca_no_arquivo(vault_dir)
+    _salvar(cliente, _cena(), _abrir(cliente)["versao"], privada=False)
+    assert _abrir(cliente)["privada"] is False
+
+
+def test_marcado_no_arquivo_entra_no_registro_ao_abrir(cliente, vault_dir, app):
+    """Desenho marcado antes do registro existir."""
+    arquivo = vault_dir / "Projetos" / "Casa.excalidraw"
+    arquivo.write_text(json.dumps({**json.loads(_cena()), "aide": {"privada": True}}))
+    _abrir(cliente)
+    assert "Projetos/Casa.excalidraw" in desenhos.marcados(app.state.config.data_dir)
+
+
+def test_renomear_leva_o_privado_junto(cliente, vault_dir):
+    _salvar(cliente, _cena(), _abrir(cliente)["versao"], privada=True)
+    resposta = cliente.post("/api/desenhos/mover", json={
+        "de": "Projetos/Casa.excalidraw", "para": "Projetos/Sobrado.excalidraw"})
+    assert resposta.status_code == 200, resposta.text
+    _sem_marca_no_arquivo(vault_dir, "Projetos/Sobrado.excalidraw")
+    assert _abrir(cliente, "Projetos/Sobrado.excalidraw")["privada"] is True
+
+
+def test_mover_a_pasta_leva_o_privado_junto(cliente, vault_dir):
+    _salvar(cliente, _cena(), _abrir(cliente)["versao"], privada=True)
+    resposta = cliente.post("/api/notas/mover-pasta", json={"de": "Projetos", "para": "Arquivo"})
+    assert resposta.status_code == 200, resposta.text
+    _sem_marca_no_arquivo(vault_dir, "Arquivo/Casa.excalidraw")
+    assert _abrir(cliente, "Arquivo/Casa.excalidraw")["privada"] is True
+
+
+def test_desenho_novo_com_nome_de_um_privado_apagado_nasce_privado(cliente):
+    """Na dúvida, privado: é só desmarcar a caixa."""
+    _salvar(cliente, _cena(), _abrir(cliente)["versao"], privada=True)
+    assert cliente.delete(URL, params={"caminho": "Projetos/Casa.excalidraw"}).status_code == 200
+    resposta = cliente.post(URL, json={"caminho": "Projetos/Casa.excalidraw"})
+    assert resposta.json()["privada"] is True
+
+
+def test_registro_ilegivel_conta_tudo_como_privado(cliente, app):
+    from pathlib import Path
+
+    registro = Path(app.state.config.data_dir) / desenhos.MARCAS
+    registro.parent.mkdir(parents=True, exist_ok=True)
+    registro.write_text("{ torto")
+    assert _abrir(cliente)["privada"] is True
