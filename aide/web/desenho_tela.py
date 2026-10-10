@@ -29,7 +29,29 @@ def _voltar(raiz: Path, de: str | None) -> str:
     return "/notas"
 
 
-def pagina(caminho: str, voltar: str) -> str:
+def _citado_por(ligs: list) -> str:
+    """As notas que levam a este desenho, numa lista que abre pela barra —
+    o clique abre a nota já no link, como na lista de links quebrados."""
+    from aide.channels import formato
+    from aide.web.notas_tela import _onde_cita
+
+    if not ligs:
+        return ('<span class="desenho-citado vazio-curto"'
+                ' title="escreva [[nome.excalidraw]] numa nota para ligar">'
+                'nenhuma nota cita</span>')
+    por_origem: dict[str, list] = {}
+    for lig in ligs:
+        por_origem.setdefault(lig.origem, []).append(lig)
+    itens = "".join(_onde_cita(origem, por_origem[origem])
+                    for origem in sorted(por_origem, key=str.casefold))
+    rotulo = formato.plural(len(por_origem), "nota cita", "notas citam")
+    return (f'<details class="desenho-citado" id="citado-por"><summary class="botao">'
+            f'{icone("nota", 15)}<span>{escape(rotulo)}</span></summary>'
+            f'<div class="desenho-citado-lista"><p class="eyebrow">Links para este desenho</p>'
+            f'<ul class="quebrado-citacoes">{itens}</ul></div></details>')
+
+
+def pagina(caminho: str, voltar: str, citado_por: str = "") -> str:
     nome = Path(caminho).name.removesuffix(desenhos.EXTENSAO)
     pasta = str(Path(caminho).parent)
     return f"""<!doctype html>
@@ -56,6 +78,7 @@ def pagina(caminho: str, voltar: str) -> str:
   <button type="button" id="renomear" class="botao"
     title="renomear ou mudar de pasta; os links das notas acompanham">
     {icone("renomear", 15)}<span>renomear</span></button>
+  {citado_por}
   <span id="desenho-estado" class="desenho-estado" role="status" aria-live="polite">abrindo…</span>
   <label class="privada" title="privado: o texto do desenho não vai para o modelo nem para a OpenAI">
     <input type="checkbox" id="privada" disabled>{icone("privada", 15)}<span>privado</span></label>
@@ -99,7 +122,10 @@ def instalar(app) -> None:
             return _erro(400, "Esse caminho não é de um desenho do vault.")
         if not arquivo.is_file():
             return _erro(404, "Desenho não encontrado: ele foi apagado ou movido.")
-        return pagina(caminho, _voltar(raiz, de))
+        from aide.web import grafo
+
+        citam = grafo.mapa(raiz).citam_desenho(caminho)
+        return pagina(caminho, _voltar(raiz, de), _citado_por(citam))
 
     @app.get("/desenho.js")
     def script() -> Response:

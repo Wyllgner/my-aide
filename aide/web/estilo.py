@@ -583,6 +583,16 @@ button.atalho-visao { width: 100%; border: 0; background: none; font: inherit; f
 .desenho-estado.erro { color: var(--accent); }
 .desenho-editor { flex: 1; min-height: 0; position: relative; }
 .desenho-conflito { border-radius: 0; }
+/* "N notas citam": abre por cima do desenho */
+.desenho-citado { position: relative; }
+.desenho-citado.vazio-curto { margin: 0; font-size: 12.5px; white-space: nowrap; }
+.desenho-citado > summary { list-style: none; cursor: pointer; }
+.desenho-citado > summary::-webkit-details-marker { display: none; }
+.desenho-citado-lista { position: absolute; top: calc(100% + 6px); right: 0; z-index: 10;
+  width: min(380px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; padding: 12px;
+  background: var(--surface); border: 1px solid var(--borda); border-radius: var(--r-inner);
+  box-shadow: 0 8px 24px rgba(21,23,28,.12); }
+.desenho-citado-lista .eyebrow { margin: 0 0 4px; }
 /* "Web Embed" e "Mermaid to Excalidraw" não funcionam aqui (a CSP barra
    iframe de fora; o mermaid ficou fora do pacote). O Excalidraw dá o mesmo
    data-testid aos dois. Quatro seletores: o excalidraw.css vem depois com
