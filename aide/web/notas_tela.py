@@ -77,9 +77,8 @@ def _ramo(itens: list[dict], aberto: str) -> str:
                      f'<div class="filhos">{_ramo(item["filhos"], aberto) or _vazia()}</div>'
                      f'</details>')
         elif item["tipo"] == "desenho":
-            # fora do arrastar por enquanto: mover desenho tem a sua rota
             html += (f'<a class="arquivo desenho" href="{escape(_href_desenho(item["caminho"], aberto))}"'
-                     f' title="{caminho}" draggable="false">{icone("desenho", 14)}'
+                     f' title="{caminho}">{icone("desenho", 14)}'
                      f'<span>{escape(item["nome"])}</span></a>')
         else:
             atual = ' aria-current="page"' if item["caminho"] == aberto else ""
