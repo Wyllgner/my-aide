@@ -692,3 +692,38 @@ def test_trecho_mostra_o_nome_e_nao_a_largura_da_imagem():
                            "Casa.excalidraw")
     assert "e Casa.excalidraw e apelido" in html
     assert "300" not in html
+
+
+# ---------- desenhos na busca ----------
+
+def _desenho_com(raiz, caminho, escrito, privada=False):
+    import json
+
+    from aide.storage import desenhos
+
+    dados = json.loads(desenhos.vazio())
+    dados["elements"] = [{"type": "text", "id": "t", "text": escrito, "originalText": escrito}]
+    if privada:
+        dados["aide"] = {"privada": True}
+    (raiz / caminho).write_text(json.dumps(dados))
+
+
+def test_busca_acha_o_texto_do_desenho(cliente, raiz):
+    _desenho_com(raiz, "Projetos/Casa/Planta.excalidraw", "muro de arrimo")
+    html = cliente.get("/notas?busca=arrimo&arquivo=Inbox/Ideia.md").text
+    assert "1 resultado" in html
+    assert ('href="/desenho?caminho=Projetos/Casa/Planta.excalidraw&amp;de=Inbox/Ideia.md"'
+            in html)
+    assert "muro de <mark>arrimo</mark>" in html
+
+
+def test_busca_da_pagina_acha_o_desenho_privado(cliente, raiz):
+    """A página é do dono (ver_privado), como com as notas privadas."""
+    _desenho_com(raiz, "Diário.excalidraw", "consulta no dentista", privada=True)
+    assert "Diário.excalidraw" in cliente.get("/notas?busca=dentista").text
+
+
+def test_texto_do_desenho_na_busca_sai_escapado(cliente, raiz):
+    _desenho_com(raiz, "X.excalidraw", "<img src=x onerror=alert(1)> arrimo")
+    html = cliente.get("/notas?busca=arrimo").text
+    assert "<img src=x" not in html
