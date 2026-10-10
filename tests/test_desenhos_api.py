@@ -300,7 +300,8 @@ def test_mover_para_outra_pasta_e_audita(cliente, vault_dir, app):
     assert (vault_dir / "Arquivo" / "Casa.excalidraw").read_text() == desenhos.vazio()
     assert _trilha(app)[-1] == ("web", "desenhos.mover", {
         "caminho": "Projetos/Casa.excalidraw", "para": "Arquivo/Casa.excalidraw",
-        "links_atualizados": [], "links_nao_atualizados": []})
+        "links_atualizados": [], "desenhos_atualizados": [],
+        "links_nao_atualizados": []})
 
 
 def test_mover_por_cima_de_outro_e_409_e_nada_some(cliente, vault_dir):
@@ -629,3 +630,20 @@ def test_renomear_nota_conserta_o_link_do_desenho_e_audita(cliente, com_notas, a
     trilha = app.state.conn_factory().execute(
         "SELECT args_json FROM audit WHERE tool = 'notas.mover'").fetchone()[0]
     assert json_.loads(trilha)["desenhos_atualizados"] == ["Projetos/Casa.excalidraw"]
+
+
+def test_renomear_desenho_conserta_o_link_de_outro_desenho_e_audita(cliente, vault_dir, app):
+    import json as json_
+
+    outro = vault_dir / "Ideias.excalidraw"
+    dados = json_.loads(desenhos.vazio())
+    dados["elements"] = [{"type": "rectangle", "id": "a", "link": "[[Casa.excalidraw]]"}]
+    outro.write_text(json_.dumps(dados))
+    resposta = cliente.post("/api/desenhos/mover", json={
+        "de": "Projetos/Casa.excalidraw", "para": "Projetos/Sobrado.excalidraw"})
+    assert resposta.status_code == 200, resposta.text
+    assert resposta.json()["desenhos_atualizados"] == ["Ideias.excalidraw"]
+    assert json_.loads(outro.read_text())["elements"][0]["link"] == "[[Sobrado.excalidraw]]"
+    trilha = app.state.conn_factory().execute(
+        "SELECT args_json FROM audit WHERE tool = 'desenhos.mover'").fetchone()[0]
+    assert json_.loads(trilha)["desenhos_atualizados"] == ["Ideias.excalidraw"]
