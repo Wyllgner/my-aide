@@ -138,11 +138,16 @@ _MARCAS = re.compile(r"\[![\w-]+\][+-]?|(?<!\w)#{1,6}\s|(?<!\S)>+\s|[*_`]+|!?\[\
 def _trecho(texto: str, termos: list[str]) -> str:
     """O trecho do achado em texto corrido, com as palavras buscadas marcadas."""
     limpo = " ".join(_MARCAS.sub(" ", _WIKI.sub(r"\1", texto)).split())[:140]
-    html = escape(limpo)
-    if termos:
-        padrao = re.compile("|".join(re.escape(escape(t)) for t in termos), re.IGNORECASE)
-        html = padrao.sub(lambda m: f"<mark>{m.group(0)}</mark>", html)
-    return html
+    if not termos:
+        return escape(limpo)
+    # acha no texto como está e escapa pedaço por pedaço: procurar no texto
+    # já escapado marcaria "lt" dentro de "&lt;" e a entidade sairia quebrada
+    padrao = re.compile("|".join(re.escape(t) for t in termos), re.IGNORECASE)
+    html, inicio = "", 0
+    for casado in padrao.finditer(limpo):
+        html += escape(limpo[inicio:casado.start()]) + f"<mark>{escape(casado.group(0))}</mark>"
+        inicio = casado.end()
+    return html + escape(limpo[inicio:])
 
 
 def _busca(ctx, raiz: Path, busca: str, aberto: str | None) -> str:

@@ -745,3 +745,17 @@ def test_texto_do_desenho_na_busca_sai_escapado(cliente, raiz):
     _desenho_com(raiz, "X.excalidraw", "<img src=x onerror=alert(1)> arrimo")
     html = cliente.get("/notas?busca=arrimo").text
     assert "<img src=x" not in html
+
+
+@pytest.mark.parametrize("texto, termo, esperado", [
+    ("a < b", "lt", "a &lt; b"),
+    ("Tom & Jerry", "amp", "Tom &amp; Jerry"),
+    ("diz \"oi\"", "quot", "diz &quot;oi&quot;"),
+    ("a < b e casa", "casa", "a &lt; b e <mark>casa</mark>"),
+    ("<b>x</b>", "b>", "&lt;<mark>b&gt;</mark>x&lt;/<mark>b&gt;</mark>"),
+])
+def test_marcar_a_busca_nao_quebra_o_que_foi_escapado(texto, termo, esperado):
+    """Procurar no texto já escapado achava "lt" dentro de "&lt;"."""
+    from aide.web.notas_tela import _trecho
+
+    assert _trecho(texto, [termo]) == esperado
