@@ -348,3 +348,64 @@ def test_tags_do_frontmatter_viram_etiquetas(indice):
 
 def test_etiquetas_continua_achando_as_tags():
     assert markdown.etiquetas("---\ntags: [a]\n---\n\n#b e `#c` #b") == ["a", "b"]
+
+
+# ---------- [[desenho.excalidraw]] ----------
+
+@pytest.fixture
+def com_desenhos(tmp_path, indice):
+    from aide.storage import desenhos
+
+    for caminho in ("Projetos/Casa/Planta.excalidraw", "Outros/Planta.excalidraw",
+                    "Inbox/Fluxo & 'x'.excalidraw"):
+        (tmp_path / caminho).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / caminho).write_text(desenhos.vazio())
+    return desenhos.indice(tmp_path)
+
+
+def _com(texto, indice, desenhos, origem="Projetos/Casa/Telhado.md"):
+    return markdown.renderizar(texto, origem, indice, None, desenhos)
+
+
+def test_link_de_desenho_abre_a_tela_e_volta_para_a_nota(indice, com_desenhos):
+    html = _com("ver [[Planta.excalidraw]]", indice, com_desenhos)
+    assert ('<a class="wikilink desenho" href="/desenho?caminho=Projetos/Casa/Planta.excalidraw'
+            '&amp;de=Projetos/Casa/Telhado.md" title="Projetos/Casa/Planta.excalidraw">'
+            'Planta</a>') in html
+
+
+def test_link_de_desenho_acha_na_pasta_da_nota_primeiro_e_pelo_caminho(indice, com_desenhos):
+    longe = _com("[[Planta.excalidraw]]", indice, com_desenhos, origem="Outros/Nota.md")
+    assert "caminho=Outros/Planta.excalidraw" in longe
+    caminho = _com("[[Outros/Planta.excalidraw|a outra]]", indice, com_desenhos)
+    assert "caminho=Outros/Planta.excalidraw" in caminho and ">a outra</a>" in caminho
+
+
+def test_link_de_desenho_que_nao_existe_fica_quebrado_para_criar(indice, com_desenhos):
+    html = _com("[[Fachada.excalidraw]]", indice, com_desenhos)
+    assert ('<a class="wikilink desenho quebrado" role="link" tabindex="0"'
+            ' data-alvo="Fachada.excalidraw"') in html
+    assert "href=" not in html.split("Fachada")[0].rsplit("<a", 1)[1]
+
+
+def test_sem_indice_de_desenhos_o_link_nao_leva_a_lugar_nenhum(indice):
+    html = _html("[[Planta.excalidraw]]", indice)
+    assert "wikilink desenho quebrado" in html
+
+
+def test_nome_de_desenho_escapado(indice, com_desenhos):
+    html = _com("[[Fluxo & 'x'.excalidraw]]", indice, com_desenhos)
+    assert ">Fluxo &amp; &#x27;x&#x27;</a>" in html
+    assert "Fluxo%20%26%20%27x%27.excalidraw" in html
+
+
+def test_link_de_desenho_nao_entra_no_mapa_como_nota():
+    """Viraria "nota que não existe" nos quebrados, e o criar faria .excalidraw.md."""
+    achadas = markdown.citacoes("[[Planta.excalidraw]] e [[Telhado]]")
+    assert [c.alvo for c in achadas] == ["Telhado"]
+
+
+def test_indice_de_desenhos_so_tem_desenho(tmp_path, com_desenhos):
+    assert com_desenhos.resolver("Telhado.md") is None
+    assert com_desenhos.resolver("Planta.excalidraw", "Projetos/Casa/X.md") == (
+        "Projetos/Casa/Planta.excalidraw")

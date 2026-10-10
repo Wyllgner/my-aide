@@ -18,7 +18,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 from aide.channels import formato
-from aide.storage import anexos, links, vault
+from aide.storage import anexos, desenhos, links, vault
 from aide.web import consultas, grafo, markdown, visao
 from aide.web.icones import icone
 from aide.web.notas_api import TAMANHO_MAXIMO
@@ -478,7 +478,7 @@ def _editor(raiz: Path, aberto: str, agora: datetime, indice: links.Indice,
 <textarea id="editor" spellcheck="{"false" if privada else "true"}" data-caminho="{escape(aberto)}"
   data-versao="{escape(str(arquivo.stat().st_mtime_ns))}">
 {escape(texto)}</textarea></div>
-<article id="previa" class="previa">{markdown.renderizar(texto, aberto, indice, anexos.indice(raiz))}</article>
+<article id="previa" class="previa">{markdown.renderizar(texto, aberto, indice, anexos.indice(raiz), desenhos.indice(raiz))}</article>
 </div>
 <div class="ao-redor">{_backlinks(entradas or [])}{local}</div>"""
 

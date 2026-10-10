@@ -492,3 +492,14 @@ def test_apagar_pasta_com_desenho_leva_e_conta_o_desenho(cliente, app, vault_dir
     assert trilha["notas"] == 1 and trilha["desenhos"] == 1
     # a contagem da lixeira enxerga os dois
     assert consultas.notas_na_lixeira(vault_dir) == 2
+
+
+def test_previa_ao_salvar_ja_liga_o_desenho(cliente, vault_dir):
+    from aide.storage import desenhos
+
+    (vault_dir / "Inbox" / "Planta.excalidraw").write_text(desenhos.vazio())
+    resposta = _salvar(cliente, "ver [[Planta.excalidraw]] e [[Nada.excalidraw]]",
+                       _abrir(cliente)["versao"])
+    html = resposta.json()["html"]
+    assert 'class="wikilink desenho" href="/desenho?caminho=Inbox/Planta.excalidraw' in html
+    assert 'class="wikilink desenho quebrado"' in html

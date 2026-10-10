@@ -145,6 +145,33 @@ def criar(caminho: Path, texto: str | None = None) -> dict:
     return dados
 
 
+# ---------- achar o desenho que um link pede ----------
+
+
+def indice(vault_dir: Path, arvore: list[dict] | None = None):
+    """Os desenhos do vault para [[Casa.excalidraw]]: pelo nome em qualquer
+    pasta (a da nota primeiro) ou pelo caminho, como os anexos e o Obsidian.
+    Da árvore da página, que já deixa de fora oculto e link simbólico."""
+    from aide.storage.anexos import Anexos
+    from aide.storage.links import chave
+
+    por_nome: dict[str, list[str]] = {}
+    por_caminho: dict[str, str] = {}
+
+    def visitar(itens: list[dict]) -> None:
+        for item in itens:
+            if item["tipo"] == "pasta":
+                visitar(item["filhos"])
+            elif item["tipo"] == "desenho":
+                caminho = item["caminho"]
+                # o Anexos procura com ".md" no fim (chave() o tira de volta)
+                por_caminho[chave(caminho + ".md")] = caminho
+                por_nome.setdefault(chave(caminho.rpartition("/")[2] + ".md"), []).append(caminho)
+
+    visitar(vault.arvore(vault_dir) if arvore is None else arvore)
+    return Anexos({k: tuple(v) for k, v in por_nome.items()}, por_caminho)
+
+
 # ---------- a biblioteca de formas ----------
 
 # Uma só, na raiz do vault, no formato do excalidraw.com (.excalidrawlib): o

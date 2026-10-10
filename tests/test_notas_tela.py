@@ -577,3 +577,19 @@ def test_script_cria_desenho_pela_rota_dele_e_abre_a_tela():
     assert 'location.href = "/desenho?caminho=" + encodeURIComponent(caminho)' in JS
     # cada id que o script procura existe na tela
     assert 'getElementById("novo-desenho")' in JS
+
+
+def test_link_quebrado_de_desenho_cria_desenho_e_nao_nota():
+    from aide.web.script import JS
+
+    trecho = JS[JS.index("function criarDoLink"):]
+    trecho = trecho[:trecho.index("// ---------- tarefa marcada")]
+    assert trecho.index('/\\.excalidraw$/i.test(novo)') < trecho.index('novo += ".md"')
+    assert 'pedir("POST", "/api/desenhos/arquivo", { caminho: novo })' in trecho
+
+
+def test_previa_da_nota_mostra_link_para_o_desenho(cliente, raiz):
+    _com_desenho(raiz)
+    (raiz / "Inbox" / "Ideia.md").write_text("ver [[Planta.excalidraw]]")
+    html = cliente.get("/notas", params={"arquivo": "Inbox/Ideia.md"}).text
+    assert 'class="wikilink desenho" href="/desenho?caminho=Projetos/Casa/Planta.excalidraw' in html
