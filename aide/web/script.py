@@ -150,8 +150,7 @@ JS = r"""
     var limparAlvos = function () {
       arvoreArrasto.querySelectorAll(".alvo-soltar").forEach(function (el) { el.classList.remove("alvo-soltar"); });
     };
-    // só nota: desenho tem a sua rota de mover
-    arvoreArrasto.querySelectorAll(".arquivo[title]:not(.desenho)").forEach(function (a) {
+    arvoreArrasto.querySelectorAll(".arquivo[title]").forEach(function (a) {
       a.addEventListener("dragstart", function (e) {
         e.dataTransfer.setData(TIPO_NOTA, a.getAttribute("title"));
         e.dataTransfer.effectAllowed = "move";
@@ -195,8 +194,10 @@ JS = r"""
       var aberta = editorAberto ? editorAberto.dataset.caminho : "";
       // a nota aberta pode ser a que muda, ou ter links nela reescritos: salva antes
       var guardar = window.aideSalvar ? window.aideSalvar() : Promise.resolve();
+      // desenho tem a sua rota; nota tem a dela, que também reescreve os links
+      var rota = /\.excalidraw$/i.test(de) ? "/api/desenhos/mover" : "/api/notas/mover";
       guardar.then(function () {
-        return pedir("POST", "/api/notas/mover", { de: de, para: para });
+        return pedir("POST", rota, { de: de, para: para });
       }).then(function (r) {
         if (!r.ok) { return erroDe(r).then(function (m) { throw new Error(m); }); }
         return r.json().then(function (d) {

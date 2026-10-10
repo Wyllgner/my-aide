@@ -517,7 +517,7 @@ def test_desenho_aparece_na_arvore_e_abre_a_tela_dele(cliente, raiz):
     html = cliente.get("/notas", params={"arquivo": "Inbox/Ideia.md"}).text
     assert ('<a class="arquivo desenho" '
             'href="/desenho?caminho=Projetos/Casa/Planta.excalidraw&amp;de=Inbox/Ideia.md"'
-            ' title="Projetos/Casa/Planta.excalidraw" draggable="false">') in html
+            ' title="Projetos/Casa/Planta.excalidraw">') in html
     assert "<span>Planta</span>" in html
 
 
@@ -553,10 +553,13 @@ def test_nome_de_desenho_sai_escapado_na_arvore(cliente, raiz):
     assert 'title="Plano &amp; &#x27;x&#x27;.excalidraw"' in html
 
 
-def test_desenho_fica_fora_do_arrastar_de_nota():
+def test_arrastar_desenho_usa_a_rota_de_desenho():
+    """A de nota recusaria o .excalidraw (e reescreve links de nota)."""
     from aide.web.script import JS
 
-    assert '.arquivo[title]:not(.desenho)' in JS
+    assert ('var rota = /\\.excalidraw$/i.test(de) ? "/api/desenhos/mover" : "/api/notas/mover";'
+            in JS)
+    assert 'return pedir("POST", rota, { de: de, para: para });' in JS
 
 
 def test_botao_de_novo_desenho_no_topo_e_em_cada_pasta(cliente, raiz):
