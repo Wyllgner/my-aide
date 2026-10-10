@@ -68,7 +68,7 @@ def montar(vault_dir: Path, agora: datetime, dias: int = 30,
         notas=len(lidas),
         palavras=sum(leitura.palavras for leitura in lidas.values()),
         ligacoes=len({(lig.origem, lig.destino) for lig in entre_notas}),
-        quebrados=len(mapa.quebrados()),
+        quebrados=len(mapa.quebrados()) + len(mapa.desenhos_quebrados()),
         orfas=sorted((c for c in lidas if c not in conectadas), key=str.casefold),
         mais_citadas=sorted(citada_por.items(), key=lambda par: (-par[1], par[0].casefold()))[:10],
         tags=[(grafia[t], n) for t, n in
