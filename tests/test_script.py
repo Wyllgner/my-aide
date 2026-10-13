@@ -196,3 +196,25 @@ def test_desfazer_no_bloco_so_quando_ele_esta_como_abriu():
     pagina = JS[JS.index('  document.addEventListener("keydown", function (e) {\n'
                          '    if (area.dataset.modo !== "vivo" || bloco)'):]
     assert 'closest("input, textarea, select, [contenteditable]")' in pagina[:400]
+
+
+# ---------- lado a lado ----------
+
+def _interpolar(pares, x):
+    inicio = JS.index("  function interpolar(")
+    fim = JS.index("  // o topo de cada linha do campo")
+    codigo = JS[inicio:fim] + f"\nconsole.log(JSON.stringify(interpolar({json.dumps(pares)}, {x})));"
+    saida = subprocess.run([node, "-e", codigo], capture_output=True, text=True, check=True)
+    return json.loads(saida.stdout)
+
+
+@pytest.mark.parametrize("x, y", [
+    (-5, 0), (0, 0), (50, 100), (100, 200), (150, 250), (300, 400), (999, 400),
+])
+def test_rolagem_anda_em_reta_entre_os_blocos(x, y):
+    """Campo e prévia têm alturas diferentes por bloco: cada trecho tem a sua escala."""
+    assert _interpolar([[0, 0], [100, 200], [300, 400]], x) == y
+
+
+def test_rolagem_sem_pares_fica_no_topo():
+    assert _interpolar([], 50) == 0
