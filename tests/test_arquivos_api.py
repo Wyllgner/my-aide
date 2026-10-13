@@ -231,3 +231,39 @@ def test_montar_imagens_com_orientacao_propria(cliente):
     assert resposta.status_code == 200, resposta.text
     paginas = PdfReader(io.BytesIO(resposta.content)).pages
     assert [round(float(p.mediabox.width)) for p in paginas] == [842, 595]
+
+
+# ---------- PDF → imagens ----------
+
+IMAGENS = "/api/arquivos/imagens"
+com_pdftoppm = pytest.mark.skipif(not __import__("shutil").which("pdftoppm"), reason="sem pdftoppm")
+
+
+@com_pdftoppm
+def test_uma_pagina_volta_como_png(cliente, temporarios):
+    resposta = cliente.post(IMAGENS, content=corpo_conversao({"a.pdf": pdf_com([300])}),
+                            headers=ESCRITA)
+    assert resposta.status_code == 200, resposta.text
+    assert resposta.headers["content-type"] == "image/png"
+    assert resposta.content.startswith(b"\x89PNG")
+    assert list(temporarios.iterdir()) == []
+
+
+@com_pdftoppm
+def test_varias_paginas_voltam_num_zip_com_numero(cliente, temporarios):
+    import zipfile
+
+    arquivos = {"contrato.pdf": pdf_com([300, 300, 300]), "outro/contrato.pdf": pdf_com([300])}
+    resposta = cliente.post(IMAGENS, content=corpo_conversao(arquivos), headers=ESCRITA)
+    assert resposta.status_code == 200, resposta.text
+    assert resposta.headers["content-type"] == "application/zip"
+    nomes = zipfile.ZipFile(io.BytesIO(resposta.content)).namelist()
+    assert nomes == ["contrato-p01.png", "contrato-p02.png", "contrato-p03.png",
+                     "outro_contrato-p01.png"]
+    assert list(temporarios.iterdir()) == []
+
+
+def test_o_que_nao_e_pdf_nao_vira_imagem(cliente):
+    resposta = cliente.post(IMAGENS, content=corpo_conversao({"a.pdf": b"nada"}), headers=ESCRITA)
+    assert resposta.status_code == 422
+    assert "não é um PDF" in resposta.json()["detail"]

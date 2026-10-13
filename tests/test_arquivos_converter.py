@@ -125,3 +125,52 @@ def test_libreoffice_que_falha_vira_erro_legivel(tmp_path, monkeypatch):
     entrada.write_text("x")
     with pytest.raises(converter.ConversaoFalhou, match="não conseguiu converter x.txt"):
         converter.para_pdf(entrada, "x.txt", tmp_path / "saida")
+
+
+# ---------- PDF → imagens ----------
+
+com_pdftoppm = pytest.mark.skipif(not shutil.which("pdftoppm"), reason="sem pdftoppm")
+
+
+def pdf_de(caminho, paginas):
+    from pypdf import PdfWriter
+
+    escritor = PdfWriter()
+    for _ in range(paginas):
+        escritor.add_blank_page(width=200, height=300)
+    with caminho.open("wb") as f:
+        escritor.write(f)
+    return caminho
+
+
+@com_pdftoppm
+def test_cada_pagina_vira_um_png_na_ordem(tmp_path):
+    from PIL import Image
+
+    imagens = converter.para_imagens(pdf_de(tmp_path / "e.pdf", 12), "e.pdf", tmp_path / "saida")
+    assert len(imagens) == 12
+    # p-01 … p-12, ordenadas pelo número e não pelo texto
+    assert [int(i.stem.rsplit("-", 1)[1]) for i in imagens] == list(range(1, 13))
+    with Image.open(imagens[0]) as primeira:
+        # 200 pt a 150 dpi
+        assert primeira.size == (round(200 / 72 * converter.DPI), round(300 / 72 * converter.DPI))
+
+
+def test_pdf_com_senha_nao_vira_imagem(tmp_path):
+    from pypdf import PdfWriter
+
+    escritor = PdfWriter(clone_from=pdf_de(tmp_path / "a.pdf", 1))
+    escritor.encrypt("segredo")
+    protegido = tmp_path / "p.pdf"
+    with protegido.open("wb") as f:
+        escritor.write(f)
+    from aide.arquivos import pdf
+
+    with pytest.raises(pdf.PdfInvalido, match="senha"):
+        converter.para_imagens(protegido, "p.pdf", tmp_path / "saida")
+
+
+def test_limite_de_paginas_para_imagem(tmp_path, monkeypatch):
+    monkeypatch.setattr(converter, "MAXIMO_DE_IMAGENS", 3)
+    with pytest.raises(converter.ConversaoFalhou, match="mais de 3 páginas"):
+        converter.para_imagens(pdf_de(tmp_path / "e.pdf", 4), "e.pdf", tmp_path / "saida")

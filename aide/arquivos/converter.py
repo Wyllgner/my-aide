@@ -1,4 +1,5 @@
-"""Converter documento em PDF pelo LibreOffice desta máquina.
+"""Converter documento em PDF pelo LibreOffice desta máquina, e PDF em
+imagens pelo pdftoppm.
 
 Cada conversão roda com um perfil do LibreOffice só dela, numa pasta
 temporária: o perfil de quem usa o LibreOffice no dia a dia nunca é tocado, e
@@ -25,6 +26,10 @@ from pathlib import Path
 log = logging.getLogger(__name__)
 
 PRAZO = 120
+# PDF → imagens: 150 dpi lê bem na tela e imprime sem serrilhado; o limite de
+# páginas segura o .zip (uma A4 dá uns 200 KB)
+DPI = 150
+MAXIMO_DE_IMAGENS = 300
 
 # a extensão diz o filtro ao LibreOffice; o conteúdo tem de ser da mesma família
 ZIP, OLE = b"PK\x03\x04", b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
@@ -87,23 +92,51 @@ def para_pdf(entrada: Path, nome: str, saida: Path) -> Path:
     entrada.rename(arquivo)
     perfil = entrada.parent / f"perfil-{entrada.stem}"
     saida.mkdir(exist_ok=True)
-    comando = [*_isolamento(), soffice, "--headless", "--norestore", "--nolockcheck",
+    comando = [soffice, "--headless", "--norestore", "--nolockcheck",
                "--nodefault", f"-env:UserInstallation={perfil.as_uri()}",
                "--convert-to", "pdf", "--outdir", str(saida), str(arquivo)]
+    ok = _rodar(comando, nome, {"HOME": str(perfil)})
+    resultado = saida / (arquivo.stem + ".pdf")
+    if not ok or not resultado.is_file() or not resultado.stat().st_size:
+        raise ConversaoFalhou(f"o LibreOffice não conseguiu converter {nome}")
+    return resultado
+
+
+def _rodar(comando: list[str], nome: str, ambiente: dict | None = None) -> bool:
+    """Roda sem rede (quando dá), um de cada vez e com prazo. Devolve se
+    terminou bem; o motivo da falha vai para o log, não para a tela."""
     with _uma_por_vez:
         # sessão própria: no prazo estourado morre o grupo inteiro, não só o
         # lançador (o soffice.bin de verdade é filho dele)
-        processo = subprocess.Popen(comando, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
-                                    start_new_session=True,
-                                    env={**os.environ, "HOME": str(perfil)})
+        processo = subprocess.Popen([*_isolamento(), *comando], stdout=subprocess.DEVNULL,
+                                    stderr=subprocess.PIPE, start_new_session=True,
+                                    env={**os.environ, **(ambiente or {})})
         try:
             _, erro = processo.communicate(timeout=PRAZO)
         except subprocess.TimeoutExpired:
             os.killpg(processo.pid, signal.SIGKILL)
             processo.wait()
             raise ConversaoFalhou(f"{nome} demorou mais de {PRAZO} s para converter") from None
-    resultado = saida / (arquivo.stem + ".pdf")
-    if processo.returncode != 0 or not resultado.is_file() or not resultado.stat().st_size:
+    if processo.returncode != 0:
         log.info("conversão de %s falhou: %s", nome, erro.decode(errors="replace")[-500:])
-        raise ConversaoFalhou(f"o LibreOffice não conseguiu converter {nome}")
-    return resultado
+    return processo.returncode == 0
+
+
+def para_imagens(entrada: Path, nome: str, saida: Path) -> list[Path]:
+    """Cada página de `entrada` como PNG em `saida`, na ordem das páginas."""
+    from aide.arquivos import pdf
+
+    pdftoppm = shutil.which("pdftoppm")
+    if not pdftoppm:
+        raise ConversaoFalhou("o pdftoppm (poppler-utils) não está instalado nesta máquina")
+    leitor = pdf.abrir(entrada, nome)
+    if len(leitor.pages) > MAXIMO_DE_IMAGENS:
+        raise ConversaoFalhou(f"{nome} tem mais de {MAXIMO_DE_IMAGENS} páginas")
+    saida.mkdir(parents=True, exist_ok=True)
+    if not _rodar([pdftoppm, "-png", "-r", str(DPI), str(entrada), str(saida / "p")], nome):
+        raise ConversaoFalhou(f"não deu para desenhar as páginas de {nome}")
+    # p-1.png … ou p-01.png …: o pdftoppm completa com zeros pelo total
+    imagens = sorted(saida.glob("p-*.png"), key=lambda c: int(c.stem.rsplit("-", 1)[1]))
+    if not imagens:
+        raise ConversaoFalhou(f"não deu para desenhar as páginas de {nome}")
+    return imagens

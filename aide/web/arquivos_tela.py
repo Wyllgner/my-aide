@@ -94,16 +94,16 @@ def tela(ctx, registry, agora) -> str:
       {icone("exportar")}<span>Baixar PDF juntado</span></button>
   </div>
 </section>
-<section class="card juntar" id="arq-converter" hidden>
+<section class="card juntar" id="arq-lote" hidden>
   <div class="editor-topo">
-    <h2>Converter para PDF</h2>
-    <span class="resumo mono">pelo LibreOffice desta máquina</span>
+    <h2 id="arq-lote-titulo"></h2>
+    <span class="resumo mono" id="arq-lote-nota"></span>
   </div>
-  <div id="arq-converter-lista"></div>
+  <div id="arq-lote-lista"></div>
   <div class="rodape-editor">
-    <span class="mono">vários documentos voltam num .zip, um PDF para cada</span>
-    <button type="button" class="botao botao-principal" id="arq-converter-baixar">
-      {icone("exportar")}<span>Converter e baixar PDF</span></button>
+    <span class="mono" id="arq-lote-rodape"></span>
+    <button type="button" class="botao botao-principal" id="arq-lote-baixar">
+      {icone("exportar")}<span>Baixar</span></button>
   </div>
 </section>
 <template id="arq-modelo-juntar">

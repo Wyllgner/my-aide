@@ -66,8 +66,9 @@ def test_soltar_nao_manda_nada_ao_servidor(cliente):
 
     js = cliente.get("/arquivos.js").text
     assert re.findall(r'fetch\(([^,]+),', js) == ["rota"]
-    assert set(re.findall(r'enviar\("([^"]+)"', js)) == {"/api/arquivos/montar",
-                                                          "/api/arquivos/converter"}
+    assert set(re.findall(r'enviar\("([^"]+)"', js)) == {"/api/arquivos/montar"}
+    assert set(re.findall(r'rota: "([^"]+)"', js)) == {"/api/arquivos/converter",
+                                                      "/api/arquivos/imagens"}
     assert "innerHTML" not in js  # nome de arquivo é texto, nunca marcação
 
 
@@ -167,10 +168,11 @@ def test_imagens_viram_pdf_cada_uma_na_sua_orientacao(cliente):
     assert 'imagens: "proprias"' in bloco
 
 
-def test_converter_mostra_cada_documento_e_baixa_pela_rota_propria(cliente):
+def test_converter_e_pdf_imagens_dividem_o_cartao_de_lote(cliente):
     html = cliente.get("/arquivos").text
-    assert '<section class="card juntar" id="arq-converter" hidden>' in html
-    assert 'id="arq-converter-baixar"' in html
+    assert '<section class="card juntar" id="arq-lote" hidden>' in html
+    assert 'id="arq-lote-baixar"' in html
     js = cliente.get("/arquivos.js").text
-    assert 'enviar("/api/arquivos/converter"' in js
-    assert "nomes: docs.map" in js
+    assert 'rota: "/api/arquivos/converter"' in js
+    assert 'rota: "/api/arquivos/imagens"' in js
+    assert "enviar(lote.rota" in js and "nomes: docs.map" in js
