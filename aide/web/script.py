@@ -907,16 +907,84 @@ JS = r"""
   });
 
   // ---------- lado a lado: as duas colunas rolam juntas ----------
-  // na mesma proporção: o texto e a prévia têm alturas diferentes, mas o meio
-  // de um fica perto do meio do outro. Quem começou a rolar manda; a rolagem
-  // que ele provoca na outra coluna não volta para ele
+  // linha a linha: o bloco que está no topo de uma coluna fica no topo da
+  // outra. Cada bloco da prévia diz a linha do arquivo de onde veio
+  // (data-fonte, data-bloco); a altura da mesma linha no campo vem de um
+  // espelho dele. Entre dois blocos, a rolagem anda em reta. Quem começou a
+  // rolar manda; a rolagem que ele provoca na outra coluna não volta para ele
   var rolando = null;
   var soltarRolagem = null;
+  var mapaRolagem = null;
+
+  // [x, y] crescentes nos dois: o y de um x, na reta entre os pares vizinhos
+  function interpolar(pares, x) {
+    if (!pares.length) { return 0; }
+    if (x <= pares[0][0]) { return pares[0][1]; }
+    for (var i = 1; i < pares.length; i++) {
+      var a = pares[i - 1];
+      var b = pares[i];
+      if (x <= b[0]) {
+        return b[0] === a[0] ? b[1] : a[1] + (x - a[0]) / (b[0] - a[0]) * (b[1] - a[1]);
+      }
+    }
+    return pares[pares.length - 1][1];
+  }
+
+  // o topo de cada linha do campo, com as quebras que a largura dele faz
+  function toposDasLinhas() {
+    var espelho = document.createElement("div");
+    var estilo = getComputedStyle(editor);
+    ["fontFamily", "fontSize", "lineHeight", "padding", "letterSpacing", "tabSize"]
+      .forEach(function (p) { espelho.style[p] = estilo[p]; });
+    espelho.style.cssText += ";position:absolute;visibility:hidden;white-space:pre-wrap;" +
+      "overflow-wrap:break-word;box-sizing:border-box;border:0;width:" + editor.clientWidth + "px";
+    editor.value.split("\n").forEach(function (linha) {
+      var d = document.createElement("div");
+      d.textContent = linha || "\u200b";
+      espelho.appendChild(d);
+    });
+    document.body.appendChild(espelho);
+    var topos = Array.prototype.map.call(espelho.children, function (d) { return d.offsetTop; });
+    document.body.removeChild(espelho);
+    return topos;
+  }
+
+  // pares [topo no campo, topo na prévia], um por bloco; refeito quando o
+  // texto, a prévia ou a altura de uma das colunas muda
+  function paresDeRolagem() {
+    var chave = [editor.value.length, editor.scrollHeight, editor.clientWidth,
+      previa.scrollHeight, previa.clientWidth].join(",");
+    if (mapaRolagem && mapaRolagem.chave === chave && mapaRolagem.texto === editor.value &&
+        mapaRolagem.primeiro === previa.firstChild) {
+      return mapaRolagem.pares;
+    }
+    var topos = editor.value.length > LIMITE_REALCE ? [] : toposDasLinhas();
+    var base = previa.getBoundingClientRect().top - previa.scrollTop;
+    var pares = [[0, 0]];
+    if (topos.length) {
+      previa.querySelectorAll("[data-fonte], [data-bloco]").forEach(function (el) {
+        var linha = parseInt(el.dataset.fonte || el.dataset.bloco, 10);
+        if (isNaN(linha) || linha >= topos.length || !el.offsetHeight) { return; }
+        var par = [topos[linha], el.getBoundingClientRect().top - base];
+        var ultimo = pares[pares.length - 1];
+        if (par[0] > ultimo[0] && par[1] > ultimo[1]) { pares.push(par); }
+      });
+    }
+    var fim = [editor.scrollHeight - editor.clientHeight, previa.scrollHeight - previa.clientHeight];
+    // as pontas sempre se encontram: no fim de uma, a outra também está no fim
+    while (pares.length > 1 && (pares[pares.length - 1][0] >= fim[0] ||
+                                 pares[pares.length - 1][1] >= fim[1])) { pares.pop(); }
+    pares.push(fim);
+    mapaRolagem = { chave: chave, texto: editor.value, primeiro: previa.firstChild, pares: pares };
+    return pares;
+  }
+
   function acompanhar(de, para) {
     if (area.dataset.modo !== "dividido" || rolando === para) { return; }
-    var max = de.scrollHeight - de.clientHeight;
     rolando = de;
-    para.scrollTop = (max > 0 ? de.scrollTop / max : 0) * (para.scrollHeight - para.clientHeight);
+    var pares = paresDeRolagem();
+    if (de === previa) { pares = pares.map(function (p) { return [p[1], p[0]]; }); }
+    para.scrollTop = interpolar(pares, de.scrollTop);
     clearTimeout(soltarRolagem);
     soltarRolagem = setTimeout(function () { rolando = null; }, 120);
   }
