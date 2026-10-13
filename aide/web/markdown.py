@@ -539,13 +539,21 @@ def _valor(chave: str, valor: str, origem: str | None) -> str:
     return " ".join(_etiqueta(t, origem) for t in tags if t) or escape(valor)
 
 
+def _repete_o_nome(titulo: str, origem: str | None) -> bool:
+    """O título é o nome do arquivo, que a página já mostra em cima da nota."""
+    nome = (origem or "").rpartition("/")[2].removesuffix(".md")
+    return bool(nome) and titulo.strip().casefold() == nome.casefold()
+
+
 def _propriedades(meta: dict[str, str], fim: int, origem: str | None = None) -> str:
     """O frontmatter em lista; `fim` é a linha onde o corpo começa, e o
-    bloco vai da primeira linha do arquivo até ela."""
-    if not meta:
-        return ""
+    bloco vai da primeira linha do arquivo até ela. O `title:` igual ao nome
+    do arquivo fica de fora: seria o mesmo nome duas vezes, um embaixo do outro."""
     linhas = "".join(f"<dt>{escape(chave)}</dt><dd>{_valor(chave, valor, origem)}</dd>"
-                     for chave, valor in meta.items())
+                     for chave, valor in meta.items()
+                     if not (chave.casefold() == "title" and _repete_o_nome(valor, origem)))
+    if not linhas:
+        return ""
     return f'<dl class="propriedades" data-bloco="0-{fim}">{linhas}</dl>'
 
 
@@ -559,7 +567,14 @@ def renderizar(texto: str, origem: str | None, indice: Indice, anexos=None,
     corpo = "\n".join(texto.split("\n")[inicio:])
     env = {"origem": origem, "indice": indice, "deslocamento": inicio, "anexos": anexos,
            "desenhos": desenhos, "previa_de": previa_de}
-    return _propriedades(meta, inicio, origem) + MOTOR.render(corpo, env)
+    html = MOTOR.render(corpo, env)
+    # o "# Título" do começo igual ao nome do arquivo ganha uma marca: o modo
+    # ler esconde, os de escrever mostram (é ali que ele se edita)
+    primeira = next((linha for linha in corpo.split("\n") if linha.strip()), "")
+    titulo = re.fullmatch(r"# +(.+?)(?: +#+)? *", primeira)
+    if titulo and _repete_o_nome(titulo.group(1), origem) and html.startswith("<h1 "):
+        html = '<h1 class="repete-nome" ' + html[len("<h1 "):]
+    return _propriedades(meta, inicio, origem) + html
 
 
 # ---------- links de uma nota, para o mapa ----------
