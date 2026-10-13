@@ -233,9 +233,9 @@ depois do reboot, use `deploy/my-aide.service`.
 
 ## Interface web
 
-Sobe junto com o daemon em **http://127.0.0.1:8787**, com doze telas: painel com
-gráficos, hoje, calendário do mês, conversas, notas, gastos, custo e saldo,
-memória, pessoas, fila, ferramentas e auditoria.
+Sobe junto com o daemon em **http://127.0.0.1:8787**, com treze telas: painel com
+gráficos, hoje, calendário do mês, conversas, notas, arquivos, gastos, custo e
+saldo, memória, pessoas, fila, ferramentas e auditoria.
 
 **Notas** é um editor no jeito do Obsidian, sobre o mesmo `vault/`:
 
@@ -260,11 +260,29 @@ O assessor usa as mesmas ligações: "o que eu anotei ligado à obra?" segue os
 links da nota central, e ao anotar sobre algo que já tem nota ele escreve
 `Relacionadas: [[...]]`.
 
+**Arquivos** converte e organiza o que você soltar ali. Nada fica guardado: o
+resultado vem como download, e o servidor apaga os temporários na hora.
+
+* **Organizar páginas** de um PDF: arrastar para mudar a ordem, lixeira para
+  excluir, o + entre as páginas para inserir outro PDF ou uma imagem naquele
+  ponto; desfazer com Ctrl+Z.
+* **Juntar PDFs** e **imagens → PDF**, na ordem que você arrumar.
+* **Converter para PDF** documentos, planilhas e apresentações (.docx, .odt,
+  .rtf, .txt, .xlsx, .pptx…), pelo LibreOffice desta máquina e sem acesso à rede
+  quando o sistema permite.
+* **PDF → imagens** (um PNG por página, num .zip) e **PDF → Word**, mantendo a
+  aparência ou só o texto corrido.
+
+Precisa do LibreOffice e do `poppler-utils` (`pdftoppm`, `pdftotext`) instalados;
+o leitor de PDF da página vem junto com o projeto (`deploy/pdfjs/build.sh`).
+
 > **Só nesta máquina.** A página mostra tudo, inclusive o que está marcado como
 > privado, e não pede senha. Ela escuta só em 127.0.0.1 (constante no código,
 > não configuração) e recusa pedido com outro nome de servidor, o que fecha o
-> DNS rebinding. As notas são a única escrita: só aceita pedido feito pela
-> própria página, só dentro do `vault/`, e cada escrita entra na auditoria.
+> DNS rebinding. Só as notas e os desenhos escrevem: só aceitam pedido feito
+> pela própria página, só dentro do `vault/`, e cada escrita entra na
+> auditoria. A tela Arquivos recebe arquivos pela mesma fronteira, mas não
+> grava nada.
 > Concluir tarefa, lançar gasto e conversar continuam sendo CLI, Telegram ou MCP.
 
 ## Telegram
