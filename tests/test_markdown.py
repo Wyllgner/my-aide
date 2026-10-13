@@ -34,11 +34,32 @@ def test_tabela(indice):
 
 
 def test_frontmatter_vira_propriedades_e_nao_texto(indice):
-    html = _html("---\ntitle: Telhado\ntags: [casa]\n---\n\ncorpo", indice)
+    html = _html("---\ntitle: Telhado novo\ntags: [casa]\n---\n\ncorpo", indice)
     assert '<dl class="propriedades" data-bloco="0-4">' in html
-    assert "<dt>title</dt><dd>Telhado</dd>" in html
+    assert "<dt>title</dt><dd>Telhado novo</dd>" in html
     assert "<dt>tags</dt><dd><a class=\"tag\"" in html
     assert "<hr" not in html
+
+
+def test_title_igual_ao_nome_do_arquivo_nao_repete(indice):
+    """O nome já está em cima da nota."""
+    html = _html("---\ntitle: telhado\ntags: [casa]\n---\n\ncorpo", indice)
+    assert "<dt>title</dt>" not in html
+    assert "<dt>tags</dt>" in html
+    # sem outra propriedade, a lista inteira some
+    assert "propriedades" not in _html("---\ntitle: Telhado\n---\n\ncorpo", indice)
+
+
+@pytest.mark.parametrize("texto, marcado", [
+    ("# Telhado\n\ncorpo", True),
+    ("\n\n# telhado #\n\ncorpo", True),
+    ("---\ntitle: x\n---\n\n# Telhado\n", True),
+    ("# Telhado novo\n", False),
+    ("## Telhado\n", False),
+    ("corpo\n\n# Telhado\n", False),
+])
+def test_titulo_igual_ao_nome_do_arquivo_ganha_marca(indice, texto, marcado):
+    assert ('<h1 class="repete-nome" ' in _html(texto, indice)) is marcado
 
 
 # ---------- [[links]] ----------

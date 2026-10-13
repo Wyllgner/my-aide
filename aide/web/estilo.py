@@ -278,6 +278,8 @@ nav a svg { flex-shrink: 0; }
           border: 1px solid var(--line-soft); border-radius: var(--r-inner);
           font-size: 14.5px; line-height: 1.7; color: var(--ink); overflow-wrap: anywhere; }
 .area[data-modo="ler"] .previa { max-height: none; max-width: 760px; }
+/* o "# Título" igual ao nome do arquivo: o nome já está em cima da nota */
+.area[data-modo="ler"] .previa h1.repete-nome { display: none; }
 /* ao vivo: clicar num bloco troca ele pelo markdown dele, no mesmo lugar e
    na mesma letra; o espaço vazio embaixo também aceita clique (escreve no fim) */
 .area[data-modo="vivo"] .previa { max-height: none; max-width: 760px; min-height: 58vh;
