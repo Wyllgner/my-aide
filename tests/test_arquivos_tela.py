@@ -7,6 +7,12 @@ from aide.storage import connect, migrate
 from aide.web.app import criar_app
 
 
+def modelo(html: str, nome: str) -> str:
+    """O conteúdo de um <template>, do fechamento dele e não do primeiro."""
+    inicio = html.index(f'<template id="{nome}">')
+    return html[inicio:html.index("</template>", inicio)]
+
+
 @pytest.fixture
 def cliente(config, tmp_path):
     def conn_factory():
@@ -99,9 +105,9 @@ def test_o_editor_traz_desfazer_recomecar_e_baixar(cliente):
 def test_a_folha_vem_de_um_modelo_com_lixeira_desenhada(cliente):
     """O ícone sai do servidor, como os outros: o script só clona o modelo."""
     html = cliente.get("/arquivos").text
-    modelo = html[html.index('<template id="arq-modelo-folha">'):html.index("</template>")]
-    assert 'draggable="true"' in modelo and 'tabindex="0"' in modelo
-    assert 'class="tirar-pagina"' in modelo and "<svg" in modelo
+    folha = modelo(html, "arq-modelo-folha")
+    assert 'draggable="true"' in folha and 'tabindex="0"' in folha
+    assert 'class="tirar-pagina"' in folha and "<svg" in folha
 
 
 def test_baixar_manda_as_fontes_para_a_rota_de_montar(cliente):
@@ -119,8 +125,7 @@ def test_inserir_oferece_outro_pdf_ou_uma_imagem(cliente):
     assert 'accept=".pdf,application/pdf"' in caixa
     assert 'accept=".jpg,.jpeg,.png,image/jpeg,image/png"' in caixa
     assert 'id="arq-inserir-fim"' in html
-    modelo = html[html.index('<template id="arq-modelo-folha">'):html.index("</template>")]
-    assert 'class="inserir-antes"' in modelo
+    assert 'class="inserir-antes"' in modelo(html, "arq-modelo-folha")
 
 
 def test_miniatura_de_imagem_nao_usa_blob_em_img(cliente):
@@ -134,10 +139,9 @@ def test_miniatura_de_imagem_nao_usa_blob_em_img(cliente):
 def test_juntar_tem_lista_arrastavel_e_botoes_de_subir_e_descer(cliente):
     html = cliente.get("/arquivos").text
     assert '<section class="card juntar" id="arq-juntar" hidden>' in html
-    modelo = html[html.index('<template id="arq-modelo-juntar">'):]
-    modelo = modelo[:modelo.index("</template>")]
-    assert 'draggable="true"' in modelo and 'tabindex="0"' in modelo
-    assert 'data-mover="-1"' in modelo and 'data-mover="1"' in modelo
+    linha = modelo(html, "arq-modelo-juntar")
+    assert 'draggable="true"' in linha and 'tabindex="0"' in linha
+    assert 'data-mover="-1"' in linha and 'data-mover="1"' in linha
     assert "Baixar PDF juntado" in html
 
 
