@@ -141,7 +141,7 @@ def test_cada_pedido_abre_sua_conexao(app):
 # ---------- a moldura ----------
 
 def test_toda_tela_tem_rota(cliente):
-    """A navegação mostra 12 links; um deles em 404 é um beco sem saída."""
+    """A navegação mostra 13 links; um deles em 404 é um beco sem saída."""
     from aide.web.paginas import TELAS
 
     for tela in TELAS:

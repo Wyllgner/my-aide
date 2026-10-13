@@ -22,6 +22,8 @@ TRACOS = {
     "ferramentas": ("M12.5 3.5a3.5 3.5 0 0 0-4.6 4.4L3.5 12.3v3.2h3.2l4.4-4.4"
                     "a3.5 3.5 0 0 0 4.4-4.6l-2.2 2.2-2-2z"),
     "auditoria": "M8.5 12.5a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM11.5 11.5 16 16",
+    # folha com setas de troca: pegar um arquivo e transformar
+    "arquivos": "M5 3h7l3 3v11H5zM12 3v3.5h3M7.5 10h5l-1.6-1.6M12.5 13.5h-5l1.6 1.6",
     # relógio: lembrete é hora marcada, e na lista ele fica ao lado de tarefa,
     # que tem prazo. O ícone é o que distingue as duas coisas de longe.
     "reminders": "M10 17a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM10 6.5V10l2.5 1.5",
@@ -67,6 +69,12 @@ TRACOS = {
     "grafo": ("M8 6a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM16.5 8.5a2 2 0 1 1-4 0 2 2 0 0 1 4 0z"
               "M10.5 15a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM7.9 6.6l4.7 1.3M6.6 7.9l1.3 5.2"
               "M13.2 10.2l-3.6 3.2"),
+    # as ações da tela Arquivos
+    "paginas": "M4 3.5h6v8H4zM10 8.5h6v8h-6z",
+    "juntar": "M4 4h5v12H4zM11 4h5v12h-5zM9 10h2",
+    "imagem": "M3.5 4.5h13v11h-13zM3.5 13l4-4 3 3 2-2 4 4M13 7.5h.01",
+    # o W dentro da folha
+    "word": "M5 3h7l3 3v11H5zM12 3v3.5h3M7 9.5l1 4.5 2-3.5 2 3.5 1-4.5",
     "quebrado": ("M8.5 11.5l-2 2a2.5 2.5 0 0 1-3.5-3.5l2-2M11.5 8.5l2-2a2.5 2.5 0 0 1"
                  " 3.5 3.5l-2 2M7 3.5v2M3.5 7h2M13 16.5v-2M16.5 13h-2"),
 }

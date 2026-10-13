@@ -154,7 +154,7 @@ def criar_app(config=None, conn_factory=None):
     # um aviso — assim a navegação inteira já é navegável e testável.
     from aide.core.context import now_in
     from aide.tools import registry as toolbelt
-    from aide.web import notas_tela
+    from aide.web import arquivos_tela, notas_tela
     from aide.web import telas as conteudo
     from aide.web.paginas import TELAS, cabecalho, em_breve
 
@@ -164,6 +164,7 @@ def criar_app(config=None, conn_factory=None):
                   "calendario": conteudo.calendario, "gastos": conteudo.gastos,
                   "custo": conteudo.custo, "conversas": conteudo.conversas,
                   "ferramentas": conteudo.ferramentas, "auditoria": conteudo.auditoria, "notas": notas_tela.tela,
+                  "arquivos": arquivos_tela.tela,
                   "memoria": conteudo.memoria, "pessoas": conteudo.pessoas,
                   "fila": conteudo.fila}
 

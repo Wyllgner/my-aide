@@ -25,6 +25,7 @@ TELAS = (
     Tela("calendario", "Calendário", "/calendario"),
     Tela("conversas", "Conversas", "/conversas"),
     Tela("notas", "Notas", "/notas"),
+    Tela("arquivos", "Arquivos", "/arquivos"),
     Tela("gastos", "Gastos", "/gastos"),
     Tela("custo", "Custo e saldo", "/custo"),
     Tela("memoria", "Memória", "/memoria"),
