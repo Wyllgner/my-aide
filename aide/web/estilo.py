@@ -704,4 +704,17 @@ button.atalho-visao { width: 100%; border: 0; background: none; font: inherit; f
 .acao[disabled] { opacity: .45; cursor: not-allowed; }
 .arq-aviso { min-height: 20px; margin: 0 0 14px; font-size: 13px; color: var(--muted); }
 .arq-aviso[data-erro] { color: var(--accent); }
+.fila-arq .linha[data-erro] .quando { color: var(--accent); }
+/* organizar: as páginas em grade, cada uma com o número embaixo */
+.editor-pdf { padding: 18px 20px 20px; }
+.editor-topo { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+.editor-topo h2 { font-size: 16px; margin: 0 8px 0 0; overflow-wrap: anywhere; }
+.editor-topo .resumo { color: var(--muted); font-size: 12.5px; margin-right: auto; }
+.grade { display: flex; flex-wrap: wrap; gap: 14px 18px; }
+.folha { width: 112px; display: flex; flex-direction: column; align-items: center; gap: 7px; }
+.miniatura { width: 112px; height: 150px; background: #fff; border: 1px solid var(--borda);
+  border-radius: 6px; box-shadow: 0 1px 3px rgba(21,23,28,.08); display: flex;
+  align-items: center; justify-content: center; overflow: hidden; }
+.miniatura canvas { display: block; max-width: 100%; max-height: 100%; }
+.folha .num { font-size: 12px; color: var(--ink); font-weight: 600; }
 """

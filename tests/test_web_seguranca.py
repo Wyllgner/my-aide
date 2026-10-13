@@ -6,6 +6,8 @@ escrever nela por um formulário, ou injetar script pelo que você mesmo
 escreveu numa tarefa ou nota.
 """
 
+from pathlib import Path
+
 import pytest
 
 fastapi = pytest.importorskip("fastapi")
@@ -306,3 +308,24 @@ def test_excalidraw_sem_chave_do_firebase_deles():
 ])
 def test_rota_do_vendor_so_entrega_o_vendor(cliente, caminho):
     assert cliente.get(f"/vendor/{caminho}").status_code == 404
+
+
+# ---------- o pdf.js da tela Arquivos ----------
+
+def test_pdfjs_servido_pelo_proprio_site(cliente):
+    """O leitor e o worker vêm daqui: a CSP barraria um CDN, e o worker é
+    script como outro qualquer (worker-src cai em script-src 'self')."""
+    for nome in ("pdf.js", "pdf.worker.js"):
+        resposta = cliente.get(f"/vendor/pdfjs/{nome}")
+        assert resposta.status_code == 200, nome
+        assert resposta.headers["content-type"].startswith("text/javascript")
+    assert "Apache License" in (Path(__file__).parents[1]
+                                / "aide/web/vendor/pdfjs/LICENCAS.txt").read_text()
+
+
+def test_pdfjs_nao_importa_nada_de_fora(cliente):
+    import re
+
+    for nome in ("pdf.js", "pdf.worker.js"):
+        texto = cliente.get(f"/vendor/pdfjs/{nome}").text
+        assert not re.search(r"""(?:from|import)\s*\(?\s*["']https?://""", texto), nome
