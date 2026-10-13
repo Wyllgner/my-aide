@@ -23,6 +23,7 @@ from aide.arquivos import MAXIMO_DE_ARQUIVOS, PLANO_MAXIMO, TAMANHO_MAXIMO, conv
 
 ROTA_DE_MONTAR = "/api/arquivos/montar"
 ROTA_DE_CONVERTER = "/api/arquivos/converter"
+ROTA_DE_IMAGENS = "/api/arquivos/imagens"
 
 
 class PedidoInvalido(ValueError):
@@ -73,6 +74,29 @@ def sem_repetir(nomes: list[str]) -> list[str]:
         n = vistos[nome.lower()] = vistos.get(nome.lower(), 0) + 1
         saida.append(nome if n == 1 else f"{base} ({n}){ponto}{ext}")
     return saida
+
+
+def imagens_de_todos(caminhos: list[Path], nomes: list[str], pasta: Path) -> tuple[Path, str]:
+    """Cada página de cada PDF como PNG. Uma imagem só volta como .png; mais
+    de uma, num .zip com "<pdf>-p01.png", "<pdf>-p02.png"…"""
+    import zipfile
+
+    por_pdf = [converter.para_imagens(c, n, pasta / f"imagens-{i}")
+               for i, (c, n) in enumerate(zip(caminhos, nomes, strict=True))]
+    total = sum(len(imagens) for imagens in por_pdf)
+    if total > converter.MAXIMO_DE_IMAGENS:
+        raise converter.ConversaoFalhou(f"mais de {converter.MAXIMO_DE_IMAGENS} páginas no total")
+    if total == 1:
+        return por_pdf[0][0], "image/png"
+    bases = sem_repetir([n.rsplit(".", 1)[0] for n in nomes])
+    pacote = pasta / "imagens.zip"
+    # PNG já vem comprimido: guardar sem recomprimir é mais rápido e do mesmo tamanho
+    with zipfile.ZipFile(pacote, "w", zipfile.ZIP_STORED) as z:
+        for base, imagens in zip(bases, por_pdf, strict=True):
+            casas = max(2, len(str(len(imagens))))
+            for numero, imagem in enumerate(imagens, 1):
+                z.write(imagem, f"{base}-p{numero:0{casas}d}.png")
+    return pacote, "application/zip"
 
 
 def converter_todos(caminhos: list[Path], nomes: list[str], pasta: Path) -> tuple[Path, str]:
@@ -172,6 +196,9 @@ def instalar(app) -> None:
     def fazer_conversao(plano, caminhos, pasta):
         return converter_todos(caminhos, nomes_do(plano), pasta)
 
+    def fazer_imagens(plano, caminhos, pasta):
+        return imagens_de_todos(caminhos, nomes_do(plano), pasta)
+
     async def montar(request):
         """O PDF com as páginas pedidas, na ordem pedida."""
         return await operar(request, fazer_montagem)
@@ -180,9 +207,14 @@ def instalar(app) -> None:
         """Documentos em PDF: um vira um PDF, vários viram um .zip."""
         return await operar(request, fazer_conversao)
 
+    async def imagens(request):
+        """PDFs em PNG, uma imagem por página."""
+        return await operar(request, fazer_imagens)
+
     # `from __future__ import annotations` deixa a anotação como texto, e o
     # FastAPI a procuraria nos globais, onde Request não está: vai o objeto,
     # antes de registrar a rota
-    for rota, funcao in ((ROTA_DE_MONTAR, montar), (ROTA_DE_CONVERTER, converter_rota)):
+    for rota, funcao in ((ROTA_DE_MONTAR, montar), (ROTA_DE_CONVERTER, converter_rota),
+                         (ROTA_DE_IMAGENS, imagens)):
         funcao.__annotations__["request"] = Request
         app.post(rota)(funcao)

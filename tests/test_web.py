@@ -733,7 +733,8 @@ def test_a_web_so_pode_calar_a_trilha_porque_as_telas_nao_escrevem(app):
                        "/api/notas/mover-pasta", "/api/notas/anexo", "/api/notas/ligar",
                        "/api/desenhos/arquivo", "/api/desenhos/biblioteca",
                        "/api/desenhos/mover", "/api/desenhos/previa",
-                       "/api/arquivos/montar", "/api/arquivos/converter"}
+                       "/api/arquivos/montar", "/api/arquivos/converter",
+                       "/api/arquivos/imagens"}
 
 
 # ---------- a janela antiga ----------

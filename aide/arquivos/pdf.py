@@ -92,7 +92,7 @@ def pagina_de_imagem(caminho: Path, nome: str, tamanho: tuple[float, float] | No
     return pagina
 
 
-def _abrir(caminho: Path, nome: str):
+def abrir(caminho: Path, nome: str):
     from pypdf import PdfReader
     from pypdf.errors import PdfReadError
 
@@ -132,7 +132,7 @@ def montar(fontes: list[Path], paginas: list[tuple[int, int]], destino: Path,
         tipo = tipo_de(caminho)
         if tipo is None:
             raise PdfInvalido(f"{nome} não é um PDF nem uma imagem .jpg ou .png")
-        leitores.append(_abrir(caminho, nome) if tipo == "pdf" else None)
+        leitores.append(abrir(caminho, nome) if tipo == "pdf" else None)
     for arquivo, pagina in paginas:
         if not 0 <= arquivo < len(leitores):
             raise PdfInvalido(f"arquivo {arquivo + 1} não foi enviado")
