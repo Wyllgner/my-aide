@@ -41,3 +41,20 @@ def test_as_acoes_nascem_desligadas(cliente):
         assert rotulo in html
     assert len(ACOES) == 6
 
+
+
+def test_o_script_e_arquivo_da_casa(cliente):
+    """A CSP só deixa rodar script daqui; embutido na página não rodaria."""
+    html = cliente.get("/arquivos").text
+    assert '<script type="module" src="/arquivos.js"></script>' in html
+    resposta = cliente.get("/arquivos.js")
+    assert resposta.status_code == 200
+    assert resposta.headers["content-type"].startswith("text/javascript")
+    assert "dataTransfer" in resposta.text
+
+
+def test_soltar_nao_manda_nada_ao_servidor(cliente):
+    """Até você escolher a ação, os arquivos ficam na página."""
+    js = cliente.get("/arquivos.js").text
+    assert "fetch(" not in js
+    assert "innerHTML" not in js  # nome de arquivo é texto, nunca marcação

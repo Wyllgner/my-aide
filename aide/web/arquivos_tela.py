@@ -57,4 +57,5 @@ def tela(ctx, registry, agora) -> str:
 </div>
 <p class="eyebrow" style="margin-bottom:10px">O que fazer com os marcados</p>
 <div class="acoes" id="acoes">{acoes}</div>
-<p class="arq-aviso" id="arq-aviso" role="status"></p>"""
+<p class="arq-aviso" id="arq-aviso" role="status"></p>
+<script type="module" src="/arquivos.js"></script>"""
