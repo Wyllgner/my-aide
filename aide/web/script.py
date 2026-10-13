@@ -1022,12 +1022,28 @@ JS = r"""
     campo.value = fonte;
     campo.spellcheck = editor.spellcheck;
     campo.setAttribute("aria-label", "markdown do bloco");
+    // as cores, como no modo editar: o campo transparente por cima de uma
+    // cópia colorida do texto dele
+    var caixa = document.createElement("div");
+    caixa.className = "bloco-caixa";
+    var copia = document.createElement("pre");
+    copia.className = "realce";
+    copia.setAttribute("aria-hidden", "true");
+    caixa.appendChild(copia);
+    caixa.appendChild(campo);
     b.campo = campo;
+    b.caixa = caixa;
+    b.colorir = function () {
+      var cabe = campo.value.length <= LIMITE_REALCE;
+      campo.classList.toggle("colorido", cabe);
+      copia.innerHTML = cabe ? realcar(campo.value) : "";
+    };
+    b.colorir();
     bloco = b;
     if (el) {
-      el.replaceWith(campo);
+      el.replaceWith(caixa);
     } else {
-      previa.insertBefore(campo, depoisDele);
+      previa.insertBefore(caixa, depoisDele);
       // veio com texto (o que estava depois do cursor): ele já sai do bloco
       // de cima e entra aqui
       if (fonte) {
@@ -1055,6 +1071,7 @@ JS = r"""
       // o bloco do fim, apagado de volta: a nota fica como estava
       editor.value = !b.el && !campo.value ? b.original : b.cabeca + campo.value + b.cauda;
       ajustarAltura(campo);
+      b.colorir();
       privada.checked = marcadaNoTexto();
       corretor();
       campo.spellcheck = editor.spellcheck;
@@ -1150,13 +1167,13 @@ JS = r"""
     bloco = null;
     if (editor.value === b.original) {
       // nada mudou: o bloco de antes volta como estava
-      if (b.el) { b.campo.replaceWith(b.el); } else { b.campo.remove(); }
+      if (b.el) { b.caixa.replaceWith(b.el); } else { b.caixa.remove(); }
     } else {
       // até a prévia nova chegar, o texto cru do bloco fica no lugar dele
       var pendente = document.createElement("div");
       pendente.className = "bloco-pendente";
       pendente.textContent = b.campo.value;
-      b.campo.replaceWith(pendente);
+      b.caixa.replaceWith(pendente);
       // o quanto a nota cresceu ou encolheu: tudo o que vem depois do bloco anda junto
       mudancas.push({ ini: b.ini, fim: b.fim,
         delta: editor.value.split("\n").length - b.original.split("\n").length });
