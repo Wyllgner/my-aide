@@ -101,6 +101,13 @@ def criar_app(config=None, conn_factory=None):
         return Response(JS, media_type="text/javascript",
                         headers={"cache-control": "no-cache"})
 
+    @app.get("/arquivos.js")
+    def script_arquivos() -> Response:
+        from aide.web.arquivos_script import JS
+
+        return Response(JS, media_type="text/javascript",
+                        headers={"cache-control": "no-cache"})
+
     from pathlib import Path
 
     pasta_fontes = Path(__file__).parent / "fontes"
@@ -154,7 +161,7 @@ def criar_app(config=None, conn_factory=None):
     # um aviso — assim a navegação inteira já é navegável e testável.
     from aide.core.context import now_in
     from aide.tools import registry as toolbelt
-    from aide.web import notas_tela
+    from aide.web import arquivos_tela, notas_tela
     from aide.web import telas as conteudo
     from aide.web.paginas import TELAS, cabecalho, em_breve
 
@@ -164,6 +171,7 @@ def criar_app(config=None, conn_factory=None):
                   "calendario": conteudo.calendario, "gastos": conteudo.gastos,
                   "custo": conteudo.custo, "conversas": conteudo.conversas,
                   "ferramentas": conteudo.ferramentas, "auditoria": conteudo.auditoria, "notas": notas_tela.tela,
+                  "arquivos": arquivos_tela.tela,
                   "memoria": conteudo.memoria, "pessoas": conteudo.pessoas,
                   "fila": conteudo.fila}
 
