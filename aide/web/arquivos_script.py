@@ -55,6 +55,7 @@ const modeloJuntar = document.getElementById("arq-modelo-juntar");
 const secaoLote = document.getElementById("arq-lote");
 const listaLote = document.getElementById("arq-lote-lista");
 const baixarLote = document.getElementById("arq-lote-baixar");
+const escolhaWord = document.getElementById("arq-word-modo");
 const inserirPdf = document.getElementById("arq-inserir-pdf");
 const inserirImagem = document.getElementById("arq-inserir-imagem");
 
@@ -741,7 +742,29 @@ const LOTES = {
       ? docs[0].arquivo.name.replace(/\.pdf$/i, "") + ".png"
       : (docs.length === 1 ? docs[0].arquivo.name.replace(/\.pdf$/i, "") + "-imagens.zip" : "imagens.zip"),
   },
+  "pdf-word": {
+    tipo: "pdf", titulo: "PDF → Word", rota: "/api/arquivos/word",
+    nota: "PDF escaneado não tem texto para tirar: ali o texto é foto",
+    rodape: "vários PDFs voltam num .zip, um .docx para cada",
+    andando: "convertendo…", falha: "não converteu",
+    botao: (docs) => docs.length === 1 ? "Baixar .docx" : "Baixar .zip com " + docs.length + " .docx",
+    aviso: () => "Convertendo para Word pelo LibreOffice…",
+    nome: (docs) => docs.length === 1 ? docs[0].arquivo.name.replace(/\.pdf$/i, "") + ".docx"
+      : "convertidos.zip",
+    extra: () => ({ modo: modoWord }),
+  },
 };
+
+// PDF → Word: nenhum jeito serve para tudo, então a escolha é sua
+const EXPLICA_WORD = {
+  aparencia: "Fica igual ao PDF, com imagens e posições; cada linha vira uma caixa de texto — bom para retocar.",
+  texto: "Só o texto, corrido, como um documento comum — edita fácil, mas perde imagens e diagramação.",
+};
+let modoWord = "aparencia";
+
+for (const b of escolhaWord.querySelectorAll("[data-modo]")) {
+  b.addEventListener("click", () => { modoWord = b.dataset.modo; situacao.clear(); desenhar(); });
+}
 
 let convertendo = false;
 const situacao = new Map();  // item -> "pronto" | "erro" enquanto a lista não muda
@@ -760,6 +783,11 @@ function desenharLote() {
   document.getElementById("arq-lote-titulo").textContent = lote.titulo;
   document.getElementById("arq-lote-nota").textContent = lote.nota;
   document.getElementById("arq-lote-rodape").textContent = lote.rodape;
+  escolhaWord.hidden = escolhida !== "pdf-word";
+  for (const b of escolhaWord.querySelectorAll("[data-modo]")) {
+    b.setAttribute("aria-pressed", String(b.dataset.modo === modoWord));
+  }
+  document.getElementById("arq-word-explica").textContent = EXPLICA_WORD[modoWord];
   listaLote.replaceChildren(...docs.map((it) => {
     const div = document.createElement("div");
     div.className = "linha";
@@ -795,7 +823,7 @@ baixarLote.addEventListener("click", async () => {
   desenhar();
   try {
     const blob = await enviar(lote.rota, docs.map((it) => it.arquivo),
-      { nomes: docs.map((it) => it.arquivo.name) });
+      { nomes: docs.map((it) => it.arquivo.name), ...(lote.extra ? lote.extra() : {}) });
     for (const it of docs) situacao.set(it, "pronto");
     entregar(blob, nome);
     avisar("Pronto: " + nome + ".");
@@ -893,8 +921,7 @@ function desenhar() {
 for (const botao of botoes) {
   botao.addEventListener("click", () => {
     escolhida = botao.dataset.acao;
-    avisar(["organizar", "juntar", "converter", "imagens-pdf", "pdf-imagens"].includes(escolhida) ? ""
-      : "Esta ação ainda está sendo construída.");
+    avisar("");
     desenhar();
   });
 }

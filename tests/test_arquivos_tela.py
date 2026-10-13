@@ -68,7 +68,8 @@ def test_soltar_nao_manda_nada_ao_servidor(cliente):
     assert re.findall(r'fetch\(([^,]+),', js) == ["rota"]
     assert set(re.findall(r'enviar\("([^"]+)"', js)) == {"/api/arquivos/montar"}
     assert set(re.findall(r'rota: "([^"]+)"', js)) == {"/api/arquivos/converter",
-                                                      "/api/arquivos/imagens"}
+                                                      "/api/arquivos/imagens",
+                                                      "/api/arquivos/word"}
     assert "innerHTML" not in js  # nome de arquivo é texto, nunca marcação
 
 
@@ -176,3 +177,24 @@ def test_converter_e_pdf_imagens_dividem_o_cartao_de_lote(cliente):
     assert 'rota: "/api/arquivos/converter"' in js
     assert 'rota: "/api/arquivos/imagens"' in js
     assert "enviar(lote.rota" in js and "nomes: docs.map" in js
+
+
+def test_pdf_word_deixa_escolher_aparencia_ou_texto(cliente):
+    html = cliente.get("/arquivos").text
+    assert '<div class="escolha-word" id="arq-word-modo" hidden>' in html
+    assert 'data-modo="aparencia"' in html and 'data-modo="texto"' in html
+    js = cliente.get("/arquivos.js").text
+    assert "extra: () => ({ modo: modoWord })" in js
+
+
+def test_nenhuma_acao_ficou_por_construir(cliente):
+    """As seis ações têm o que fazer: o aviso de "em construção" saiu."""
+    import re
+
+    from aide.web.arquivos_tela import ACOES
+
+    js = cliente.get("/arquivos.js").text
+    assert "sendo construída" not in js
+    # organizar tem a grade própria; as outras são chaves de LISTAS ou LOTES
+    tratadas = {"organizar"} | set(re.findall(r'^  "([a-z-]+)": \{$', js, flags=re.MULTILINE))
+    assert {chave for chave, *_ in ACOES} <= tratadas

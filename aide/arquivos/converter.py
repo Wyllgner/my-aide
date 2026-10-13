@@ -1,5 +1,5 @@
 """Converter documento em PDF pelo LibreOffice desta máquina, e PDF em
-imagens pelo pdftoppm.
+imagens (pdftoppm) ou em Word (LibreOffice ou pdftotext).
 
 Cada conversão roda com um perfil do LibreOffice só dela, numa pasta
 temporária: o perfil de quem usa o LibreOffice no dia a dia nunca é tocado, e
@@ -90,13 +90,20 @@ def para_pdf(entrada: Path, nome: str, saida: Path) -> Path:
     # o LibreOffice escolhe o filtro pela extensão do arquivo em disco
     arquivo = entrada.with_suffix("." + ext)
     entrada.rename(arquivo)
-    perfil = entrada.parent / f"perfil-{entrada.stem}"
-    saida.mkdir(exist_ok=True)
+    return _libreoffice(soffice, arquivo, "pdf", "pdf", nome, saida)
+
+
+def _libreoffice(soffice: str, arquivo: Path, formato: str, ext: str, nome: str, saida: Path,
+                 filtro: str | None = None) -> Path:
+    """`arquivo` convertido para `formato` em `saida`, com perfil próprio."""
+    perfil = arquivo.parent / f"perfil-{arquivo.stem}"
+    saida.mkdir(parents=True, exist_ok=True)
     comando = [soffice, "--headless", "--norestore", "--nolockcheck",
                "--nodefault", f"-env:UserInstallation={perfil.as_uri()}",
-               "--convert-to", "pdf", "--outdir", str(saida), str(arquivo)]
+               *([f"--infilter={filtro}"] if filtro else []),
+               "--convert-to", formato, "--outdir", str(saida), str(arquivo)]
     ok = _rodar(comando, nome, {"HOME": str(perfil)})
-    resultado = saida / (arquivo.stem + ".pdf")
+    resultado = saida / f"{arquivo.stem}.{ext}"
     if not ok or not resultado.is_file() or not resultado.stat().st_size:
         raise ConversaoFalhou(f"o LibreOffice não conseguiu converter {nome}")
     return resultado
@@ -140,3 +147,43 @@ def para_imagens(entrada: Path, nome: str, saida: Path) -> list[Path]:
     if not imagens:
         raise ConversaoFalhou(f"não deu para desenhar as páginas de {nome}")
     return imagens
+
+
+WORD = "docx:MS Word 2007 XML"
+MODOS_WORD = ("aparencia", "texto")
+
+
+def para_word(entrada: Path, nome: str, saida: Path, modo: str = "aparencia") -> Path:
+    """O PDF como .docx. Dois jeitos, porque nenhum serve para tudo:
+
+    - "aparencia": o LibreOffice importa o PDF como desenho; fica igual ao
+      original, mas cada linha é uma caixa de texto — bom para retocar.
+    - "texto": só o texto, corrido, pelo pdftotext; perde imagens e
+      diagramação, mas edita como um documento qualquer.
+
+    Nenhum dos dois lê PDF escaneado: ali o texto é foto."""
+    from aide.arquivos import pdf
+
+    if modo not in MODOS_WORD:
+        raise ConversaoFalhou(f"modo desconhecido: {modo}")
+    soffice = shutil.which("soffice")
+    if not soffice:
+        raise ConversaoFalhou("o LibreOffice não está instalado nesta máquina")
+    pdf.abrir(entrada, nome)
+    if modo == "aparencia":
+        arquivo = entrada.with_suffix(".pdf")
+        entrada.rename(arquivo)
+        return _libreoffice(soffice, arquivo, WORD, "docx", nome, saida, "writer_pdf_import")
+
+    pdftotext = shutil.which("pdftotext")
+    if not pdftotext:
+        raise ConversaoFalhou("o pdftotext (poppler-utils) não está instalado nesta máquina")
+    texto = entrada.with_suffix(".txt")
+    if not _rodar([pdftotext, "-enc", "UTF-8", str(entrada), str(texto)], nome) or not texto.is_file():
+        raise ConversaoFalhou(f"não deu para tirar o texto de {nome}")
+    conteudo = texto.read_text(encoding="utf-8", errors="replace")
+    if not conteudo.strip():
+        raise ConversaoFalhou(f"{nome} não tem texto para tirar: parece ser imagem escaneada")
+    # o \f que separa as páginas vira linha em branco, não um caractere estranho
+    texto.write_text(conteudo.replace("\f", "\n\n"), encoding="utf-8")
+    return _libreoffice(soffice, texto, WORD, "docx", nome, saida, "Text (encoded):UTF8")

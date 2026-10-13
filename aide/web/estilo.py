@@ -756,6 +756,14 @@ button.atalho-visao { width: 100%; border: 0; background: none; font: inherit; f
 .juntar .quando[data-estado="pronto"] { color: #3E9C6B; font-weight: 600; }
 .juntar .quando[data-estado="erro"] { color: var(--accent); font-weight: 600; }
 .juntar .quando[data-estado="convertendo"] { color: var(--muted); }
+.escolha-word { display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  margin: 0 0 12px; padding: 12px 14px; background: var(--paper);
+  border: 1px solid var(--line); border-radius: var(--r-inner); }
+.escolha-word p { margin: 0; flex: 1; min-width: 240px; color: var(--muted); font-size: 12.5px;
+  line-height: 1.5; }
+.escolhas { display: flex; gap: 6px; }
+.botao.escolha[aria-pressed="true"] { border-color: var(--accent); background: var(--soft);
+  color: var(--accent); font-weight: 600; }
 .inserir { position: absolute; z-index: 5; width: 250px; padding: 8px;
   box-shadow: 0 8px 24px rgba(21,23,28,.12); }
 .inserir .eyebrow { margin: 4px 8px 8px; }
