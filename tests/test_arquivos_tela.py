@@ -129,3 +129,22 @@ def test_miniatura_de_imagem_nao_usa_blob_em_img(cliente):
     assert "createImageBitmap" in js
     assert "createObjectURL" in js  # só para entregar o download
     assert ".src = URL.createObjectURL" not in js
+
+
+def test_juntar_tem_lista_arrastavel_e_botoes_de_subir_e_descer(cliente):
+    html = cliente.get("/arquivos").text
+    assert '<section class="card juntar" id="arq-juntar" hidden>' in html
+    modelo = html[html.index('<template id="arq-modelo-juntar">'):]
+    modelo = modelo[:modelo.index("</template>")]
+    assert 'draggable="true"' in modelo and 'tabindex="0"' in modelo
+    assert 'data-mover="-1"' in modelo and 'data-mover="1"' in modelo
+    assert "Baixar PDF juntado" in html
+
+
+def test_organizar_e_juntar_usam_a_mesma_rota(cliente):
+    """Juntar é montar com todas as páginas de cada um, em sequência."""
+    import re
+
+    js = cliente.get("/arquivos.js").text
+    assert len(re.findall(r"fetch\(", js)) == 1
+    assert js.count("await montar(") == 2

@@ -741,6 +741,18 @@ button.atalho-visao { width: 100%; border: 0; background: none; font: inherit; f
   border-color: var(--accent); }
 .inserir-antes:hover svg, .inserir-antes[aria-expanded="true"] svg { color: #fff; }
 .editor-pdf { position: relative; }
+/* juntar: uma linha por PDF, na ordem do resultado */
+.juntar { padding: 18px 20px 20px; margin-top: 14px; }
+.juntar .linha { padding: 10px 6px; cursor: grab; position: relative; border-radius: 8px; }
+.juntar .linha:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.juntar .linha[data-arrastando] { opacity: .35; }
+.juntar .linha[data-cair="antes"] { box-shadow: inset 0 3px 0 var(--accent); }
+.juntar .linha[data-cair="depois"] { box-shadow: inset 0 -3px 0 var(--accent); }
+.juntar .nome { font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  min-width: 0; }
+.juntar .alca { color: var(--faint); font-size: 15px; letter-spacing: -2px; }
+.juntar .mover { width: 32px; justify-content: center; padding: 0; font-size: 15px; }
+.juntar .quando + .mover { margin-left: 8px; }
 .inserir { position: absolute; z-index: 5; width: 250px; padding: 8px;
   box-shadow: 0 8px 24px rgba(21,23,28,.12); }
 .inserir .eyebrow { margin: 4px 8px 8px; }
