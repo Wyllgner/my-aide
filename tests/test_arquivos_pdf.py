@@ -189,3 +189,11 @@ def test_extensao_mentirosa_nao_engana(tmp_path):
     saida = tmp_path / "s.pdf"
     pdf.montar([disfarcado], [(0, 0)], saida)
     assert larguras(saida) == [150]
+
+
+def test_album_cada_foto_na_propria_orientacao(tmp_path):
+    deitada = foto(tmp_path / "d.jpg", (800, 600))
+    em_pe = foto(tmp_path / "e.jpg", (600, 800))
+    saida = tmp_path / "s.pdf"
+    pdf.montar([deitada, em_pe], [(0, 0), (1, 0)], saida, imagem_na_vizinha=False)
+    assert tamanhos(saida) == [(842, 595), (595, 842)]

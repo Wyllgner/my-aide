@@ -164,7 +164,9 @@ def instalar(app) -> None:
 
     def fazer_montagem(plano, caminhos, pasta):
         destino = pasta / "resultado.pdf"
-        pdf.montar(caminhos, paginas_do(plano), destino)
+        # "imagens": "proprias" é o imagens → PDF: cada foto na orientação dela
+        pdf.montar(caminhos, paginas_do(plano), destino,
+                   imagem_na_vizinha=plano.get("imagens") != "proprias")
         return destino, "application/pdf"
 
     def fazer_conversao(plano, caminhos, pasta):
