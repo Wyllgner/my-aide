@@ -213,6 +213,36 @@ nav a svg { flex-shrink: 0; }
                               color: var(--accent); font-weight: 600; }
 .privada:has(input:checked) svg { color: var(--accent); }
 .editor-meta { margin: 0; font-size: 11.5px; color: var(--faint); }
+
+/* exportar: o botão abre as duas saídas embaixo dele */
+.exportar { position: relative; }
+.exportar > summary { list-style: none; }
+.exportar > summary::-webkit-details-marker { display: none; }
+.exportar[open] > summary { background: var(--line-soft); border-color: var(--faint); }
+.exportar-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20;
+                 display: flex; flex-direction: column; gap: 6px; padding: 8px;
+                 background: var(--surface); border: 1px solid var(--borda);
+                 border-radius: var(--r-inner); box-shadow: 0 6px 18px rgba(0, 0, 0, .08); }
+.exportar-menu .botao { justify-content: flex-start; }
+
+/* PDF: a impressão leva só o nome da nota e a prévia, em qualquer modo */
+@media print {
+  @page { margin: 18mm 16mm; }
+  html, body { background: #fff !important; }
+  .lateral, .cabecalho, .notas-lateral, .editor-acoes, .editor-meta, .conflito,
+  .campo, .ao-redor, .renomear, .editor-topo .mono, .previa h1.repete-nome,
+  .previa::after { display: none !important; }
+  .app, main, .notas, .notas-editor, .area { display: block !important; padding: 0 !important;
+    margin: 0 !important; border: 0 !important; box-shadow: none !important;
+    background: none !important; min-height: 0 !important; max-width: none !important; }
+  .titulo-nota { font-size: 24px; margin: 0 0 14px; }
+  .area .previa { display: block !important; max-height: none !important; min-height: 0 !important;
+    max-width: none !important; overflow: visible !important; padding: 0 !important;
+    border: 0 !important; font-size: 11.5pt; }
+  .previa [data-bloco]:hover { background: none; box-shadow: none; }
+  .previa pre, .previa table, .previa img, .previa blockquote, .previa li { break-inside: avoid; }
+  .previa h1, .previa h2, .previa h3 { break-after: avoid; }
+}
 #estado[data-estado="pendente"], #estado[data-estado="salvando"] { color: var(--muted); }
 #estado[data-estado="erro"] { color: var(--accent); }
 .conflito { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px;
