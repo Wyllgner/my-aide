@@ -47,6 +47,9 @@ const desfazer = document.getElementById("arq-desfazer");
 const recomecar = document.getElementById("arq-recomecar");
 const baixar = document.getElementById("arq-baixar");
 const modeloFolha = document.getElementById("arq-modelo-folha");
+const caixaInserir = document.getElementById("arq-inserir");
+const inserirPdf = document.getElementById("arq-inserir-pdf");
+const inserirImagem = document.getElementById("arq-inserir-imagem");
 
 // { arquivo: File, tipo, marcado, doc (promessa do pdf.js), paginas, erro }
 let itens = [];
@@ -142,8 +145,23 @@ const aVista = new IntersectionObserver((entradas) => {
   }
 }, { rootMargin: "300px" });
 
+// imagem: desenhada direto, sem pdf.js. <img> com blob: a CSP não deixa
+async function desenharImagem(it, moldura) {
+  const bitmap = await createImageBitmap(it.arquivo, { imageOrientation: "from-image" });
+  const dpr = window.devicePixelRatio || 1;
+  const escala = Math.min(112 / bitmap.width, 150 / bitmap.height);
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.floor(bitmap.width * escala * dpr));
+  canvas.height = Math.max(1, Math.floor(bitmap.height * escala * dpr));
+  canvas.style.width = Math.floor(bitmap.width * escala) + "px";
+  canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  moldura.replaceChildren(canvas);
+}
+
 async function desenharPagina(it, numero, moldura) {
   try {
+    if (it.tipo === "imagem") return await desenharImagem(it, moldura);
     const doc = await abrir(it);
     const pagina = await doc.getPage(numero);
     const base = pagina.getViewport({ scale: 1 });
@@ -181,7 +199,9 @@ function moldura(p) {
     molduras.set(chave(p), m);
     aVista.observe(m);
   }
-  m.setAttribute("aria-label", "Página " + p.pagina + " de " + sessao.fontes[p.fonte].arquivo.name);
+  const fonte = sessao.fontes[p.fonte];
+  m.setAttribute("aria-label", fonte.tipo === "imagem" ? "Imagem " + fonte.arquivo.name
+    : "Página " + p.pagina + " de " + fonte.arquivo.name);
   return m;
 }
 
@@ -214,14 +234,21 @@ function folha(p, i, foraDeOrdem) {
   const n = document.createElement("b");
   n.textContent = i + 1;
   num.append(n);
-  if (foraDeOrdem.has(i)) {
-    const era = document.createElement("span");
-    era.className = "era";
+  const era = document.createElement("span");
+  era.className = "era";
+  if (p.fonte !== 0) {
+    const fonte = sessao.fontes[p.fonte];
+    era.textContent = " · " + fonte.arquivo.name + (fonte.tipo === "pdf" ? " p." + p.pagina : "");
+    div.dataset.deFora = "1";
+    div.title = fonte.arquivo.name;
+  } else if (foraDeOrdem.has(i)) {
     era.textContent = " · era " + p.pagina;
-    num.append(era);
   }
+  if (era.textContent) num.append(era);
   if (sessao.movida === chave(p)) div.dataset.movida = "1";
   div.querySelector(".tirar-pagina").addEventListener("click", () => excluir(i));
+  const mais = div.querySelector(".inserir-antes");
+  mais.addEventListener("click", (e) => { e.stopPropagation(); abrirInserir(i, mais); });
   return div;
 }
 
@@ -231,6 +258,8 @@ function resumir() {
   const partes = [n === sessao.paginas.length ? paginas(n) : paginas(n) + " → " + sessao.paginas.length];
   const excluidas = n - atuais.length;
   if (excluidas) partes.push(excluidas === 1 ? "1 excluída" : excluidas + " excluídas");
+  const inseridas = sessao.paginas.length - atuais.length;
+  if (inseridas) partes.push(inseridas === 1 ? "1 inserida" : inseridas + " inseridas");
   if (atuais.some((p, i) => i > 0 && p.pagina < atuais[i - 1].pagina)) partes.push("ordem mudada");
   return partes.join(" · ");
 }
@@ -275,7 +304,94 @@ function excluir(i) {
   mudar(novas, null, Math.min(i, novas.length - 1));
 }
 
+// ---------- inserir: de outro PDF ou de uma imagem ----------
+
+let ondeInserir = null;  // posição na lista onde as páginas novas entram
+
+function abrirInserir(posicao, ancora) {
+  fecharInserir();
+  ondeInserir = posicao;
+  document.getElementById("arq-inserir-onde").textContent =
+    posicao >= sessao.paginas.length ? "Inserir no fim" : "Inserir antes da página " + (posicao + 1);
+  const caixa = ancora.getBoundingClientRect();
+  const base = editor.getBoundingClientRect();
+  caixaInserir.style.left = Math.min(caixa.left - base.left, base.width - 260) + "px";
+  caixaInserir.style.top = (caixa.bottom - base.top + 6) + "px";
+  caixaInserir.hidden = false;
+  caixaInserir._ancora = ancora;
+  ancora.setAttribute("aria-expanded", "true");
+  caixaInserir.querySelector("button").focus();
+}
+
+function fecharInserir() {
+  if (caixaInserir._ancora) caixaInserir._ancora.removeAttribute("aria-expanded");
+  caixaInserir._ancora = null;
+  caixaInserir.hidden = true;
+}
+
+function inserir(fonte, quantas) {
+  const indice = sessao.fontes.push(fonte) - 1;
+  const novas = sessao.paginas.slice();
+  const onde = Math.min(ondeInserir, novas.length);
+  novas.splice(onde, 0, ...Array.from({ length: quantas }, (_, k) => ({ fonte: indice, pagina: k + 1 })));
+  mudar(novas, null, onde);
+}
+
+async function inserirArquivo(arquivo, tipo) {
+  fecharInserir();
+  if (!sessao || !arquivo) return;
+  if (tipoDe(arquivo.name) !== tipo) {
+    avisar(arquivo.name + (tipo === "pdf" ? " não é um PDF." : " não é .jpg nem .png."), true);
+    return desenhar();
+  }
+  const fonte = { arquivo, tipo, doc: null, paginas: null, erro: null };
+  if (tipo === "imagem") return inserir(fonte, 1);
+  const atual = sessao;
+  try {
+    const doc = await abrir(fonte);
+    if (sessao !== atual) return;
+    fonte.paginas = doc.numPages;
+    inserir(fonte, doc.numPages);
+    avisar(paginas(doc.numPages) + " de " + arquivo.name + " entraram. Tire com a lixeira as que não quiser.");
+  } catch (erro) {
+    avisar(arquivo.name + (erro && erro.name === "PasswordException"
+      ? " está protegido por senha." : " não abriu como PDF."), true);
+  }
+  desenhar();
+}
+
+for (const botao of caixaInserir.querySelectorAll("[data-inserir]")) {
+  botao.addEventListener("click", () => {
+    (botao.dataset.inserir === "pdf" ? inserirPdf : inserirImagem).click();
+  });
+}
+inserirPdf.addEventListener("change", () => {
+  const arquivo = inserirPdf.files[0];
+  inserirPdf.value = "";
+  inserirArquivo(arquivo, "pdf");
+});
+inserirImagem.addEventListener("change", () => {
+  const arquivo = inserirImagem.files[0];
+  inserirImagem.value = "";
+  inserirArquivo(arquivo, "imagem");
+});
+document.getElementById("arq-inserir-fim").addEventListener("click", (e) => {
+  e.stopPropagation();
+  if (sessao) abrirInserir(sessao.paginas.length, e.currentTarget);
+});
+document.addEventListener("click", (e) => {
+  if (!caixaInserir.hidden && !caixaInserir.contains(e.target)) fecharInserir();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !caixaInserir.hidden) {
+    const ancora = caixaInserir._ancora;
+    fecharInserir();
+    if (ancora) ancora.focus();
+  }
+});
+
 function abrirSessao(alvo) {
+  fecharInserir();
   aVista.disconnect();
   molduras.clear();
   sessao = null;
@@ -395,10 +511,12 @@ function entregar(blob, nome) {
 baixar.addEventListener("click", async () => {
   if (!sessao || !sessao.paginas.length || sessao.enviando) return;
   const atual = sessao;
-  const arquivos = atual.fontes.map((f) => f.arquivo);
+  // só vai o que alguma página usa: uma inserção desfeita não sobe à toa
+  const usadas = [...new Set(atual.paginas.map((p) => p.fonte))].sort((x, y) => x - y);
+  const arquivos = usadas.map((f) => atual.fontes[f].arquivo);
   const plano = {
     arquivos: arquivos.map((a) => a.size),
-    paginas: atual.paginas.map((p) => [p.fonte, p.pagina - 1]),
+    paginas: atual.paginas.map((p) => [usadas.indexOf(p.fonte), p.pagina - 1]),
   };
   atual.enviando = true;
   baixar.disabled = true;

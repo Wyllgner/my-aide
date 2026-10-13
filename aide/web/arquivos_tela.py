@@ -65,11 +65,19 @@ def tela(ctx, registry, agora) -> str:
     <button type="button" class="botao" id="arq-desfazer" disabled
       title="Desfazer (Ctrl+Z)">{icone("desfazer")}Desfazer</button>
     <button type="button" class="botao" id="arq-recomecar" disabled>Recomeçar</button>
+    <button type="button" class="botao" id="arq-inserir-fim">{icone("mais")}Inserir no fim</button>
   </div>
   <div class="grade" id="arq-grade"></div>
+  <div class="card inserir" id="arq-inserir" hidden>
+    <p class="eyebrow" id="arq-inserir-onde"></p>
+    <button type="button" class="botao" data-inserir="pdf">{icone("paginas")}Páginas de outro PDF…</button>
+    <button type="button" class="botao" data-inserir="imagem">{icone("imagem")}Uma imagem…</button>
+    <input type="file" id="arq-inserir-pdf" accept=".pdf,application/pdf" hidden>
+    <input type="file" id="arq-inserir-imagem" accept=".jpg,.jpeg,.png,image/jpeg,image/png" hidden>
+  </div>
   <div class="rodape-editor">
-    <span class="mono">arraste para mover · lixeira exclui · com a página em foco,
-      Alt+← → move e Delete exclui</span>
+    <span class="mono">arraste para mover · + insere antes da página · lixeira exclui ·
+      com a página em foco, Alt+← → move e Delete exclui</span>
     <button type="button" class="botao botao-principal" id="arq-baixar">
       {icone("exportar")}Baixar PDF</button>
   </div>
@@ -78,6 +86,7 @@ def tela(ctx, registry, agora) -> str:
   <div class="folha" draggable="true" tabindex="0">
     <div class="miniatura" role="img"></div>
     <button type="button" class="tirar-pagina" title="Excluir página">{icone("lixeira", 14)}</button>
+    <button type="button" class="inserir-antes" title="Inserir antes desta página">{icone("mais", 14)}</button>
     <span class="num"></span>
   </div>
 </template>
