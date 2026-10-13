@@ -38,24 +38,31 @@ def tela(ctx, registry, agora) -> str:
     acoes = "".join(_acao(*a) for a in ACOES)
     return f"""{cabecalho("Arquivos", "converter e organizar")}
 <div class="arq-topo">
-  <label class="soltar" id="soltar">
+  <label class="soltar" id="arq-soltar">
     {icone("arquivos", 30)}
     <strong>Solte os arquivos aqui</strong>
     <span>ou <span class="link">escolha no computador</span> · Word, LibreOffice, planilhas,
       apresentações, PDF e imagens</span>
     <span class="mono soltar-aviso">nada fica guardado: o resultado vem como download
       e os temporários são apagados na hora</span>
-    <input type="file" id="escolher" multiple hidden>
+    <input type="file" id="arq-escolher" multiple hidden>
   </label>
   <div class="card fila-arq">
     <div class="linha fila-topo">
-      <span class="eyebrow" id="fila-resumo">nenhum arquivo</span>
-      <button type="button" class="botao-fraco" id="limpar" hidden>Limpar</button>
+      <span class="eyebrow" id="arq-fila-resumo">nenhum arquivo</span>
+      <button type="button" class="botao-fraco" id="arq-limpar" hidden>Limpar</button>
     </div>
-    <div id="fila"><p class="vazio">Os arquivos que você soltar aparecem aqui.</p></div>
+    <div id="arq-fila"><p class="vazio">Os arquivos que você soltar aparecem aqui.</p></div>
   </div>
 </div>
 <p class="eyebrow" style="margin-bottom:10px">O que fazer com os marcados</p>
-<div class="acoes" id="acoes">{acoes}</div>
+<div class="acoes" id="arq-acoes">{acoes}</div>
 <p class="arq-aviso" id="arq-aviso" role="status"></p>
+<section class="card editor-pdf" id="arq-editor" hidden>
+  <div class="editor-topo">
+    <h2 id="arq-editor-nome"></h2>
+    <span class="resumo mono" id="arq-editor-resumo"></span>
+  </div>
+  <div class="grade" id="arq-grade"></div>
+</section>
 <script type="module" src="/arquivos.js"></script>"""
