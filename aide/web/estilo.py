@@ -284,11 +284,25 @@ nav a svg { flex-shrink: 0; }
                                   cursor: text; padding: 4px 10px; }
 /* o padding acima é onde cabem a sobra de 8px do bloco aberto e a sombra
    do bloco sob o mouse: sem ele, abrir um bloco criava rolagem para o lado */
-.bloco-vivo { display: block; width: calc(100% + 16px); margin: -4px -8px .9em; padding: 4px 8px;
+.bloco-caixa { position: relative; width: calc(100% + 16px); margin: -4px -8px .9em; }
+.bloco-vivo { display: block; width: 100%; margin: 0; padding: 4px 8px;
               border: 0; border-radius: var(--r-inner); background: var(--line-soft);
               font: inherit; line-height: inherit; color: var(--ink); resize: none;
               overflow: hidden; tab-size: 2; }
 .bloco-vivo:focus { outline: none; box-shadow: inset 2px 0 0 var(--accent); }
+/* as cores do bloco: a cópia na mesma letra do campo. A letra aqui não é
+   monoespaçada, então negrito e itálico ficam só na cor — mais largos, eles
+   quebrariam a linha num lugar diferente do campo e o cursor desalinharia */
+/* a cópia é um <pre> dentro da prévia: ".previa .bloco-caixa" vence o
+   ".previa pre" (margem, rolagem e padding de bloco de código) */
+.previa .bloco-caixa .realce { margin: 0; padding: 4px 8px; border: 0; overflow: hidden;
+                               background: var(--line-soft); font: inherit;
+                               line-height: inherit; scrollbar-gutter: auto; }
+.bloco-caixa .realce .r-forte, .bloco-caixa .realce .r-titulo { font-weight: inherit; }
+.bloco-caixa .realce .r-italico { font-style: inherit; }
+.bloco-vivo.colorido { position: relative; color: transparent; caret-color: var(--ink);
+                       background: transparent; }
+.bloco-vivo.colorido::selection { background: rgba(196, 67, 43, .18); }
 .bloco-pendente { white-space: pre-wrap; color: var(--muted); margin: 0 0 .9em; }
 /* o bloco sob o mouse ganha um fundo leve: mostra o que o clique vai abrir.
    Sombra, e não padding, para nada sair do lugar */
