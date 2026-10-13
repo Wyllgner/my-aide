@@ -555,6 +555,34 @@ def test_a_busca_poe_o_titulo_primeiro_e_marca_o_trecho_limpo(cliente, config, r
     assert "[[" not in html.split('class="arvore')[1].split("voltar às pastas")[0]
 
 
+def test_buscar_sem_nota_aberta_abre_o_primeiro_resultado(cliente, config, raiz):
+    """Abria a última nota mexida, que nem sempre está na lista."""
+    import os
+
+    from aide.storage.reconciliacao import reconciliar
+
+    (raiz / "Inbox" / "Muro.md").write_text("# Muro\n\no muro caiu\n")
+    (raiz / "Inbox" / "Recente.md").write_text("nada a ver")
+    os.utime(raiz / "Inbox" / "Muro.md", (1, 1))
+    reconciliar(cliente.app.state.conn_factory(), config.vault_dir)
+    html = cliente.get("/notas?busca=muro").text
+    assert 'class="arquivo achado" href="/notas?arquivo=Inbox/Muro.md&amp;busca=muro"' \
+        ' aria-current="page"' in html
+    # com a nota na URL, ela continua a aberta
+    html = cliente.get("/notas?busca=muro&arquivo=Inbox/Recente.md").text
+    assert 'aria-current="page"' not in html.split("voltar às pastas")[0].split('class="atalhos"')[1]
+
+
+def test_tag_sem_nota_aberta_abre_a_primeira_da_lista(cliente, raiz):
+    import os
+
+    (raiz / "Inbox" / "Obra.md").write_text("#reforma")
+    (raiz / "Inbox" / "Recente.md").write_text("nada a ver")
+    os.utime(raiz / "Inbox" / "Obra.md", (1, 1))
+    html = cliente.get("/notas?tag=reforma").text
+    assert 'href="/notas?arquivo=Inbox/Obra.md&amp;tag=reforma" aria-current="page"' in html
+
+
 def test_trecho_da_busca_nao_vira_html():
     from aide.web.notas_tela import _trecho
 

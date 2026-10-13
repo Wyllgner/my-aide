@@ -152,8 +152,10 @@ def _trecho(texto: str, termos: list[str]) -> str:
     return html + escape(limpo[inicio:])
 
 
-def _busca(ctx, raiz: Path, busca: str, aberto: str | None) -> str:
-    """Direto no índice, e não pela tool do modelo: `notes.search` esconde as
+def _achados_da_busca(ctx, raiz: Path, busca: str) -> list[tuple[str, dict]]:
+    """As notas que a busca acha, na ordem da lista: (caminho no vault, achado).
+
+    Direto no índice, e não pela tool do modelo: `notes.search` esconde as
     privadas de propósito, e aqui quem procura é o dono. Sem embedder, que é
     o que a página tem — a consulta também não sai da máquina."""
     from aide.storage.search import buscar, termos_da_consulta
@@ -167,13 +169,24 @@ def _busca(ctx, raiz: Path, busca: str, aberto: str | None) -> str:
         titulo = (achado.get("title") or "").casefold()
         return 0 if termos and all(t in titulo for t in termos) else 1
 
-    itens, quantos = "", 0
+    saida = []
     for a in sorted(achados, key=no_titulo):
         row = ctx.conn.execute("SELECT path FROM notes WHERE id = ?", (a["id"],)).fetchone()
         try:
-            relativo = vault.relativo_de(raiz, Path(row["path"]))
+            saida.append((vault.relativo_de(raiz, Path(row["path"])), a))
         except (TypeError, ValueError):
             continue
+    return saida
+
+
+def _busca(ctx, raiz: Path, busca: str, aberto: str | None,
+           achados: list[tuple[str, dict]]) -> str:
+    """A lista da busca: as notas de `_achados_da_busca` e depois os desenhos."""
+    from aide.storage.search import termos_da_consulta
+
+    termos = termos_da_consulta(busca)
+    itens, quantos = "", 0
+    for relativo, a in achados:
         atual = ' aria-current="page"' if relativo == aberto else ""
         trecho = (f'<span class="trecho">{_trecho(a["trecho"], termos)}</span>'
                   if a.get("trecho") else "")
@@ -298,21 +311,25 @@ def _visao_geral(raiz: Path, agora: datetime, indice: links.Indice, conn=None) -
 </div>"""
 
 
-def _por_tag(raiz: Path, indice, tag: str, aberto: str | None) -> str:
-    """As notas com a tag, do frontmatter ou do texto. Como no Obsidian,
-    #casa traz também #casa/obra."""
+def _notas_da_tag(raiz: Path, indice, tag: str) -> list[str]:
+    """As notas com a tag, do frontmatter ou do texto, por nome. Como no
+    Obsidian, #casa traz também #casa/obra."""
     alvo = tag.casefold()
     achadas = []
     for caminho, leitura in grafo.leituras(raiz, indice).items():
         if any(t.casefold() == alvo or t.casefold().startswith(alvo + "/")
                for t in leitura.tags):
             achadas.append(caminho)
+    return sorted(achadas, key=str.casefold)
+
+
+def _por_tag(tag: str, achadas: list[str], aberto: str | None) -> str:
     topo = (f'<p class="eyebrow">#{escape(tag)} · '
             f'{formato.plural(len(achadas), "nota")}</p>')
     if not achadas:
         return topo + '<p class="vazio">Nenhuma nota com esta tag.</p>'
     itens = ""
-    for caminho in sorted(achadas, key=str.casefold):
+    for caminho in achadas:
         atual = ' aria-current="page"' if caminho == aberto else ""
         nome = caminho.rpartition("/")[2].removesuffix(".md")
         itens += (f'<a class="arquivo achado" href="{escape(_href(caminho))}&amp;tag='
@@ -561,6 +578,12 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
     # para o [[ sugerir desenhos também
     indice_desenhos = desenhos.indice(raiz, itens)
     caminhos_de_desenho = sorted(indice_desenhos.por_caminho.values(), key=str.casefold)
+    achados = _achados_da_busca(ctx, raiz, busca) if busca else []
+    com_tag = _notas_da_tag(raiz, indice, tag) if tag else []
+    # buscou sem nota aberta: abre o primeiro da lista, e não a última mexida
+    if not arquivo and nota is None:
+        primeiro = [c for c, _ in achados[:1]] or com_tag[:1]
+        arquivo = primeiro[0] if primeiro else None
     aberto = _escolher(ctx, raiz, arquivo, nota, indice)
     if aberto:
         # antes de mostrar: a caixa "privada" lê o frontmatter
@@ -590,9 +613,9 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
               f'voltar às pastas</a>')
 
     if busca:
-        lateral = _busca(ctx, raiz, busca, aberto) + voltar
+        lateral = _busca(ctx, raiz, busca, aberto, achados) + voltar
     elif tag:
-        lateral = _por_tag(raiz, indice, tag, aberto) + voltar
+        lateral = _por_tag(tag, com_tag, aberto) + voltar
     elif quebrados:
         lateral = _quebrados(raiz, quebrados_todos, indice.caminhos) + voltar
     else:
