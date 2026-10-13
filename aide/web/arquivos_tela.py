@@ -62,7 +62,23 @@ def tela(ctx, registry, agora) -> str:
   <div class="editor-topo">
     <h2 id="arq-editor-nome"></h2>
     <span class="resumo mono" id="arq-editor-resumo"></span>
+    <button type="button" class="botao" id="arq-desfazer" disabled
+      title="Desfazer (Ctrl+Z)">{icone("desfazer")}Desfazer</button>
+    <button type="button" class="botao" id="arq-recomecar" disabled>Recomeçar</button>
   </div>
   <div class="grade" id="arq-grade"></div>
+  <div class="rodape-editor">
+    <span class="mono">arraste para mover · lixeira exclui · com a página em foco,
+      Alt+← → move e Delete exclui</span>
+    <button type="button" class="botao botao-principal" id="arq-baixar">
+      {icone("exportar")}Baixar PDF</button>
+  </div>
 </section>
+<template id="arq-modelo-folha">
+  <div class="folha" draggable="true" tabindex="0">
+    <div class="miniatura" role="img"></div>
+    <button type="button" class="tirar-pagina" title="Excluir página">{icone("lixeira", 14)}</button>
+    <span class="num"></span>
+  </div>
+</template>
 <script type="module" src="/arquivos.js"></script>"""

@@ -43,12 +43,14 @@ const aviso = document.getElementById("arq-aviso");
 const botoes = Array.from(document.querySelectorAll("#arq-acoes .acao"));
 const editor = document.getElementById("arq-editor");
 const grade = document.getElementById("arq-grade");
+const desfazer = document.getElementById("arq-desfazer");
+const recomecar = document.getElementById("arq-recomecar");
+const baixar = document.getElementById("arq-baixar");
+const modeloFolha = document.getElementById("arq-modelo-folha");
 
 // { arquivo: File, tipo, marcado, doc (promessa do pdf.js), paginas, erro }
 let itens = [];
 let escolhida = null;
-// o PDF que a grade mostra agora: redesenhar a lista não refaz as miniaturas
-let noEditor = null;
 
 function extensao(nome) {
   const i = nome.lastIndexOf(".");
@@ -158,35 +160,271 @@ async function desenharPagina(it, numero, moldura) {
   }
 }
 
-function folha(it, numero) {
-  const div = document.createElement("div");
-  div.className = "folha";
-  const moldura = document.createElement("div");
-  moldura.className = "miniatura";
-  moldura.setAttribute("role", "img");
-  moldura.setAttribute("aria-label", "Página " + numero);
-  moldura._origem = { item: it, pagina: numero };
-  aVista.observe(moldura);
-  const num = document.createElement("span");
-  num.className = "num mono";
-  num.textContent = numero;
-  div.append(moldura, num);
+// ---------- organizar: a sessão de um PDF ----------
+// fontes[0] é o PDF aberto; as páginas são { fonte, pagina } contadas do 1.
+// Baixar manda as fontes e essa lista para /api/arquivos/montar.
+
+let sessao = null;
+const molduras = new Map();  // "fonte:pagina" -> a miniatura já desenhada
+
+function chave(p) {
+  return p.fonte + ":" + p.pagina;
+}
+
+function moldura(p) {
+  let m = molduras.get(chave(p));
+  if (!m) {
+    m = document.createElement("div");
+    m.className = "miniatura";
+    m.setAttribute("role", "img");
+    m._origem = { item: sessao.fontes[p.fonte], pagina: p.pagina };
+    molduras.set(chave(p), m);
+    aVista.observe(m);
+  }
+  m.setAttribute("aria-label", "Página " + p.pagina + " de " + sessao.fontes[p.fonte].arquivo.name);
+  return m;
+}
+
+// As páginas que você moveu são as que estão fora da maior sequência que
+// continua em ordem: arrastar a 2 para depois da 5 marca só a 2, e excluir
+// uma página não marca as que só andaram uma casa
+function movidas(lista) {
+  const seq = lista.map((p, i) => (p.fonte === 0 ? { valor: p.pagina, i } : null)).filter(Boolean);
+  const fins = [];      // fins[k]: posição em seq do menor fim de sequência de tamanho k+1
+  const antes = [];
+  for (let j = 0; j < seq.length; j++) {
+    let lo = 0, hi = fins.length;
+    while (lo < hi) {
+      const meio = (lo + hi) >> 1;
+      if (seq[fins[meio]].valor < seq[j].valor) lo = meio + 1; else hi = meio;
+    }
+    antes[j] = lo ? fins[lo - 1] : -1;
+    fins[lo] = j;
+  }
+  const emOrdem = new Set();
+  for (let j = fins.length ? fins[fins.length - 1] : -1; j >= 0; j = antes[j]) emOrdem.add(seq[j].i);
+  return new Set(seq.filter((x) => !emOrdem.has(x.i)).map((x) => x.i));
+}
+
+function folha(p, i, foraDeOrdem) {
+  const div = modeloFolha.content.firstElementChild.cloneNode(true);
+  div.dataset.indice = i;
+  div.querySelector(".miniatura").replaceWith(moldura(p));
+  const num = div.querySelector(".num");
+  const n = document.createElement("b");
+  n.textContent = i + 1;
+  num.append(n);
+  if (foraDeOrdem.has(i)) {
+    const era = document.createElement("span");
+    era.className = "era";
+    era.textContent = " · era " + p.pagina;
+    num.append(era);
+  }
+  if (sessao.movida === chave(p)) div.dataset.movida = "1";
+  div.querySelector(".tirar-pagina").addEventListener("click", () => excluir(i));
   return div;
+}
+
+function resumir() {
+  const n = sessao.original;
+  const atuais = sessao.paginas.filter((p) => p.fonte === 0);
+  const partes = [n === sessao.paginas.length ? paginas(n) : paginas(n) + " → " + sessao.paginas.length];
+  const excluidas = n - atuais.length;
+  if (excluidas) partes.push(excluidas === 1 ? "1 excluída" : excluidas + " excluídas");
+  if (atuais.some((p, i) => i > 0 && p.pagina < atuais[i - 1].pagina)) partes.push("ordem mudada");
+  return partes.join(" · ");
+}
+
+function redesenharGrade(foco) {
+  const foraDeOrdem = movidas(sessao.paginas);
+  grade.replaceChildren(...sessao.paginas.map((p, i) => folha(p, i, foraDeOrdem)));
+  if (!sessao.paginas.length) {
+    const vazio = document.createElement("p");
+    vazio.className = "vazio";
+    vazio.textContent = "Nenhuma página sobrou. Desfaça para trazer de volta.";
+    grade.append(vazio);
+  }
+  document.getElementById("arq-editor-resumo").textContent = resumir();
+  desfazer.disabled = !sessao.historico.length;
+  recomecar.disabled = !sessao.historico.length;
+  baixar.disabled = !sessao.paginas.length || sessao.enviando;
+  if (foco !== undefined) {
+    const alvo = grade.querySelector('.folha[data-indice="' + foco + '"]');
+    if (alvo) alvo.focus();
+  }
+}
+
+function mudar(novas, movida, foco) {
+  sessao.historico.push(sessao.paginas);
+  sessao.paginas = novas;
+  sessao.movida = movida || null;
+  redesenharGrade(foco);
+}
+
+function mover(de, para) {
+  if (de === para || para < 0 || para >= sessao.paginas.length) return;
+  const novas = sessao.paginas.slice();
+  const [p] = novas.splice(de, 1);
+  novas.splice(para, 0, p);
+  mudar(novas, chave(p), para);
+}
+
+function excluir(i) {
+  const novas = sessao.paginas.slice();
+  novas.splice(i, 1);
+  mudar(novas, null, Math.min(i, novas.length - 1));
+}
+
+function abrirSessao(alvo) {
+  aVista.disconnect();
+  molduras.clear();
+  sessao = null;
+  editor.hidden = !alvo;
+  grade.replaceChildren();
+  if (!alvo) return;
+  sessao = {
+    item: alvo,
+    fontes: [alvo],
+    original: alvo.paginas,
+    paginas: Array.from({ length: alvo.paginas }, (_, i) => ({ fonte: 0, pagina: i + 1 })),
+    historico: [],
+    movida: null,
+    enviando: false,
+  };
+  document.getElementById("arq-editor-nome").textContent = alvo.arquivo.name;
+  redesenharGrade();
 }
 
 function desenharEditor() {
   const marcados = itens.filter((it) => it.marcado);
   const alvo = escolhida === "organizar" && marcados[0] && marcados[0].paginas ? marcados[0] : null;
-  if (alvo === noEditor) return;
-  noEditor = alvo;
-  aVista.disconnect();
-  grade.replaceChildren();
-  editor.hidden = !alvo;
-  if (!alvo) return;
-  document.getElementById("arq-editor-nome").textContent = alvo.arquivo.name;
-  document.getElementById("arq-editor-resumo").textContent = paginas(alvo.paginas);
-  for (let n = 1; n <= alvo.paginas; n++) grade.append(folha(alvo, n));
+  if (alvo !== (sessao && sessao.item)) abrirSessao(alvo);
 }
+
+// arrastar: a barra mostra de que lado da vizinha a página cai
+let arrastada = null;
+
+function limparMarcas() {
+  for (const f of grade.querySelectorAll("[data-cair], [data-arrastando]")) {
+    delete f.dataset.cair;
+    delete f.dataset.arrastando;
+  }
+}
+
+function destino(e) {
+  const alvo = e.target.closest(".folha");
+  if (!alvo) return null;
+  const caixa = alvo.getBoundingClientRect();
+  const depois = e.clientX > caixa.left + caixa.width / 2;
+  return { alvo, depois, indice: Number(alvo.dataset.indice) + (depois ? 1 : 0) };
+}
+
+grade.addEventListener("dragstart", (e) => {
+  const f = e.target.closest(".folha");
+  if (!f) return;
+  arrastada = Number(f.dataset.indice);
+  f.dataset.arrastando = "1";
+  e.dataTransfer.effectAllowed = "move";
+  e.dataTransfer.setData("text/plain", "página " + (arrastada + 1));
+});
+grade.addEventListener("dragover", (e) => {
+  if (arrastada === null) return;
+  e.preventDefault();
+  const d = destino(e);
+  for (const f of grade.querySelectorAll("[data-cair]")) if (!d || f !== d.alvo) delete f.dataset.cair;
+  if (d) d.alvo.dataset.cair = d.depois ? "depois" : "antes";
+});
+grade.addEventListener("drop", (e) => {
+  if (arrastada === null) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const d = destino(e);
+  const de = arrastada;
+  arrastada = null;
+  limparMarcas();
+  if (d) mover(de, d.indice > de ? d.indice - 1 : d.indice);
+});
+grade.addEventListener("dragend", () => { arrastada = null; limparMarcas(); });
+
+grade.addEventListener("keydown", (e) => {
+  const f = e.target.closest(".folha");
+  if (!f || e.target !== f) return;
+  const i = Number(f.dataset.indice);
+  if (e.altKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+    e.preventDefault();
+    mover(i, i + (e.key === "ArrowLeft" ? -1 : 1));
+  } else if (e.key === "Delete" || e.key === "Backspace") {
+    e.preventDefault();
+    excluir(i);
+  }
+});
+
+desfazer.addEventListener("click", () => {
+  if (!sessao || !sessao.historico.length) return;
+  sessao.paginas = sessao.historico.pop();
+  sessao.movida = null;
+  redesenharGrade();
+});
+recomecar.addEventListener("click", () => {
+  if (!sessao) return;
+  mudar(Array.from({ length: sessao.original }, (_, i) => ({ fonte: 0, pagina: i + 1 })));
+});
+document.addEventListener("keydown", (e) => {
+  if (!sessao || editor.hidden || !(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "z") return;
+  if (e.target.closest("input, textarea")) return;
+  e.preventDefault();
+  desfazer.click();
+});
+
+// baixar: o corpo é a linha do plano e as fontes coladas na ordem
+function nomeDoResultado(nome) {
+  return nome.replace(/\.pdf$/i, "") + "-organizado.pdf";
+}
+
+function entregar(blob, nome) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nome;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+baixar.addEventListener("click", async () => {
+  if (!sessao || !sessao.paginas.length || sessao.enviando) return;
+  const atual = sessao;
+  const arquivos = atual.fontes.map((f) => f.arquivo);
+  const plano = {
+    arquivos: arquivos.map((a) => a.size),
+    paginas: atual.paginas.map((p) => [p.fonte, p.pagina - 1]),
+  };
+  atual.enviando = true;
+  baixar.disabled = true;
+  avisar("Montando o PDF…");
+  desenhar();
+  try {
+    const resposta = await fetch("/api/arquivos/montar", {
+      method: "POST",
+      headers: { "Content-Type": "application/octet-stream", "X-Aide": "1" },
+      body: new Blob([JSON.stringify(plano) + "\n", ...arquivos]),
+      credentials: "same-origin",
+    });
+    if (!resposta.ok) {
+      const motivo = await resposta.json().then((d) => d.detail, () => "erro " + resposta.status);
+      throw new Error(motivo);
+    }
+    entregar(await resposta.blob(), nomeDoResultado(atual.item.arquivo.name));
+    avisar("Pronto: " + paginas(atual.paginas.length) + " em " + nomeDoResultado(atual.item.arquivo.name) + ".");
+  } catch (erro) {
+    avisar("Não deu para montar: " + erro.message, true);
+  } finally {
+    atual.enviando = false;
+    desenhar();
+    if (sessao === atual) redesenharGrade();
+  }
+});
 
 // ---------- a lista ----------
 
