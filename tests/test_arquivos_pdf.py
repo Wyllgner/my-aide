@@ -94,3 +94,98 @@ def test_pedido_que_nao_fecha_com_o_arquivo(a, tmp_path, pedido, motivo):
 def test_limite_de_paginas(a, tmp_path):
     with pytest.raises(pdf.PdfInvalido, match="mais de"):
         pdf.montar([a], [(0, 0)] * (pdf.MAXIMO_DE_PAGINAS + 1), tmp_path / "s.pdf")
+
+
+# ---------- imagem como página ----------
+
+def foto(caminho, tamanho=(400, 300), formato="JPEG", modo="RGB", cor=(200, 30, 30), exif=None):
+    from PIL import Image
+
+    imagem = Image.new(modo, tamanho, cor)
+    extra = {"exif": exif} if exif is not None else {}
+    imagem.save(caminho, formato, **extra)
+    return caminho
+
+
+def tamanhos(caminho):
+    return [(round(float(p.mediabox.width)), round(float(p.mediabox.height)))
+            for p in PdfReader(caminho).pages]
+
+
+def test_imagem_no_meio_toma_o_tamanho_da_pagina_de_antes(a, tmp_path):
+    imagem = foto(tmp_path / "f.jpg")
+    saida = tmp_path / "s.pdf"
+    pdf.montar([a, imagem], [(0, 0), (1, 0), (0, 1)], saida)
+    assert tamanhos(saida) == [(101, 200), (101, 200), (102, 200)]
+
+
+def test_imagem_no_comeco_toma_o_tamanho_da_primeira_de_pdf(b, tmp_path):
+    imagem = foto(tmp_path / "f.png", formato="PNG")
+    saida = tmp_path / "s.pdf"
+    pdf.montar([imagem, b], [(0, 0), (1, 0)], saida)
+    assert tamanhos(saida) == [(201, 200), (201, 200)]
+
+
+def test_so_imagens_viram_a4_na_orientacao_da_foto(tmp_path):
+    deitada = foto(tmp_path / "d.jpg", (800, 600))
+    em_pe = foto(tmp_path / "e.jpg", (600, 800))
+    saida = tmp_path / "s.pdf"
+    pdf.montar([deitada, em_pe], [(0, 0), (1, 0)], saida)
+    # cada imagem sozinha, sem PDF antes, decide pela própria forma;
+    # a segunda já tem vizinha e herda o tamanho dela
+    assert tamanhos(saida)[0] == (842, 595)
+
+
+def test_a_imagem_cabe_inteira_na_pagina_com_margem(tmp_path):
+    imagem = foto(tmp_path / "f.jpg", (1000, 100))
+    saida = tmp_path / "s.pdf"
+    pdf.montar([imagem], [(0, 0)], saida)
+    pagina = PdfReader(saida).pages[0]
+    assert "/XObject" in pagina["/Resources"]
+    assert tamanhos(saida) == [(842, 595)]
+
+
+def test_transparencia_vira_fundo_branco(tmp_path):
+    imagem = foto(tmp_path / "t.png", formato="PNG", modo="RGBA", cor=(0, 0, 0, 0))
+    saida = tmp_path / "s.pdf"
+    pdf.montar([imagem], [(0, 0)], saida)
+    convertida = pdf._abrir_imagem(imagem, "x")
+    assert convertida.mode == "RGB"
+    assert convertida.getpixel((0, 0)) == (255, 255, 255)
+
+
+def test_foto_de_celular_deitada_pelo_exif_fica_em_pe(tmp_path):
+    from PIL import Image
+
+    exif = Image.Exif()
+    exif[0x0112] = 6  # gire 90°: o sensor gravou deitado
+    imagem = foto(tmp_path / "c.jpg", (800, 600), exif=exif.tobytes())
+    assert pdf._abrir_imagem(imagem, "x").size == (600, 800)
+
+
+def test_imagem_tem_uma_pagina_so(tmp_path):
+    imagem = foto(tmp_path / "f.jpg")
+    with pytest.raises(pdf.PdfInvalido, match="não tem a página 2"):
+        pdf.montar([imagem], [(0, 1)], tmp_path / "s.pdf")
+
+
+def test_imagem_quebrada_vira_erro_legivel(tmp_path):
+    quebrada = tmp_path / "q.jpg"
+    quebrada.write_bytes(b"\xff\xd8\xff\xe0 e mais nada")
+    with pytest.raises(pdf.PdfInvalido, match="não é uma imagem que dê para abrir"):
+        pdf.montar([quebrada], [(0, 0)], tmp_path / "s.pdf")
+
+
+def test_bomba_de_descompressao_e_recusada(tmp_path, monkeypatch):
+    monkeypatch.setattr(pdf, "MAXIMO_DE_PIXELS", 1000)
+    imagem = foto(tmp_path / "f.png", (100, 100), formato="PNG")
+    with pytest.raises(pdf.PdfInvalido, match="grande demais"):
+        pdf.montar([imagem], [(0, 0)], tmp_path / "s.pdf")
+
+
+def test_extensao_mentirosa_nao_engana(tmp_path):
+    """Um .jpg que é PDF é tratado como PDF, e vice-versa: vale o conteúdo."""
+    disfarcado = criar(tmp_path / "na-verdade-pdf.jpg", [150])
+    saida = tmp_path / "s.pdf"
+    pdf.montar([disfarcado], [(0, 0)], saida)
+    assert larguras(saida) == [150]
