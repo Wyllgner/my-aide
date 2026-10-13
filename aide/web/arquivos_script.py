@@ -48,6 +48,10 @@ const recomecar = document.getElementById("arq-recomecar");
 const baixar = document.getElementById("arq-baixar");
 const modeloFolha = document.getElementById("arq-modelo-folha");
 const caixaInserir = document.getElementById("arq-inserir");
+const secaoJuntar = document.getElementById("arq-juntar");
+const listaJuntar = document.getElementById("arq-juntar-lista");
+const baixarJuntado = document.getElementById("arq-juntar-baixar");
+const modeloJuntar = document.getElementById("arq-modelo-juntar");
 const inserirPdf = document.getElementById("arq-inserir-pdf");
 const inserirImagem = document.getElementById("arq-inserir-imagem");
 
@@ -493,8 +497,8 @@ document.addEventListener("keydown", (e) => {
 });
 
 // baixar: o corpo é a linha do plano e as fontes coladas na ordem
-function nomeDoResultado(nome) {
-  return nome.replace(/\.pdf$/i, "") + "-organizado.pdf";
+function nomeDoResultado(nome, sufixo) {
+  return nome.replace(/\.pdf$/i, "") + "-" + sufixo + ".pdf";
 }
 
 function entregar(blob, nome) {
@@ -508,39 +512,157 @@ function entregar(blob, nome) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+// manda as fontes e a lista de páginas; devolve o PDF ou lança com o motivo
+async function montar(arquivos, lista) {
+  const plano = { arquivos: arquivos.map((a) => a.size), paginas: lista };
+  const resposta = await fetch("/api/arquivos/montar", {
+    method: "POST",
+    headers: { "Content-Type": "application/octet-stream", "X-Aide": "1" },
+    body: new Blob([JSON.stringify(plano) + "\n", ...arquivos]),
+    credentials: "same-origin",
+  });
+  if (!resposta.ok) {
+    throw new Error(await resposta.json().then((d) => d.detail, () => "erro " + resposta.status));
+  }
+  return resposta.blob();
+}
+
 baixar.addEventListener("click", async () => {
   if (!sessao || !sessao.paginas.length || sessao.enviando) return;
   const atual = sessao;
   // só vai o que alguma página usa: uma inserção desfeita não sobe à toa
   const usadas = [...new Set(atual.paginas.map((p) => p.fonte))].sort((x, y) => x - y);
   const arquivos = usadas.map((f) => atual.fontes[f].arquivo);
-  const plano = {
-    arquivos: arquivos.map((a) => a.size),
-    paginas: atual.paginas.map((p) => [usadas.indexOf(p.fonte), p.pagina - 1]),
-  };
+  const lista = atual.paginas.map((p) => [usadas.indexOf(p.fonte), p.pagina - 1]);
+  const nome = nomeDoResultado(atual.item.arquivo.name, "organizado");
   atual.enviando = true;
   baixar.disabled = true;
   avisar("Montando o PDF…");
   desenhar();
   try {
-    const resposta = await fetch("/api/arquivos/montar", {
-      method: "POST",
-      headers: { "Content-Type": "application/octet-stream", "X-Aide": "1" },
-      body: new Blob([JSON.stringify(plano) + "\n", ...arquivos]),
-      credentials: "same-origin",
-    });
-    if (!resposta.ok) {
-      const motivo = await resposta.json().then((d) => d.detail, () => "erro " + resposta.status);
-      throw new Error(motivo);
-    }
-    entregar(await resposta.blob(), nomeDoResultado(atual.item.arquivo.name));
-    avisar("Pronto: " + paginas(atual.paginas.length) + " em " + nomeDoResultado(atual.item.arquivo.name) + ".");
+    entregar(await montar(arquivos, lista), nome);
+    avisar("Pronto: " + paginas(atual.paginas.length) + " em " + nome + ".");
   } catch (erro) {
     avisar("Não deu para montar: " + erro.message, true);
   } finally {
     atual.enviando = false;
     desenhar();
     if (sessao === atual) redesenharGrade();
+  }
+});
+
+// ---------- juntar: os PDFs marcados, na ordem que você arrumar ----------
+
+let ordemJuntar = [];
+let juntando = false;
+
+function sincronizarJuntar(marcados) {
+  // quem continua marcado mantém o lugar; quem chegou entra no fim
+  const validos = marcados.filter((it) => it.tipo === "pdf" && it.paginas && !it.erro);
+  ordemJuntar = ordemJuntar.filter((it) => validos.includes(it))
+    .concat(validos.filter((it) => !ordemJuntar.includes(it)));
+}
+
+function linhaJuntar(it, i) {
+  const div = modeloJuntar.content.firstElementChild.cloneNode(true);
+  div.dataset.indice = i;
+  div.querySelector(".nome").textContent = it.arquivo.name;
+  div.querySelector(".nome").title = it.arquivo.name;
+  const antes = ordemJuntar.slice(0, i).reduce((soma, x) => soma + x.paginas, 0);
+  div.querySelector(".quando").textContent = it.paginas === 1 ? "pág " + (antes + 1)
+    : "págs " + (antes + 1) + "–" + (antes + it.paginas);
+  const subir = div.querySelector('[data-mover="-1"]');
+  const descer = div.querySelector('[data-mover="1"]');
+  subir.disabled = i === 0;
+  descer.disabled = i === ordemJuntar.length - 1;
+  subir.setAttribute("aria-label", "Subir " + it.arquivo.name);
+  descer.setAttribute("aria-label", "Descer " + it.arquivo.name);
+  subir.addEventListener("click", () => moverJuntar(i, i - 1, "-1"));
+  descer.addEventListener("click", () => moverJuntar(i, i + 1, "1"));
+  return div;
+}
+
+function desenharJuntar(foco) {
+  const visivel = escolhida === "juntar" && ordemJuntar.length >= 2;
+  secaoJuntar.hidden = !visivel;
+  if (!visivel) return;
+  listaJuntar.replaceChildren(...ordemJuntar.map(linhaJuntar));
+  const total = ordemJuntar.reduce((soma, it) => soma + it.paginas, 0);
+  document.getElementById("arq-juntar-resumo").textContent =
+    ordemJuntar.length + " PDFs · " + paginas(total) + " no total";
+  baixarJuntado.disabled = juntando;
+  if (foco) {
+    const alvo = listaJuntar.querySelector('[data-indice="' + foco.indice + '"]');
+    const botao = alvo && foco.botao && alvo.querySelector('[data-mover="' + foco.botao + '"]');
+    if (botao && !botao.disabled) botao.focus(); else if (alvo) alvo.focus();
+  }
+}
+
+function moverJuntar(de, para, botao) {
+  if (para < 0 || para >= ordemJuntar.length || de === para) return;
+  const [it] = ordemJuntar.splice(de, 1);
+  ordemJuntar.splice(para, 0, it);
+  desenharJuntar({ indice: para, botao });
+}
+
+let arrastadaJuntar = null;
+
+listaJuntar.addEventListener("dragstart", (e) => {
+  const l = e.target.closest(".linha");
+  if (!l) return;
+  arrastadaJuntar = Number(l.dataset.indice);
+  l.dataset.arrastando = "1";
+  e.dataTransfer.effectAllowed = "move";
+  e.dataTransfer.setData("text/plain", ordemJuntar[arrastadaJuntar].arquivo.name);
+});
+listaJuntar.addEventListener("dragover", (e) => {
+  if (arrastadaJuntar === null) return;
+  e.preventDefault();
+  const l = e.target.closest(".linha");
+  for (const x of listaJuntar.querySelectorAll("[data-cair]")) if (x !== l) delete x.dataset.cair;
+  if (!l) return;
+  const caixa = l.getBoundingClientRect();
+  l.dataset.cair = e.clientY > caixa.top + caixa.height / 2 ? "depois" : "antes";
+});
+listaJuntar.addEventListener("drop", (e) => {
+  if (arrastadaJuntar === null) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const l = e.target.closest(".linha");
+  const de = arrastadaJuntar;
+  arrastadaJuntar = null;
+  if (!l) return desenharJuntar();
+  const caixa = l.getBoundingClientRect();
+  let para = Number(l.dataset.indice) + (e.clientY > caixa.top + caixa.height / 2 ? 1 : 0);
+  if (para > de) para--;
+  if (para === de) return desenharJuntar();
+  moverJuntar(de, para);
+});
+listaJuntar.addEventListener("dragend", () => { arrastadaJuntar = null; desenharJuntar(); });
+listaJuntar.addEventListener("keydown", (e) => {
+  const l = e.target.closest(".linha");
+  if (!l || e.target !== l || !e.altKey || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
+  e.preventDefault();
+  const i = Number(l.dataset.indice);
+  moverJuntar(i, i + (e.key === "ArrowUp" ? -1 : 1));
+});
+
+baixarJuntado.addEventListener("click", async () => {
+  if (juntando || ordemJuntar.length < 2) return;
+  const ordem = ordemJuntar.slice();
+  const lista = ordem.flatMap((it, f) => Array.from({ length: it.paginas }, (_, p) => [f, p]));
+  const nome = nomeDoResultado(ordem[0].arquivo.name, "juntado");
+  juntando = true;
+  avisar("Juntando " + ordem.length + " PDFs…");
+  desenhar();
+  try {
+    entregar(await montar(ordem.map((it) => it.arquivo), lista), nome);
+    avisar("Pronto: " + paginas(lista.length) + " em " + nome + ".");
+  } catch (erro) {
+    avisar("Não deu para juntar: " + erro.message, true);
+  } finally {
+    juntando = false;
+    desenhar();
   }
 });
 
@@ -620,12 +742,14 @@ function desenhar() {
     botao.setAttribute("aria-pressed", String(escolhida === acao));
   }
   desenharEditor();
+  sincronizarJuntar(marcados);
+  desenharJuntar();
 }
 
 for (const botao of botoes) {
   botao.addEventListener("click", () => {
     escolhida = botao.dataset.acao;
-    avisar(escolhida === "organizar" ? "" : "Esta ação ainda está sendo construída.");
+    avisar(["organizar", "juntar"].includes(escolhida) ? "" : "Esta ação ainda está sendo construída.");
     desenhar();
   });
 }

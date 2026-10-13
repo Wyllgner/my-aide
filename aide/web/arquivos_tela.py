@@ -82,6 +82,28 @@ def tela(ctx, registry, agora) -> str:
       {icone("exportar")}Baixar PDF</button>
   </div>
 </section>
+<section class="card juntar" id="arq-juntar" hidden>
+  <div class="editor-topo">
+    <h2>Juntar PDFs</h2>
+    <span class="resumo mono" id="arq-juntar-resumo"></span>
+  </div>
+  <div id="arq-juntar-lista"></div>
+  <div class="rodape-editor">
+    <span class="mono">arraste para mudar a ordem · com a linha em foco, Alt+↑ ↓ move</span>
+    <button type="button" class="botao botao-principal" id="arq-juntar-baixar">
+      {icone("exportar")}Baixar PDF juntado</button>
+  </div>
+</section>
+<template id="arq-modelo-juntar">
+  <div class="linha" draggable="true" tabindex="0">
+    <span class="alca" aria-hidden="true">⋮⋮</span>
+    <span class="tipo" data-tipo="pdf">PDF</span>
+    <span class="nome"></span>
+    <span class="quando mono"></span>
+    <button type="button" class="botao mover" data-mover="-1" title="Subir">↑</button>
+    <button type="button" class="botao mover" data-mover="1" title="Descer">↓</button>
+  </div>
+</template>
 <template id="arq-modelo-folha">
   <div class="folha" draggable="true" tabindex="0">
     <div class="miniatura" role="img"></div>
