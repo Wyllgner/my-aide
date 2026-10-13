@@ -17,9 +17,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-web = ["fastapi>=0.110", "uvicorn>=0.27"]
+# pypdf: reordenar, excluir e juntar páginas na tela Arquivos
+web = ["fastapi>=0.110", "uvicorn>=0.27", "pypdf>=6.1"]
 dev = ["pytest>=8.0", "ruff>=0.5", "pip-audit>=2.7",
-       "fastapi>=0.110", "uvicorn>=0.27", "httpx>=0.27"]
+       "fastapi>=0.110", "uvicorn>=0.27", "httpx>=0.27", "pypdf>=6.1"]
 
 [project.scripts]
 myaide = "aide.cli:app"

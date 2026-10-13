@@ -1,7 +1,9 @@
 """A aplicação web.
 
 **Quase só leitura.** A única escrita é a do vault: notas (`notas_api.py`) e
-desenhos (`desenhos_api.py`), porque ele virou o caderno que se escreve aqui. O resto — concluir tarefa, lançar
+desenhos (`desenhos_api.py`), porque ele virou o caderno que se escreve aqui.
+A tela Arquivos (`arquivos_api.py`) também recebe POST, mas não grava nada:
+converte o que chega e devolve como download. O resto — concluir tarefa, lançar
 gasto, conversar — continua sendo CLI, Telegram ou MCP. Escrita tem preço:
 CSRF, DNS rebinding e o clique errado numa aba esquecida. `seguranca.py` paga
 os dois primeiros para todas as rotas, e `test_so_o_vault_escreve` impede
@@ -67,10 +69,11 @@ def criar_app(config=None, conn_factory=None):
 
     app.state.contexto = contexto
 
-    from aide.web import desenho_tela, desenhos_api, notas_api
+    from aide.web import arquivos_api, desenho_tela, desenhos_api, notas_api
 
     notas_api.instalar(app)
     desenhos_api.instalar(app)
+    arquivos_api.instalar(app)
     desenho_tela.instalar(app)
 
     def saldo_atual() -> dict | None:

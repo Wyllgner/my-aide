@@ -87,11 +87,12 @@ def test_a_url_anunciada_e_local(config, tmp_path, monkeypatch):
 def test_so_o_vault_escreve(app):
     """Escrita é decisão, não acidente: rota nova que escreve quebra aqui até
     alguém pensar em CSRF, auditoria e caminho para ela. Notas e desenhos
-    passaram por isso (test_notas_api, test_desenhos_api)."""
+    passaram por isso (test_notas_api, test_desenhos_api). /api/arquivos/
+    recebe arquivos mas não grava nada (test_arquivos_api)."""
     for rota in app.routes:
         metodos = getattr(rota, "methods", set()) - {"GET", "HEAD"}
         if metodos:
-            assert rota.path.startswith(("/api/notas/", "/api/desenhos/")), \
+            assert rota.path.startswith(("/api/notas/", "/api/desenhos/", "/api/arquivos/")), \
                 f"rota de escrita exposta: {rota.path}"
 
 
@@ -726,11 +727,13 @@ def test_a_web_so_pode_calar_a_trilha_porque_as_telas_nao_escrevem(app):
                if getattr(rota, "methods", set()) - {"GET", "HEAD"}}
     # /api/notas/anexo e /api/notas/ligar auditam também (test_anexos, test_notas_api);
     # os desenhos, em test_desenhos_api. /api/desenhos/previa é a exceção de
-    # propósito: grava cache fora do vault (data/previas-desenho), não dado seu
+    # propósito: grava cache fora do vault (data/previas-desenho), não dado seu.
+    # /api/arquivos/ não grava nada: devolve o resultado e apaga o temporário
     assert escrita == {"/api/notas/arquivo", "/api/notas/pasta", "/api/notas/mover",
                        "/api/notas/mover-pasta", "/api/notas/anexo", "/api/notas/ligar",
                        "/api/desenhos/arquivo", "/api/desenhos/biblioteca",
-                       "/api/desenhos/mover", "/api/desenhos/previa"}
+                       "/api/desenhos/mover", "/api/desenhos/previa",
+                       "/api/arquivos/montar"}
 
 
 # ---------- a janela antiga ----------
