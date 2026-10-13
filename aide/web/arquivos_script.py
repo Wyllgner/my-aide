@@ -560,14 +560,40 @@ baixar.addEventListener("click", async () => {
   }
 });
 
-// ---------- juntar: os PDFs marcados, na ordem que você arrumar ----------
+// ---------- juntar e imagens → PDF: os marcados, na ordem que você arrumar ----------
+// A mesma lista serve às duas ações: muda o tipo aceito, o título, o botão e
+// o pedido. Imagem é uma página só, na orientação dela.
+
+const LISTAS = {
+  "juntar": {
+    tipo: "pdf", minimo: 2, titulo: "Juntar PDFs", botao: "Baixar PDF juntado",
+    verbo: "Juntando", falha: "Não deu para juntar",
+    nome: (ordem) => nomeDoResultado(ordem[0].arquivo.name, "juntado"),
+    paginas: (ordem) => ordem.flatMap((it, f) => Array.from({ length: it.paginas }, (_, p) => [f, p])),
+    extra: {},
+  },
+  "imagens-pdf": {
+    tipo: "imagem", minimo: 1, titulo: "Imagens → PDF", botao: "Baixar PDF",
+    verbo: "Montando o PDF com", falha: "Não deu para montar",
+    nome: (ordem) => ordem[0].arquivo.name.replace(/\.[^.]+$/, "") + ".pdf",
+    paginas: (ordem) => ordem.map((_, f) => [f, 0]),
+    extra: { imagens: "proprias" },
+  },
+};
+
+function paginasDe(it) {
+  return it.tipo === "pdf" ? it.paginas : 1;
+}
 
 let ordemJuntar = [];
 let juntando = false;
 
 function sincronizarJuntar(marcados) {
   // quem continua marcado mantém o lugar; quem chegou entra no fim
-  const validos = marcados.filter((it) => it.tipo === "pdf" && it.paginas && !it.erro);
+  const modo = LISTAS[escolhida];
+  if (!modo) return;
+  const validos = marcados.filter((it) => it.tipo === modo.tipo && !it.erro
+    && (it.tipo !== "pdf" || it.paginas));
   ordemJuntar = ordemJuntar.filter((it) => validos.includes(it))
     .concat(validos.filter((it) => !ordemJuntar.includes(it)));
 }
@@ -577,9 +603,12 @@ function linhaJuntar(it, i) {
   div.dataset.indice = i;
   div.querySelector(".nome").textContent = it.arquivo.name;
   div.querySelector(".nome").title = it.arquivo.name;
-  const antes = ordemJuntar.slice(0, i).reduce((soma, x) => soma + x.paginas, 0);
-  div.querySelector(".quando").textContent = it.paginas === 1 ? "pág " + (antes + 1)
-    : "págs " + (antes + 1) + "–" + (antes + it.paginas);
+  const tipo = div.querySelector(".tipo");
+  tipo.dataset.tipo = it.tipo;
+  tipo.textContent = extensao(it.arquivo.name).toUpperCase();
+  const antes = ordemJuntar.slice(0, i).reduce((soma, x) => soma + paginasDe(x), 0);
+  div.querySelector(".quando").textContent = paginasDe(it) === 1 ? "pág " + (antes + 1)
+    : "págs " + (antes + 1) + "–" + (antes + paginasDe(it));
   const subir = div.querySelector('[data-mover="-1"]');
   const descer = div.querySelector('[data-mover="1"]');
   subir.disabled = i === 0;
@@ -592,13 +621,16 @@ function linhaJuntar(it, i) {
 }
 
 function desenharJuntar(foco) {
-  const visivel = escolhida === "juntar" && ordemJuntar.length >= 2;
+  const modo = LISTAS[escolhida];
+  const visivel = Boolean(modo) && ordemJuntar.length >= modo.minimo;
   secaoJuntar.hidden = !visivel;
   if (!visivel) return;
   listaJuntar.replaceChildren(...ordemJuntar.map(linhaJuntar));
-  const total = ordemJuntar.reduce((soma, it) => soma + it.paginas, 0);
-  document.getElementById("arq-juntar-resumo").textContent =
-    ordemJuntar.length + " PDFs · " + paginas(total) + " no total";
+  const total = ordemJuntar.reduce((soma, it) => soma + paginasDe(it), 0);
+  document.getElementById("arq-juntar-titulo").textContent = modo.titulo;
+  document.getElementById("arq-juntar-resumo").textContent = (modo.tipo === "pdf"
+    ? ordemJuntar.length + " PDFs · " : "") + paginas(total) + " no total";
+  baixarJuntado.lastChild.textContent = modo.botao;
   baixarJuntado.disabled = juntando;
   if (foco) {
     const alvo = listaJuntar.querySelector('[data-indice="' + foco.indice + '"]');
@@ -657,18 +689,21 @@ listaJuntar.addEventListener("keydown", (e) => {
 });
 
 baixarJuntado.addEventListener("click", async () => {
-  if (juntando || ordemJuntar.length < 2) return;
+  const modo = LISTAS[escolhida];
+  if (juntando || !modo || ordemJuntar.length < modo.minimo) return;
   const ordem = ordemJuntar.slice();
-  const lista = ordem.flatMap((it, f) => Array.from({ length: it.paginas }, (_, p) => [f, p]));
-  const nome = nomeDoResultado(ordem[0].arquivo.name, "juntado");
+  const lista = modo.paginas(ordem);
+  const nome = modo.nome(ordem);
   juntando = true;
-  avisar("Juntando " + ordem.length + " PDFs…");
+  avisar(modo.verbo + " " + ordem.length + (modo.tipo === "pdf" ? " PDFs…" : " imagens…"));
   desenhar();
   try {
-    entregar(await montar(ordem.map((it) => it.arquivo), lista), nome);
+    const blob = await enviar("/api/arquivos/montar", ordem.map((it) => it.arquivo),
+      { paginas: lista, ...modo.extra });
+    entregar(blob, nome);
     avisar("Pronto: " + paginas(lista.length) + " em " + nome + ".");
   } catch (erro) {
-    avisar("Não deu para juntar: " + erro.message, true);
+    avisar(modo.falha + ": " + erro.message, true);
   } finally {
     juntando = false;
     desenhar();
@@ -819,7 +854,7 @@ function desenhar() {
 for (const botao of botoes) {
   botao.addEventListener("click", () => {
     escolhida = botao.dataset.acao;
-    avisar(["organizar", "juntar", "converter"].includes(escolhida) ? ""
+    avisar(["organizar", "juntar", "converter", "imagens-pdf"].includes(escolhida) ? ""
       : "Esta ação ainda está sendo construída.");
     desenhar();
   });

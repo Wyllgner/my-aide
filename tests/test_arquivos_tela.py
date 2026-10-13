@@ -153,7 +153,18 @@ def test_organizar_e_juntar_usam_a_mesma_rota(cliente):
 
     js = cliente.get("/arquivos.js").text
     assert len(re.findall(r"fetch\(", js)) == 1
-    assert js.count("await montar(") == 2
+    assert "await montar(" in js                      # organizar
+    assert 'enviar("/api/arquivos/montar"' in js      # juntar e imagens → PDF
+
+
+def test_imagens_viram_pdf_cada_uma_na_sua_orientacao(cliente):
+    """Imagens → PDF é a lista do juntar com imagens, uma página por foto, e
+    pede ao servidor que cada uma fique em pé ou deitada como é."""
+    js = cliente.get("/arquivos.js").text
+    bloco = js[js.index('"imagens-pdf": {', js.index("const LISTAS")):]
+    bloco = bloco[:bloco.index("},\n};")]
+    assert 'tipo: "imagem"' in bloco and "minimo: 1" in bloco
+    assert 'imagens: "proprias"' in bloco
 
 
 def test_converter_mostra_cada_documento_e_baixa_pela_rota_propria(cliente):
