@@ -73,6 +73,7 @@ TRACOS = {
     "paginas": "M4 3.5h6v8H4zM10 8.5h6v8h-6z",
     "juntar": "M4 4h5v12H4zM11 4h5v12h-5zM9 10h2",
     "imagem": "M3.5 4.5h13v11h-13zM3.5 13l4-4 3 3 2-2 4 4M13 7.5h.01",
+    "mais": "M10 4.5v11M4.5 10h11",
     # seta que volta: desfazer o último passo
     "desfazer": "M6 8.5h6.5a3.5 3.5 0 0 1 0 7H9M8.5 5.5l-3 3 3 3",
     # o W dentro da folha

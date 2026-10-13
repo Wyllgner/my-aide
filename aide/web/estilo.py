@@ -728,6 +728,23 @@ button.atalho-visao { width: 100%; border: 0; background: none; font: inherit; f
 .tirar-pagina:hover { border-color: var(--accent); background: var(--soft); }
 .tirar-pagina:hover svg { color: var(--accent); }
 .folha .num .era { color: var(--muted); font-weight: 400; }
+.folha[data-de-fora] .miniatura { background: #FFF9F7; }
+.folha[data-de-fora] .num .era { color: var(--accent); }
+/* + na borda esquerda: aparece ao passar o mouse ou com foco */
+.inserir-antes { position: absolute; top: 61px; left: -15px; z-index: 1; width: 24px; height: 24px;
+  padding: 0; border-radius: var(--r-pill); border: 1px solid var(--borda); background: #fff;
+  cursor: pointer; display: flex; align-items: center; justify-content: center; opacity: 0; }
+.inserir-antes svg { color: var(--muted); }
+.folha:hover .inserir-antes, .inserir-antes:focus-visible, .inserir-antes[aria-expanded="true"] {
+  opacity: 1; }
+.inserir-antes:hover, .inserir-antes[aria-expanded="true"] { background: var(--accent);
+  border-color: var(--accent); }
+.inserir-antes:hover svg, .inserir-antes[aria-expanded="true"] svg { color: #fff; }
+.editor-pdf { position: relative; }
+.inserir { position: absolute; z-index: 5; width: 250px; padding: 8px;
+  box-shadow: 0 8px 24px rgba(21,23,28,.12); }
+.inserir .eyebrow { margin: 4px 8px 8px; }
+.inserir .botao { width: 100%; justify-content: flex-start; margin-top: 6px; }
 /* o .botao do site não tinha estado desligado: até aqui nenhum precisou */
 .botao:disabled { opacity: .45; cursor: not-allowed; }
 .botao:disabled:hover { background: var(--surface); border-color: var(--borda); }

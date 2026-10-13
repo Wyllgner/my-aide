@@ -110,3 +110,22 @@ def test_baixar_manda_as_fontes_para_a_rota_de_montar(cliente):
     assert '"X-Aide": "1"' in js
     # a página é contada do 1 na tela e do 0 no servidor
     assert "p.pagina - 1" in js
+
+
+def test_inserir_oferece_outro_pdf_ou_uma_imagem(cliente):
+    html = cliente.get("/arquivos").text
+    caixa = html[html.index('id="arq-inserir"'):html.index('id="arq-inserir-imagem"') + 200]
+    assert 'data-inserir="pdf"' in caixa and 'data-inserir="imagem"' in caixa
+    assert 'accept=".pdf,application/pdf"' in caixa
+    assert 'accept=".jpg,.jpeg,.png,image/jpeg,image/png"' in caixa
+    assert 'id="arq-inserir-fim"' in html
+    modelo = html[html.index('<template id="arq-modelo-folha">'):html.index("</template>")]
+    assert 'class="inserir-antes"' in modelo
+
+
+def test_miniatura_de_imagem_nao_usa_blob_em_img(cliente):
+    """img-src da CSP é 'self' e data:; um <img src="blob:..."> some calado."""
+    js = cliente.get("/arquivos.js").text
+    assert "createImageBitmap" in js
+    assert "createObjectURL" in js  # só para entregar o download
+    assert ".src = URL.createObjectURL" not in js
