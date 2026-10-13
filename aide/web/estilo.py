@@ -711,7 +711,30 @@ button.atalho-visao { width: 100%; border: 0; background: none; font: inherit; f
 .editor-topo h2 { font-size: 16px; margin: 0 8px 0 0; overflow-wrap: anywhere; }
 .editor-topo .resumo { color: var(--muted); font-size: 12.5px; margin-right: auto; }
 .grade { display: flex; flex-wrap: wrap; gap: 14px 18px; }
-.folha { width: 112px; display: flex; flex-direction: column; align-items: center; gap: 7px; }
+.folha { width: 112px; display: flex; flex-direction: column; align-items: center; gap: 7px;
+  position: relative; cursor: grab; border-radius: 8px; }
+.folha:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.folha[data-arrastando] { opacity: .35; }
+/* onde a página vai cair: uma barra no lado certo da vizinha */
+.folha[data-cair]::before { content: ""; position: absolute; top: 0; height: 150px; width: 3px;
+  border-radius: 2px; background: var(--accent); }
+.folha[data-cair="antes"]::before { left: -11px; }
+.folha[data-cair="depois"]::before { right: -11px; }
+.folha[data-movida] .miniatura { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tirar-pagina { position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; padding: 0;
+  border-radius: var(--r-pill); border: 1px solid var(--borda); background: #fff; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; }
+.tirar-pagina svg { color: var(--muted); }
+.tirar-pagina:hover { border-color: var(--accent); background: var(--soft); }
+.tirar-pagina:hover svg { color: var(--accent); }
+.folha .num .era { color: var(--muted); font-weight: 400; }
+/* o .botao do site não tinha estado desligado: até aqui nenhum precisou */
+.botao:disabled { opacity: .45; cursor: not-allowed; }
+.botao:disabled:hover { background: var(--surface); border-color: var(--borda); }
+.botao.botao-principal:disabled:hover { background: var(--accent); border-color: var(--accent); }
+.rodape-editor { display: flex; align-items: center; gap: 10px; margin-top: 18px; padding-top: 16px;
+  border-top: 1px solid var(--line-soft); flex-wrap: wrap; }
+.rodape-editor .mono { color: var(--muted); font-size: 12px; margin-right: auto; }
 .miniatura { width: 112px; height: 150px; background: #fff; border: 1px solid var(--borda);
   border-radius: 6px; box-shadow: 0 1px 3px rgba(21,23,28,.08); display: flex;
   align-items: center; justify-content: center; overflow: hidden; }

@@ -54,9 +54,12 @@ def test_o_script_e_arquivo_da_casa(cliente):
 
 
 def test_soltar_nao_manda_nada_ao_servidor(cliente):
-    """Até você escolher a ação, os arquivos ficam na página."""
+    """Até você escolher a ação, os arquivos ficam na página: o único envio
+    é o do botão de baixar."""
+    import re
+
     js = cliente.get("/arquivos.js").text
-    assert "fetch(" not in js
+    assert re.findall(r'fetch\(([^,]+),', js) == ['"/api/arquivos/montar"']
     assert "innerHTML" not in js  # nome de arquivo é texto, nunca marcação
 
 
@@ -83,3 +86,27 @@ def test_nenhum_id_da_tela_e_procurado_pelo_app_js(cliente):
     procurados = set(re.findall(r'getElementById\("([^"]+)"\)', cliente.get("/app.js").text))
     assert ids and procurados
     assert not ids & procurados
+
+
+def test_o_editor_traz_desfazer_recomecar_e_baixar(cliente):
+    html = cliente.get("/arquivos").text
+    assert 'id="arq-desfazer" disabled' in html
+    assert 'id="arq-recomecar" disabled' in html
+    assert 'id="arq-baixar"' in html
+    assert "Baixar PDF" in html
+
+
+def test_a_folha_vem_de_um_modelo_com_lixeira_desenhada(cliente):
+    """O ícone sai do servidor, como os outros: o script só clona o modelo."""
+    html = cliente.get("/arquivos").text
+    modelo = html[html.index('<template id="arq-modelo-folha">'):html.index("</template>")]
+    assert 'draggable="true"' in modelo and 'tabindex="0"' in modelo
+    assert 'class="tirar-pagina"' in modelo and "<svg" in modelo
+
+
+def test_baixar_manda_as_fontes_para_a_rota_de_montar(cliente):
+    js = cliente.get("/arquivos.js").text
+    assert 'fetch("/api/arquivos/montar"' in js
+    assert '"X-Aide": "1"' in js
+    # a página é contada do 1 na tela e do 0 no servidor
+    assert "p.pagina - 1" in js
