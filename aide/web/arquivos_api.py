@@ -24,6 +24,8 @@ from aide.arquivos import MAXIMO_DE_ARQUIVOS, PLANO_MAXIMO, TAMANHO_MAXIMO, conv
 ROTA_DE_MONTAR = "/api/arquivos/montar"
 ROTA_DE_CONVERTER = "/api/arquivos/converter"
 ROTA_DE_IMAGENS = "/api/arquivos/imagens"
+ROTA_DE_WORD = "/api/arquivos/word"
+DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 
 class PedidoInvalido(ValueError):
@@ -99,19 +101,33 @@ def imagens_de_todos(caminhos: list[Path], nomes: list[str], pasta: Path) -> tup
     return pacote, "application/zip"
 
 
-def converter_todos(caminhos: list[Path], nomes: list[str], pasta: Path) -> tuple[Path, str]:
-    """Um PDF, ou um .zip com um PDF para cada documento."""
+def _um_ou_zip(resultados: list[Path], nomes: list[str], ext: str, tipo: str,
+               pasta: Path) -> tuple[Path, str]:
+    """Um resultado volta como é; vários, num .zip com o nome de cada origem."""
     import zipfile
 
-    pdfs = [converter.para_pdf(c, n, pasta / "saida") for c, n in zip(caminhos, nomes, strict=True)]
-    if len(pdfs) == 1:
-        return pdfs[0], "application/pdf"
+    if len(resultados) == 1:
+        return resultados[0], tipo
     pacote = pasta / "convertidos.zip"
-    finais = sem_repetir([n.rsplit(".", 1)[0] + ".pdf" for n in nomes])
+    finais = sem_repetir([n.rsplit(".", 1)[0] + "." + ext for n in nomes])
     with zipfile.ZipFile(pacote, "w", zipfile.ZIP_DEFLATED) as z:
-        for pdf_, nome in zip(pdfs, finais, strict=True):
-            z.write(pdf_, nome)
+        for resultado, nome in zip(resultados, finais, strict=True):
+            z.write(resultado, nome)
     return pacote, "application/zip"
+
+
+def converter_todos(caminhos: list[Path], nomes: list[str], pasta: Path) -> tuple[Path, str]:
+    """Um PDF, ou um .zip com um PDF para cada documento."""
+    pdfs = [converter.para_pdf(c, n, pasta / "saida") for c, n in zip(caminhos, nomes, strict=True)]
+    return _um_ou_zip(pdfs, nomes, "pdf", "application/pdf", pasta)
+
+
+def word_de_todos(caminhos: list[Path], nomes: list[str], pasta: Path,
+                  modo: str) -> tuple[Path, str]:
+    """Um .docx, ou um .zip com um .docx para cada PDF."""
+    docs = [converter.para_word(c, n, pasta / f"word-{i}", modo)
+            for i, (c, n) in enumerate(zip(caminhos, nomes, strict=True))]
+    return _um_ou_zip(docs, nomes, "docx", DOCX, pasta)
 
 
 def instalar(app) -> None:
@@ -199,6 +215,12 @@ def instalar(app) -> None:
     def fazer_imagens(plano, caminhos, pasta):
         return imagens_de_todos(caminhos, nomes_do(plano), pasta)
 
+    def fazer_word(plano, caminhos, pasta):
+        modo = plano.get("modo", "aparencia")
+        if modo not in converter.MODOS_WORD:
+            raise PedidoInvalido("modo é aparencia ou texto")
+        return word_de_todos(caminhos, nomes_do(plano), pasta, modo)
+
     async def montar(request):
         """O PDF com as páginas pedidas, na ordem pedida."""
         return await operar(request, fazer_montagem)
@@ -211,10 +233,14 @@ def instalar(app) -> None:
         """PDFs em PNG, uma imagem por página."""
         return await operar(request, fazer_imagens)
 
+    async def word(request):
+        """PDFs em .docx, mantendo a aparência ou só o texto."""
+        return await operar(request, fazer_word)
+
     # `from __future__ import annotations` deixa a anotação como texto, e o
     # FastAPI a procuraria nos globais, onde Request não está: vai o objeto,
     # antes de registrar a rota
     for rota, funcao in ((ROTA_DE_MONTAR, montar), (ROTA_DE_CONVERTER, converter_rota),
-                         (ROTA_DE_IMAGENS, imagens)):
+                         (ROTA_DE_IMAGENS, imagens), (ROTA_DE_WORD, word)):
         funcao.__annotations__["request"] = Request
         app.post(rota)(funcao)

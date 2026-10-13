@@ -267,3 +267,43 @@ def test_o_que_nao_e_pdf_nao_vira_imagem(cliente):
     resposta = cliente.post(IMAGENS, content=corpo_conversao({"a.pdf": b"nada"}), headers=ESCRITA)
     assert resposta.status_code == 422
     assert "não é um PDF" in resposta.json()["detail"]
+
+
+# ---------- PDF → Word ----------
+
+WORD = "/api/arquivos/word"
+
+
+def corpo_word(arquivos: dict[str, bytes], modo=None) -> bytes:
+    plano = {"arquivos": [len(c) for c in arquivos.values()], "nomes": list(arquivos)}
+    if modo:
+        plano["modo"] = modo
+    return json.dumps(plano).encode() + b"\n" + b"".join(arquivos.values())
+
+
+@com_libreoffice
+def test_um_pdf_volta_como_docx(cliente, temporarios):
+    from aide.web.arquivos_api import DOCX
+
+    resposta = cliente.post(WORD, content=corpo_word({"a.pdf": pdf_com([300])}), headers=ESCRITA)
+    assert resposta.status_code == 200, resposta.text
+    assert resposta.headers["content-type"] == DOCX
+    assert resposta.content.startswith(b"PK")
+    assert list(temporarios.iterdir()) == []
+
+
+@com_libreoffice
+def test_varios_pdfs_voltam_num_zip_de_docx(cliente):
+    import zipfile
+
+    arquivos = {"a.pdf": pdf_com([300]), "b.pdf": pdf_com([300])}
+    resposta = cliente.post(WORD, content=corpo_word(arquivos), headers=ESCRITA)
+    assert resposta.status_code == 200, resposta.text
+    assert zipfile.ZipFile(io.BytesIO(resposta.content)).namelist() == ["a.docx", "b.docx"]
+
+
+def test_modo_invalido_e_400(cliente):
+    resposta = cliente.post(WORD, content=corpo_word({"a.pdf": pdf_com([300])}, "ocr"),
+                            headers=ESCRITA)
+    assert resposta.status_code == 400
+    assert "aparencia ou texto" in resposta.json()["detail"]

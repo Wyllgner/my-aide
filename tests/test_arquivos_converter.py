@@ -174,3 +174,61 @@ def test_limite_de_paginas_para_imagem(tmp_path, monkeypatch):
     monkeypatch.setattr(converter, "MAXIMO_DE_IMAGENS", 3)
     with pytest.raises(converter.ConversaoFalhou, match="mais de 3 páginas"):
         converter.para_imagens(pdf_de(tmp_path / "e.pdf", 4), "e.pdf", tmp_path / "saida")
+
+
+# ---------- PDF → Word ----------
+
+def pdf_com_texto(tmp_path, texto="Cláusula primeira: o aluguel vence no dia 5."):
+    entrada = tmp_path / "fonte.txt"
+    entrada.write_text(texto)
+    return converter.para_pdf(entrada, "fonte.txt", tmp_path / "pdf")
+
+
+def texto_do_docx(caminho):
+    import re
+
+    xml = zipfile.ZipFile(caminho).read("word/document.xml").decode()
+    return " ".join(re.findall(r"<w:t[^>]*>([^<]*)</w:t>", xml))
+
+
+@com_libreoffice
+@pytest.mark.parametrize("modo", ["aparencia", "texto"])
+def test_pdf_vira_docx_nos_dois_modos(tmp_path, modo):
+    origem = pdf_com_texto(tmp_path)
+    entrada = tmp_path / "entrada-0"
+    origem.rename(entrada)
+    docx = converter.para_word(entrada, "contrato.pdf", tmp_path / "saida", modo)
+    assert docx.suffix == ".docx"
+    assert "aluguel vence no dia 5" in texto_do_docx(docx)
+
+
+@com_libreoffice
+def test_aparencia_usa_caixas_e_texto_usa_paragrafos(tmp_path):
+    """É a diferença que justifica ter os dois: caixa por linha num, texto
+    corrido no outro."""
+    for modo, caixas in (("aparencia", True), ("texto", False)):
+        pasta = tmp_path / modo
+        pasta.mkdir()
+        entrada = pasta / "entrada-0"
+        pdf_com_texto(pasta).rename(entrada)
+        docx = converter.para_word(entrada, "c.pdf", pasta / "saida", modo)
+        xml = zipfile.ZipFile(docx).read("word/document.xml").decode()
+        assert ("<w:txbxContent" in xml) is caixas, modo
+
+
+@com_libreoffice
+def test_pdf_sem_texto_avisa_que_parece_escaneado(tmp_path):
+    from pypdf import PdfWriter
+
+    escritor = PdfWriter()
+    escritor.add_blank_page(width=200, height=200)
+    entrada = tmp_path / "entrada-0"
+    with entrada.open("wb") as f:
+        escritor.write(f)
+    with pytest.raises(converter.ConversaoFalhou, match="escaneada"):
+        converter.para_word(entrada, "foto.pdf", tmp_path / "saida", "texto")
+
+
+def test_modo_desconhecido(tmp_path):
+    with pytest.raises(converter.ConversaoFalhou, match="modo desconhecido"):
+        converter.para_word(tmp_path / "x", "x.pdf", tmp_path / "saida", "ocr")
