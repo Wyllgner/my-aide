@@ -119,14 +119,24 @@ function acrescentar(arquivos) {
 
 function abrir(it) {
   if (!it.doc) {
-    it.doc = it.arquivo.arrayBuffer().then((dados) => pdfjs.getDocument({
-      data: new Uint8Array(dados),
-      // WebAssembly a CSP barra; o pdf.js tem o caminho em JS para o mesmo
-      useWasm: false,
-      enableXfa: false,
-    }).promise);
+    it.doc = it.arquivo.arrayBuffer().then((dados) => {
+      it.tarefa = pdfjs.getDocument({
+        data: new Uint8Array(dados),
+        // WebAssembly a CSP barra; o pdf.js tem o caminho em JS para o mesmo
+        useWasm: false,
+        enableXfa: false,
+      });
+      return it.tarefa.promise;
+    });
   }
   return it.doc;
+}
+
+// devolve a memória do PDF ao worker. No pdf.js 6 quem tem destroy() é a
+// tarefa de carregamento; o documento só tem cleanup()
+function liberar(it) {
+  if (it.doc) it.doc.then(() => it.tarefa && it.tarefa.destroy(), () => {});
+  it.doc = null;
 }
 
 function contarPaginas(it) {
@@ -400,6 +410,7 @@ document.addEventListener("keydown", (e) => {
 
 function abrirSessao(alvo) {
   fecharInserir();
+  if (sessao) sessao.fontes.slice(1).forEach(liberar);
   aVista.disconnect();
   molduras.clear();
   sessao = null;
@@ -869,7 +880,7 @@ function linha(it, i) {
   tirar.textContent = "×";
   tirar.addEventListener("click", () => {
     itens.splice(i, 1);
-    if (it.doc) it.doc.then((doc) => doc.destroy(), () => {});
+    liberar(it);
     avisar("");
     desenhar();
   });
@@ -927,7 +938,7 @@ for (const botao of botoes) {
 }
 
 limpar.addEventListener("click", () => {
-  for (const it of itens) if (it.doc) it.doc.then((doc) => doc.destroy(), () => {});
+  for (const it of itens) liberar(it);
   itens = [];
   escolhida = null;
   avisar("");

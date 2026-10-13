@@ -198,3 +198,14 @@ def test_nenhuma_acao_ficou_por_construir(cliente):
     # organizar tem a grade própria; as outras são chaves de LISTAS ou LOTES
     tratadas = {"organizar"} | set(re.findall(r'^  "([a-z-]+)": \{$', js, flags=re.MULTILINE))
     assert {chave for chave, *_ in ACOES} <= tratadas
+
+
+def test_libera_o_pdf_pela_tarefa_de_carregamento(cliente):
+    """No pdf.js 6 o documento não tem destroy(): chamar nele lançava erro
+    toda vez que um PDF saía da lista, e a memória não voltava."""
+    js = cliente.get("/arquivos.js").text
+    assert "doc.destroy" not in js
+    assert "it.tarefa.destroy()" in js
+    vendor = (__import__("pathlib").Path(__file__).parents[1]
+              / "aide/web/vendor/pdfjs/pdf.js").read_text()
+    assert "class PDFDocumentLoadingTask{" in vendor
