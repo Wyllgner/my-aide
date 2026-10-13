@@ -1,7 +1,7 @@
 """A tela Arquivos: soltar arquivos e escolher o que fazer com eles.
 
 Converter documento e imagem em PDF, organizar as páginas de um PDF, juntar
-vários. Nada fica guardado: os arquivos vivem na página até o download, e o
+vários, e o caminho de volta: PDF em imagens ou em Word. Nada fica guardado: os arquivos vivem na página até o download, e o
 servidor só os vê durante a operação que você pediu.
 
 O servidor monta a moldura; a lista e os botões são de /arquivos.js, porque os
@@ -98,6 +98,15 @@ def tela(ctx, registry, agora) -> str:
   <div class="editor-topo">
     <h2 id="arq-lote-titulo"></h2>
     <span class="resumo mono" id="arq-lote-nota"></span>
+  </div>
+  <div class="escolha-word" id="arq-word-modo" hidden>
+    <div class="escolhas" role="group" aria-label="Como converter">
+      <button type="button" class="botao escolha" data-modo="aparencia"
+        aria-pressed="true">Manter a aparência</button>
+      <button type="button" class="botao escolha" data-modo="texto"
+        aria-pressed="false">Só o texto</button>
+    </div>
+    <p id="arq-word-explica"></p>
   </div>
   <div id="arq-lote-lista"></div>
   <div class="rodape-editor">
