@@ -127,8 +127,11 @@ def colunas(pares: list[tuple[str, float]], largura: int = 600, altura: int = 96
 
 
 def barras(pares: list[tuple[str, float]], rotulo_px: int = 96,
-           vazio: str = "nada registrado ainda", formatar=None) -> str:
+           vazio: str = "nada registrado ainda", formatar=None,
+           links: list[str] | None = None) -> str:
     """Barras horizontais. Rótulo ao lado, valor no fim — nunca cor sozinha.
+
+    `links`, um endereço por par, faz do rótulo um link para o que ele conta.
 
     `formatar` existe porque o padrão escreve 0.0406 com ponto, e a página
     inteira escreve vírgula: o número destoar do resto é o mesmo defeito que
@@ -140,14 +143,19 @@ def barras(pares: list[tuple[str, float]], rotulo_px: int = 96,
 
     maximo = max(v for _, v in pares) or 1
     linhas = ""
-    for nome, valor in pares:
+    for i, (nome, valor) in enumerate(pares):
         pc = valor / maximo * 100
         opac = 0.35 + 0.65 * valor / maximo
+        estilo = (f'width:{rotulo_px}px;flex-shrink:0;font-size:12.5px;'
+                  f'overflow:hidden;text-overflow:ellipsis;white-space:nowrap')
+        if links:
+            rotulo = (f'<a href="{escape(links[i])}" style="{estilo};color:var(--accent);'
+                      f'text-decoration:none" title="{escape(nome)}">{escape(nome)}</a>')
+        else:
+            rotulo = (f'<span style="{estilo};color:var(--muted)"'
+                      f' title="{escape(nome)}">{escape(nome)}</span>')
         linhas += (
-            f'<div style="display:flex;align-items:center;gap:10px">'
-            f'<span style="width:{rotulo_px}px;flex-shrink:0;font-size:12.5px;'
-            f'color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap"'
-            f' title="{escape(nome)}">{escape(nome)}</span>'
+            f'<div style="display:flex;align-items:center;gap:10px">{rotulo}'
             f'<div style="flex:1;height:16px;background:{TRILHO};border-radius:5px;overflow:hidden">'
             f'<div style="width:{pc:.1f}%;height:100%;background:{ACENTO};'
             f'opacity:{opac:.2f};border-radius:5px"></div></div>'

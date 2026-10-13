@@ -276,7 +276,9 @@ def _visao_geral(raiz: Path, agora: datetime, indice: links.Indice, conn=None) -
                                  vazio="nenhuma nota ainda")
     citadas = graficos.barras([(nome(c), n) for c, n in v.mais_citadas], rotulo_px=150,
                               vazio="nenhuma nota é citada ainda")
-    tags = graficos.barras(v.tags[:12], rotulo_px=120, vazio="nenhuma tag ainda")
+    tags = graficos.barras([(f"#{t}", n) for t, n in v.tags[:12]], rotulo_px=120,
+                           vazio="nenhuma tag ainda",
+                           links=[f"/notas?tag={quote(t, safe='/')}" for t, _ in v.tags[:12]])
     orfas = "".join(f'<a href="{escape(_href(c))}">{escape(nome(c))}</a>' for c in v.orfas[:40])
     if len(v.orfas) > 40:
         orfas += f'<span class="onde">e mais {len(v.orfas) - 40}</span>'
