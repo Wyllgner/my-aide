@@ -98,9 +98,12 @@ def corpo_grande_demais(tamanho: str | None, limite: int = CORPO_MAXIMO) -> bool
 ROTA_DE_DESENHO = "/api/desenhos/arquivo"
 # a prévia em PNG do desenho, que a página exporta depois de salvar
 ROTA_DE_PREVIA = "/api/desenhos/previa"
+# a tela Arquivos: o corpo são os arquivos a converter ou montar
+ROTAS_DE_ARQUIVOS = "/api/arquivos/"
 
 
 def limite_do_corpo(metodo: str, caminho: str) -> int:
+    from aide import arquivos
     from aide.storage import anexos, desenhos, previas
 
     if metodo == "POST" and caminho == ROTA_DE_ANEXO:
@@ -109,6 +112,8 @@ def limite_do_corpo(metodo: str, caminho: str) -> int:
         return 2 * desenhos.TAMANHO_MAXIMO
     if metodo == "PUT" and caminho == ROTA_DE_PREVIA:
         return previas.TAMANHO_MAXIMO
+    if metodo == "POST" and caminho.startswith(ROTAS_DE_ARQUIVOS):
+        return arquivos.TAMANHO_MAXIMO + arquivos.PLANO_MAXIMO
     return CORPO_MAXIMO
 
 
