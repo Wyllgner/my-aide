@@ -539,6 +539,18 @@ def _editor(raiz: Path, aberto: str, agora: datetime, indice: links.Indice,
       title="anexar imagem, PDF, áudio ou vídeo · também dá para colar (Ctrl+V) ou arrastar para o texto">
       {icone("anexar", 15)}<span>anexar</span></button>
     <input type="file" id="escolher-anexo" multiple hidden accept="{",".join(anexos.EXTENSOES)}">
+    <details id="exportar" class="exportar">
+      <summary class="botao" title="baixar a nota em .md ou salvar em PDF">
+        {icone("exportar", 15)}<span>exportar</span></summary>
+      <div class="exportar-menu">
+        <button type="button" id="exportar-md" class="botao"
+          title="o arquivo como está no vault, frontmatter incluído">
+          {icone("nota", 15)}<span>baixar .md</span></button>
+        <button type="button" id="exportar-pdf" class="botao"
+          title="abre a impressão só com a nota formatada · escolha “Salvar como PDF”">
+          {icone("ler", 15)}<span>PDF</span></button>
+      </div>
+    </details>
     <button type="button" id="botao-renomear" class="botao" title="renomear ou mover · F2">
       {icone("renomear", 15)}<span>renomear</span></button>
     <button type="button" id="apagar" class="botao botao-perigo"

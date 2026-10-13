@@ -802,3 +802,23 @@ def test_id_de_nota_que_nao_existe_abre_a_tela_normal(cliente, nota):
     """Um id maior que o inteiro do SQLite dava erro 500."""
     resposta = cliente.get("/notas", params={"nota": nota})
     assert resposta.status_code == 200
+
+
+# ---------- exportar ----------
+
+def test_a_nota_tem_exportar_em_md_e_pdf(cliente):
+    html = _tela(cliente, "Inbox/Ideia.md")
+    assert '<details id="exportar" class="exportar">' in html
+    assert 'id="exportar-md"' in html and "<span>baixar .md</span>" in html
+    assert 'id="exportar-pdf"' in html
+
+
+def test_a_impressao_leva_so_o_nome_e_a_previa():
+    """O PDF sai da impressão do navegador: lateral, botões e campo ficam de
+    fora, e a prévia aparece mesmo no modo editar, onde ela fica escondida."""
+    from aide.web.estilo import CSS
+
+    impressao = CSS[CSS.index("@media print"):]
+    for escondido in (".lateral", ".notas-lateral", ".editor-acoes", ".campo", ".ao-redor"):
+        assert escondido in impressao.split("display: none !important")[0]
+    assert ".area .previa { display: block !important" in impressao

@@ -35,6 +35,8 @@ TRACOS = {
     "privada": "M5.5 9h9v7.5h-9zM7.5 9V6.5a2.5 2.5 0 0 1 5 0V9",
     "renomear": "M3.5 6.5h13v7h-13zM7 8.5v3",
     "lixeira": "M4 6h12M8 6V4h4v2M5.5 6l.8 10.5h7.4L14.5 6M8.5 9v5M11.5 9v5",
+    # seta descendo para a bandeja: tirar a nota daqui
+    "exportar": "M10 3.5v9M6.5 9l3.5 3.5 3.5-3.5M4 13.5v3h12v-3",
     "anexar": ("M14 8.5l-5.5 5.5a2 2 0 0 1-2.8-2.8l6-6a3.25 3.25 0 0 1 4.6 4.6l-6.2 6.2"
                "a4.5 4.5 0 0 1-6.4-6.4l5.3-5.3"),
     # os callouts (> [!tipo]) na prévia

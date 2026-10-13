@@ -732,6 +732,72 @@ JS = r"""
   }
   window.aideSalvar = garantirSalvo;
 
+  // ---------- exportar ----------
+  // .md: o texto do campo, que é o da nota (no ao vivo também), sem passar
+  // pelo servidor. PDF: a impressão do navegador, que o CSS de print deixa
+  // só com o nome e a prévia — e a prévia precisa estar em dia com o texto
+  var exportar = document.getElementById("exportar");
+  var nomeDaNota = caminho.split("/").pop();
+
+  document.getElementById("exportar-md").addEventListener("click", function () {
+    exportar.open = false;
+    fecharBloco();
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([editor.value], { type: "text/markdown;charset=utf-8" }));
+    a.download = nomeDaNota;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  });
+
+  // salvo e com a prévia que veio desse texto: sem bloco do ao vivo ainda
+  // esperando a prévia nova
+  function previaEmDia() {
+    return new Promise(function (pronto, falhou) {
+      var tentativas = 0;
+      (function ver() {
+        if (!conflito.hidden) { falhou(new Error("resolva o conflito antes de exportar")); return; }
+        if (!salvando && editor.value === salvo && !previa.querySelector(".bloco-pendente")) {
+          pronto();
+          return;
+        }
+        if (++tentativas > 100) { falhou(new Error("a prévia não ficou pronta; tente de novo")); return; }
+        if (!salvando && editor.value !== salvo) { salvar(); }
+        setTimeout(ver, 100);
+      })();
+    });
+  }
+
+  // a imagem de fora da tela (loading=lazy) ainda não carregou: sem esperar,
+  // ela sai em branco no PDF
+  function imagensCarregadas() {
+    return Promise.all(Array.prototype.map.call(previa.querySelectorAll("img"), function (img) {
+      img.loading = "eager";
+      if (img.complete) { return null; }
+      return new Promise(function (pronto) {
+        img.addEventListener("load", pronto, { once: true });
+        img.addEventListener("error", pronto, { once: true });
+      });
+    }));
+  }
+
+  document.getElementById("exportar-pdf").addEventListener("click", function () {
+    exportar.open = false;
+    fecharBloco();
+    previaEmDia().then(imagensCarregadas).then(function () {
+      // o título da página vira o nome sugerido do PDF
+      var titulo = document.title;
+      document.title = nomeDaNota.replace(/\.md$/i, "");
+      window.addEventListener("afterprint", function () { document.title = titulo; }, { once: true });
+      window.print();
+    }).catch(function (e) { mostrar(e.message, "erro"); });
+  });
+
+  document.addEventListener("click", function (e) {
+    if (exportar.open && !exportar.contains(e.target)) { exportar.open = false; }
+  });
+
   function agendar() {
     clearTimeout(espera);
     mostrar("não salvo", "pendente");
