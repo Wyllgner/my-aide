@@ -753,6 +753,9 @@ button.atalho-visao { width: 100%; border: 0; background: none; font: inherit; f
 .juntar .alca { color: var(--faint); font-size: 15px; letter-spacing: -2px; }
 .juntar .mover { width: 32px; justify-content: center; padding: 0; font-size: 15px; }
 .juntar .quando + .mover { margin-left: 8px; }
+.juntar .quando[data-estado="pronto"] { color: #3E9C6B; font-weight: 600; }
+.juntar .quando[data-estado="erro"] { color: var(--accent); font-weight: 600; }
+.juntar .quando[data-estado="convertendo"] { color: var(--muted); }
 .inserir { position: absolute; z-index: 5; width: 250px; padding: 8px;
   box-shadow: 0 8px 24px rgba(21,23,28,.12); }
 .inserir .eyebrow { margin: 4px 8px 8px; }

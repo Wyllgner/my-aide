@@ -147,3 +147,70 @@ def test_o_limite_desta_tela_e_maior_que_o_das_notas():
 def test_vale_a_fronteira_de_escrita(cliente, cabecalhos):
     resposta = cliente.post(ROTA, content=corpo([pdf_com([101])], [[0, 0]]), headers=cabecalhos)
     assert resposta.status_code == 403
+
+
+# ---------- converter documentos ----------
+
+CONVERTER = "/api/arquivos/converter"
+com_libreoffice = pytest.mark.skipif(not __import__("shutil").which("soffice"),
+                                     reason="sem LibreOffice")
+
+
+def corpo_conversao(arquivos: dict[str, bytes]) -> bytes:
+    plano = {"arquivos": [len(c) for c in arquivos.values()], "nomes": list(arquivos)}
+    return json.dumps(plano).encode() + b"\n" + b"".join(arquivos.values())
+
+
+@com_libreoffice
+def test_um_documento_volta_como_pdf(cliente, temporarios):
+    resposta = cliente.post(CONVERTER, content=corpo_conversao({"nota.txt": "Olá março".encode()}),
+                            headers=ESCRITA)
+    assert resposta.status_code == 200, resposta.text
+    assert resposta.headers["content-type"] == "application/pdf"
+    assert "março" in PdfReader(io.BytesIO(resposta.content)).pages[0].extract_text()
+    assert list(temporarios.iterdir()) == []
+
+
+@com_libreoffice
+def test_varios_voltam_num_zip_sem_nome_repetido(cliente, temporarios):
+    import zipfile
+
+    arquivos = {"a.txt": b"um", "a.rtf": b"{\\rtf1 dois}", "pasta/b.txt": b"tres"}
+    resposta = cliente.post(CONVERTER, content=corpo_conversao(arquivos), headers=ESCRITA)
+    assert resposta.status_code == 200, resposta.text
+    assert resposta.headers["content-type"] == "application/zip"
+    nomes = zipfile.ZipFile(io.BytesIO(resposta.content)).namelist()
+    # "pasta/b.txt" não vira pasta dentro do zip
+    assert nomes == ["a.pdf", "a (2).pdf", "pasta_b.pdf"]
+    assert list(temporarios.iterdir()) == []
+
+
+def test_conteudo_que_mente_a_extensao_e_422(cliente, temporarios):
+    resposta = cliente.post(CONVERTER, content=corpo_conversao({"x.docx": b"%PDF-1.7 nao e docx"}),
+                            headers=ESCRITA)
+    assert resposta.status_code == 422
+    assert "não é o que a extensão diz" in resposta.json()["detail"]
+    assert list(temporarios.iterdir()) == []
+
+
+@pytest.mark.parametrize("nomes", [None, [], ["a.txt", "b.txt"], [""], [3]])
+def test_um_nome_para_cada_arquivo(cliente, nomes):
+    plano = {"arquivos": [2]}
+    if nomes is not None:
+        plano["nomes"] = nomes
+    resposta = cliente.post(CONVERTER, content=json.dumps(plano).encode() + b"\nab", headers=ESCRITA)
+    assert resposta.status_code == 400
+    assert "um nome para cada arquivo" in resposta.json()["detail"]
+
+
+def test_converter_tambem_tem_o_limite_desta_tela():
+    from aide import arquivos
+    from aide.web import seguranca
+
+    assert seguranca.limite_do_corpo("POST", CONVERTER) == arquivos.TAMANHO_MAXIMO + arquivos.PLANO_MAXIMO
+
+
+def test_sem_repetir():
+    from aide.web.arquivos_api import sem_repetir
+
+    assert sem_repetir(["a.pdf", "A.pdf", "b.pdf", "a.pdf"]) == ["a.pdf", "A (2).pdf", "b.pdf", "a (3).pdf"]

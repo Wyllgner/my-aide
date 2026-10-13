@@ -52,6 +52,9 @@ const secaoJuntar = document.getElementById("arq-juntar");
 const listaJuntar = document.getElementById("arq-juntar-lista");
 const baixarJuntado = document.getElementById("arq-juntar-baixar");
 const modeloJuntar = document.getElementById("arq-modelo-juntar");
+const secaoConverter = document.getElementById("arq-converter");
+const listaConverter = document.getElementById("arq-converter-lista");
+const baixarConvertido = document.getElementById("arq-converter-baixar");
 const inserirPdf = document.getElementById("arq-inserir-pdf");
 const inserirImagem = document.getElementById("arq-inserir-imagem");
 
@@ -513,9 +516,11 @@ function entregar(blob, nome) {
 }
 
 // manda as fontes e a lista de páginas; devolve o PDF ou lança com o motivo
-async function montar(arquivos, lista) {
-  const plano = { arquivos: arquivos.map((a) => a.size), paginas: lista };
-  const resposta = await fetch("/api/arquivos/montar", {
+// o corpo é a linha do plano e os arquivos colados; devolve o resultado ou
+// lança com o motivo que o servidor deu
+async function enviar(rota, arquivos, extra) {
+  const plano = { arquivos: arquivos.map((a) => a.size), ...extra };
+  const resposta = await fetch(rota, {
     method: "POST",
     headers: { "Content-Type": "application/octet-stream", "X-Aide": "1" },
     body: new Blob([JSON.stringify(plano) + "\n", ...arquivos]),
@@ -525,6 +530,10 @@ async function montar(arquivos, lista) {
     throw new Error(await resposta.json().then((d) => d.detail, () => "erro " + resposta.status));
   }
   return resposta.blob();
+}
+
+function montar(arquivos, lista) {
+  return enviar("/api/arquivos/montar", arquivos, { paginas: lista });
 }
 
 baixar.addEventListener("click", async () => {
@@ -666,6 +675,66 @@ baixarJuntado.addEventListener("click", async () => {
   }
 });
 
+// ---------- converter: documentos em PDF pelo LibreOffice ----------
+
+let convertendo = false;
+const situacao = new Map();  // item -> "pronto" | "erro" enquanto a lista não muda
+
+function desenharConverter() {
+  const docs = itens.filter((it) => it.marcado && it.tipo === "documento");
+  const visivel = escolhida === "converter" && docs.length > 0;
+  secaoConverter.hidden = !visivel;
+  if (!visivel) return;
+  listaConverter.replaceChildren(...docs.map((it) => {
+    const div = document.createElement("div");
+    div.className = "linha";
+    const tipo = document.createElement("span");
+    tipo.className = "tipo";
+    tipo.textContent = extensao(it.arquivo.name).toUpperCase();
+    const nome = document.createElement("span");
+    nome.className = "nome";
+    nome.textContent = it.arquivo.name;
+    nome.title = it.arquivo.name;
+    const estado = document.createElement("span");
+    estado.className = "quando";
+    const s = convertendo ? "convertendo" : situacao.get(it);
+    estado.dataset.estado = s || "esperando";
+    estado.textContent = { convertendo: "convertendo…", pronto: "pronto", erro: "não converteu" }[s]
+      || tamanho(it.arquivo.size);
+    div.append(tipo, nome, estado);
+    return div;
+  }));
+  baixarConvertido.disabled = convertendo;
+  baixarConvertido.lastChild.textContent = docs.length === 1 ? "Converter e baixar PDF"
+    : "Converter e baixar .zip com " + docs.length + " PDFs";
+}
+
+baixarConvertido.addEventListener("click", async () => {
+  const docs = itens.filter((it) => it.marcado && it.tipo === "documento");
+  if (convertendo || !docs.length) return;
+  const nome = docs.length === 1 ? docs[0].arquivo.name.replace(/\.[^.]+$/, "") + ".pdf"
+    : "convertidos.zip";
+  convertendo = true;
+  situacao.clear();
+  avisar(docs.length === 1 ? "Convertendo pelo LibreOffice…"
+    : "Convertendo " + docs.length + " documentos pelo LibreOffice, um de cada vez…");
+  desenhar();
+  try {
+    const blob = await enviar("/api/arquivos/converter", docs.map((it) => it.arquivo),
+      { nomes: docs.map((it) => it.arquivo.name) });
+    for (const it of docs) situacao.set(it, "pronto");
+    entregar(blob, nome);
+    avisar("Pronto: " + nome + ".");
+  } catch (erro) {
+    // o servidor diz qual não converteu; os outros ficam como estavam
+    for (const it of docs) if (erro.message.includes(it.arquivo.name)) situacao.set(it, "erro");
+    avisar("Não deu para converter: " + erro.message, true);
+  } finally {
+    convertendo = false;
+    desenhar();
+  }
+});
+
 // ---------- a lista ----------
 
 function linha(it, i) {
@@ -744,12 +813,14 @@ function desenhar() {
   desenharEditor();
   sincronizarJuntar(marcados);
   desenharJuntar();
+  desenharConverter();
 }
 
 for (const botao of botoes) {
   botao.addEventListener("click", () => {
     escolhida = botao.dataset.acao;
-    avisar(["organizar", "juntar"].includes(escolhida) ? "" : "Esta ação ainda está sendo construída.");
+    avisar(["organizar", "juntar", "converter"].includes(escolhida) ? ""
+      : "Esta ação ainda está sendo construída.");
     desenhar();
   });
 }

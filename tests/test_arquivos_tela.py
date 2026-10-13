@@ -65,7 +65,9 @@ def test_soltar_nao_manda_nada_ao_servidor(cliente):
     import re
 
     js = cliente.get("/arquivos.js").text
-    assert re.findall(r'fetch\(([^,]+),', js) == ['"/api/arquivos/montar"']
+    assert re.findall(r'fetch\(([^,]+),', js) == ["rota"]
+    assert set(re.findall(r'enviar\("([^"]+)"', js)) == {"/api/arquivos/montar",
+                                                          "/api/arquivos/converter"}
     assert "innerHTML" not in js  # nome de arquivo é texto, nunca marcação
 
 
@@ -112,7 +114,7 @@ def test_a_folha_vem_de_um_modelo_com_lixeira_desenhada(cliente):
 
 def test_baixar_manda_as_fontes_para_a_rota_de_montar(cliente):
     js = cliente.get("/arquivos.js").text
-    assert 'fetch("/api/arquivos/montar"' in js
+    assert 'enviar("/api/arquivos/montar"' in js
     assert '"X-Aide": "1"' in js
     # a página é contada do 1 na tela e do 0 no servidor
     assert "p.pagina - 1" in js
@@ -152,3 +154,12 @@ def test_organizar_e_juntar_usam_a_mesma_rota(cliente):
     js = cliente.get("/arquivos.js").text
     assert len(re.findall(r"fetch\(", js)) == 1
     assert js.count("await montar(") == 2
+
+
+def test_converter_mostra_cada_documento_e_baixa_pela_rota_propria(cliente):
+    html = cliente.get("/arquivos").text
+    assert '<section class="card juntar" id="arq-converter" hidden>' in html
+    assert 'id="arq-converter-baixar"' in html
+    js = cliente.get("/arquivos.js").text
+    assert 'enviar("/api/arquivos/converter"' in js
+    assert "nomes: docs.map" in js
