@@ -35,9 +35,10 @@ class ToolContext:
     # lista de tarefas" e soterra as ações que importam — a GUI antiga chegou
     # a responder por 413 de 572 linhas. Quem só lê desliga isto.
     #
-    # Não é um interruptor geral de auditoria: quem escreve mantém `True`, e a
-    # web só pode desligá-lo porque não tem nenhuma rota de escrita — o que
-    # `test_nenhuma_rota_escreve` garante.
+    # Não é um interruptor geral de auditoria: quem escreve mantém `True`. A
+    # web desliga só no contexto das telas, que leem; as rotas que gravam no
+    # vault não usam esse contexto e auditam por conta própria — o que
+    # `test_a_web_so_pode_calar_a_trilha_porque_as_telas_nao_escrevem` garante.
     auditar: bool = True
 
 
