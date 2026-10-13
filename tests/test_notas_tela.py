@@ -393,6 +393,14 @@ def test_visao_geral_mostra_os_numeros_e_as_orfas(cliente, raiz):
     assert 'id="editor"' not in html
 
 
+def test_tags_da_visao_geral_levam_a_lista_da_tag(cliente, raiz):
+    (raiz / "Inbox" / "Ideia.md").write_text("#casa/reforma e #Ação")
+    painel = cliente.get("/notas?geral=1").text.split('<div class="visao">')[1]
+    assert 'href="/notas?tag=casa/reforma"' in painel
+    assert 'href="/notas?tag=A%C3%A7%C3%A3o"' in painel
+    assert ">#casa/reforma</a>" in painel
+
+
 def test_atalho_para_a_visao_geral_na_lateral(cliente):
     html = _tela(cliente, "Inbox/Ideia.md")
     assert 'href="/notas?geral=1&amp;arquivo=Inbox/Ideia.md"><svg' in html
