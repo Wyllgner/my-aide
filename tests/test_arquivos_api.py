@@ -214,3 +214,20 @@ def test_sem_repetir():
     from aide.web.arquivos_api import sem_repetir
 
     assert sem_repetir(["a.pdf", "A.pdf", "b.pdf", "a.pdf"]) == ["a.pdf", "A (2).pdf", "b.pdf", "a (3).pdf"]
+
+
+def test_montar_imagens_com_orientacao_propria(cliente):
+    from PIL import Image
+
+    def jpg(tamanho):
+        bruto = io.BytesIO()
+        Image.new("RGB", tamanho, "white").save(bruto, "JPEG")
+        return bruto.getvalue()
+
+    deitada, em_pe = jpg((800, 600)), jpg((600, 800))
+    plano = {"arquivos": [len(deitada), len(em_pe)], "paginas": [[0, 0], [1, 0]], "imagens": "proprias"}
+    resposta = cliente.post(ROTA, content=json.dumps(plano).encode() + b"\n" + deitada + em_pe,
+                            headers=ESCRITA)
+    assert resposta.status_code == 200, resposta.text
+    paginas = PdfReader(io.BytesIO(resposta.content)).pages
+    assert [round(float(p.mediabox.width)) for p in paginas] == [842, 595]

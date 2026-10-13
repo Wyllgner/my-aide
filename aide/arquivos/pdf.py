@@ -111,10 +111,15 @@ def _abrir(caminho: Path, nome: str):
     return leitor
 
 
-def montar(fontes: list[Path], paginas: list[tuple[int, int]], destino: Path) -> int:
+def montar(fontes: list[Path], paginas: list[tuple[int, int]], destino: Path,
+           imagem_na_vizinha: bool = True) -> int:
     """Escreve em `destino` as `paginas` pedidas, na ordem. Página contada do
     zero, como o índice do arquivo em `fontes`; imagem tem só a página 0.
-    Devolve quantas saíram."""
+    Devolve quantas saíram.
+
+    `imagem_na_vizinha`: a imagem toma o tamanho da página de antes, como
+    quem insere uma foto num contrato. Sem isso, cada imagem vira uma A4 na
+    orientação dela — um álbum de fotos deitadas e em pé."""
     from pypdf import PdfWriter
 
     if not paginas:
@@ -143,7 +148,9 @@ def montar(fontes: list[Path], paginas: list[tuple[int, int]], destino: Path) ->
         if leitor:
             escritor.add_page(leitor.pages[pagina])
         else:
-            vizinha = _tamanho(escritor.pages[-1]) if escritor.pages else primeira_de_pdf
+            vizinha = None
+            if imagem_na_vizinha:
+                vizinha = _tamanho(escritor.pages[-1]) if escritor.pages else primeira_de_pdf
             escritor.add_page(pagina_de_imagem(fontes[arquivo], f"o arquivo {arquivo + 1}", vizinha))
     with destino.open("wb") as saida:
         escritor.write(saida)

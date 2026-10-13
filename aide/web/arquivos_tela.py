@@ -84,14 +84,14 @@ def tela(ctx, registry, agora) -> str:
 </section>
 <section class="card juntar" id="arq-juntar" hidden>
   <div class="editor-topo">
-    <h2>Juntar PDFs</h2>
+    <h2 id="arq-juntar-titulo">Juntar PDFs</h2>
     <span class="resumo mono" id="arq-juntar-resumo"></span>
   </div>
   <div id="arq-juntar-lista"></div>
   <div class="rodape-editor">
     <span class="mono">arraste para mudar a ordem · com a linha em foco, Alt+↑ ↓ move</span>
     <button type="button" class="botao botao-principal" id="arq-juntar-baixar">
-      {icone("exportar")}Baixar PDF juntado</button>
+      {icone("exportar")}<span>Baixar PDF juntado</span></button>
   </div>
 </section>
 <section class="card juntar" id="arq-converter" hidden>
