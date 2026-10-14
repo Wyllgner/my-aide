@@ -45,7 +45,10 @@ ele:   #15 Enviar versão final do artigo venceu ontem.
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -e ".[dev,web]"
+# a trava: versão exata e hash de cada pacote, diretos e indiretos — um pacote
+# adulterado ou trocado no PyPI é recusado na instalação
+.venv/bin/pip install --require-hashes -r requirements.lock
+.venv/bin/pip install --no-deps -e .
 cp .env.example .env          # preencha OPENAI_API_KEY
 .venv/bin/myaide init         # cria o banco e aplica as migrations
 .venv/bin/myaide doctor       # confere o ambiente, tudo verde?
@@ -441,6 +444,7 @@ seu (o endereço do iCal, por exemplo).
 .venv/bin/pytest -q                  # 551 testes
 .venv/bin/pytest -q -m "not slow"    # sem os que sobem processo de verdade
 .venv/bin/ruff check aide tests
+.venv/bin/pip-audit -r requirements.lock   # vulnerabilidade conhecida em algo travado?
 ```
 
 O Excalidraw dos desenhos vem compilado em `aide/web/vendor/excalidraw/`, então
