@@ -63,16 +63,56 @@ def buscar(consulta: str, limite: int = typer.Option(5, "--limite", "-n")) -> No
 @app.command(rich_help_panel="Notas e memória")
 def perfil() -> None:
     """Mostra o que o assessor sabe sobre você."""
-    _, _, ctx = _ctx()
+    from aide.tools import memory
+
+    _, conn, ctx = _ctx()
     fatos = registry.call("memory.list", {"kind": "profile"}, ctx).data
     if not fatos:
         console.print("[dim]Ele ainda não sabe nada sobre você.[/]")
-        return
-    table = Table(box=None, show_header=False)
-    for f in fatos:
-        confianca = "" if f["confidence"] >= 1 else " [dim](incerto)[/]"
-        table.add_row(f"[cyan]{f['key']}[/]", f["value"] + confianca)
-    console.print(table)
+    else:
+        table = Table(box=None, show_header=False)
+        for f in fatos:
+            confianca = "" if f["confidence"] >= 1 else " [dim](incerto)[/]"
+            table.add_row(f"[cyan]{f['key']}[/]", f["value"] + confianca)
+        console.print(table)
+    espera = memory.pendentes(conn)
+    if espera:
+        console.print("\n[yellow]Aguardando você confirmar[/] [dim](gravado por "
+                      "agente de fora; não vale até você aceitar)[/]")
+        for f in espera:
+            console.print(f"  [dim]#{f['id']}[/] [cyan]{f['key']}[/]: {f['value']}"
+                          f" [dim]— {f['origem']}[/]")
+        console.print("[dim]myaide perfil-confirmar ID  ·  myaide perfil-recusar ID[/]")
+
+
+@app.command("perfil-confirmar", rich_help_panel="Notas e memória")
+def perfil_confirmar(id_: int = typer.Argument(..., metavar="ID")) -> None:
+    """Aceita um fato de perfil que um agente de fora gravou."""
+    from aide.tools import memory
+
+    _, conn, _ = _ctx()
+    try:
+        fato = memory.confirmar(conn, id_)
+    except ValueError as erro:
+        console.print(f"[red]{erro}[/]")
+        raise typer.Exit(1) from None
+    conn.commit()
+    console.print(f"[green]Confirmado:[/] {fato['key']}: {fato['value']}")
+
+
+@app.command("perfil-recusar", rich_help_panel="Notas e memória")
+def perfil_recusar(id_: int = typer.Argument(..., metavar="ID")) -> None:
+    """Descarta um fato de perfil que um agente de fora gravou."""
+    from aide.tools import memory
+
+    _, conn, _ = _ctx()
+    try:
+        fato = memory.recusar(conn, id_)
+    except ValueError as erro:
+        console.print(f"[red]{erro}[/]")
+        raise typer.Exit(1) from None
+    conn.commit()
+    console.print(f"[dim]Descartado:[/] {fato['key']}: {fato['value']}")
 
 
 @app.command(rich_help_panel="Notas e memória")

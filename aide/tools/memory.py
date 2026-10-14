@@ -16,8 +16,9 @@ LIMITE_PERFIL = 60
 
 
 def _vigentes(conn, kind: str | None = None, incluir_privadas: bool = True):
+    # o que espera confirmação não vale ainda: fora do prompt, da busca e da lista
     sql = "SELECT id, kind, key, value, confidence, created_at FROM memory" \
-          " WHERE superseded_by IS NULL"
+          " WHERE superseded_by IS NULL AND pendente = 0"
     params: list = []
     if kind:
         sql += " AND kind = ?"
@@ -26,6 +27,55 @@ def _vigentes(conn, kind: str | None = None, incluir_privadas: bool = True):
         sql += " AND private = 0"
     sql += " ORDER BY created_at DESC"
     return conn.execute(sql, params).fetchall()
+
+
+# Quem grava perfil sem a pessoa do outro lado. O modelo no Telegram e no
+# terminal é a própria pessoa pedindo ("lembra que sou alérgico"); um agente
+# pelo MCP pode estar seguindo instrução de uma página que ele leu.
+ORIGENS_A_CONFIRMAR = frozenset({"mcp"})
+
+
+def _substituir(conn, kind: str, key: str, novo: int) -> int:
+    """O fato antigo não some: vira histórico apontando para o novo. O que
+    ainda espera confirmação não é substituído — nem substitui."""
+    return conn.execute(
+        "UPDATE memory SET superseded_by = ? WHERE kind = ? AND key = ?"
+        " AND id != ? AND superseded_by IS NULL AND pendente = 0",
+        (novo, kind, key, novo),
+    ).rowcount
+
+
+def pendentes(conn) -> list[dict]:
+    """Os fatos de perfil que um agente de fora gravou e esperam a pessoa."""
+    return [dict(r) for r in conn.execute(
+        "SELECT id, key, value, confidence, private, origem, created_at FROM memory"
+        " WHERE pendente = 1 AND superseded_by IS NULL ORDER BY created_at").fetchall()]
+
+
+def confirmar(conn, id_: int) -> dict:
+    """O fato passa a valer e toma o lugar do que havia com a mesma chave."""
+    row = conn.execute("SELECT kind, key, value FROM memory WHERE id = ? AND pendente = 1",
+                       (id_,)).fetchone()
+    if row is None:
+        raise ValueError(f"não há fato aguardando confirmação com o id {id_}")
+    total = conn.execute("SELECT COUNT(*) FROM memory WHERE kind = 'profile'"
+                         " AND superseded_by IS NULL AND pendente = 0").fetchone()[0]
+    existe = conn.execute("SELECT 1 FROM memory WHERE kind = 'profile' AND key = ?"
+                          " AND superseded_by IS NULL AND pendente = 0", (row["key"],)).fetchone()
+    if total >= LIMITE_PERFIL and existe is None:
+        raise ValueError(f"o perfil já tem {total} fatos; esqueça algum antes de confirmar")
+    conn.execute("UPDATE memory SET pendente = 0 WHERE id = ?", (id_,))
+    _substituir(conn, row["kind"], row["key"], id_)
+    return {"id": id_, "key": row["key"], "value": row["value"]}
+
+
+def recusar(conn, id_: int) -> dict:
+    row = conn.execute("SELECT key, value FROM memory WHERE id = ? AND pendente = 1",
+                       (id_,)).fetchone()
+    if row is None:
+        raise ValueError(f"não há fato aguardando confirmação com o id {id_}")
+    conn.execute("DELETE FROM memory WHERE id = ?", (id_,))
+    return {"id": id_, "key": row["key"], "value": row["value"]}
 
 
 @registry.register(
@@ -59,12 +109,24 @@ def save(ctx: ToolContext, kind: str, key: str, value: str,
     if not 0 < confidence <= 1:
         raise ValueError("confidence deve estar entre 0 e 1")
 
+    if kind == "profile" and ctx.actor in ORIGENS_A_CONFIRMAR:
+        # agente de fora: o fato espera o dono, e o que já valia continua valendo
+        cur = ctx.conn.execute(
+            "INSERT INTO memory (kind, key, value, confidence, private, origem, pendente)"
+            " VALUES ('profile', ?, ?, ?, ?, ?, 1)",
+            (key, value.strip(), confidence, int(private), ctx.actor))
+        return {"id": cur.lastrowid, "kind": kind, "key": key, "value": value.strip(),
+                "pendente": True,
+                "aviso": "fato de perfil vindo de fora: fica aguardando a pessoa confirmar"}
+
     if kind == "profile":
         total = ctx.conn.execute(
             "SELECT COUNT(*) c FROM memory WHERE kind = 'profile' AND superseded_by IS NULL"
+            " AND pendente = 0"
         ).fetchone()["c"]
         anterior = ctx.conn.execute(
-            "SELECT id FROM memory WHERE kind = 'profile' AND key = ? AND superseded_by IS NULL",
+            "SELECT id FROM memory WHERE kind = 'profile' AND key = ? AND superseded_by IS NULL"
+            " AND pendente = 0",
             (key,),
         ).fetchone()
         if total >= LIMITE_PERFIL and anterior is None:
@@ -74,17 +136,12 @@ def save(ctx: ToolContext, kind: str, key: str, value: str,
             )
 
     cur = ctx.conn.execute(
-        "INSERT INTO memory (kind, key, value, confidence, private) VALUES (?, ?, ?, ?, ?)",
-        (kind, key, value.strip(), confidence, int(private)),
+        "INSERT INTO memory (kind, key, value, confidence, private, origem)"
+        " VALUES (?, ?, ?, ?, ?, ?)",
+        (kind, key, value.strip(), confidence, int(private), ctx.actor),
     )
     novo = cur.lastrowid
-
-    # o fato antigo não some: vira histórico apontando para o novo
-    substituidos = ctx.conn.execute(
-        "UPDATE memory SET superseded_by = ? WHERE kind = ? AND key = ?"
-        " AND id != ? AND superseded_by IS NULL",
-        (novo, kind, key, novo),
-    ).rowcount
+    substituidos = _substituir(ctx.conn, kind, key, novo)
 
     return {"id": novo, "kind": kind, "key": key, "value": value.strip(),
             "substituiu": substituidos}

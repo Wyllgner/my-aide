@@ -1146,6 +1146,31 @@ def auditoria(ctx, registry, agora: datetime, ator: str | None = None) -> str:
 
 # ---------- notas ----------
 
+def _pendentes_de_perfil(ctx) -> str:
+    """Fatos que um agente de fora gravou: não valem até você aceitar no
+    terminal. A página é de leitura; aqui só avisa que eles existem."""
+    from aide.tools import memory
+
+    espera = memory.pendentes(ctx.conn)
+    if not espera:
+        return ""
+    linhas = "".join(
+        f'<div class="linha" style="padding:10px 18px;align-items:baseline">'
+        f'<span class="ref mono">#{f["id"]}</span>'
+        f'<span class="mono" style="font-size:12.5px;color:var(--muted);width:150px;'
+        f'flex-shrink:0">{escape(f["key"])}</span>'
+        f'<span style="font-size:14px;line-height:1.5">{escape(f["value"])}</span>'
+        f'<span class="quando mono" style="font-size:11.5px">{escape(f["origem"] or "")}</span>'
+        f'</div>' for f in espera)
+    return (f'<div class="card" style="margin-bottom:16px;border-color:var(--accent)">'
+            f'<div style="padding:16px 20px 10px"><span class="eyebrow late">Aguardando você '
+            f'confirmar · {len(espera)}</span><p style="margin:6px 0 0;font-size:12.5px;'
+            f'color:var(--muted)">Gravado por um agente de fora (MCP). Não entra no que o '
+            f'assessor sabe até você aceitar: <span class="mono">myaide perfil-confirmar ID</span>'
+            f' ou <span class="mono">myaide perfil-recusar ID</span>.</p></div>'
+            f'<div style="border-top:1px solid var(--line-soft)">{linhas}</div></div>')
+
+
 def memoria(ctx, registry, agora: datetime) -> str:
     def bloco(kind: str, titulo: str, vazio: str) -> str:
         fatos = registry.call("memory.list", {"kind": kind}, ctx).data or []
@@ -1175,6 +1200,7 @@ def memoria(ctx, registry, agora: datetime) -> str:
            '<p style="margin:0;font-size:12.5px;color:var(--faint);max-width:40ch;'
            'text-align:right;line-height:1.5">O perfil vai inteiro em toda conversa. '
            'O que está marcado como privado não sai desta máquina.</p>')}
+{_pendentes_de_perfil(ctx)}
 <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;
             align-items:start">
   {bloco("profile", "Perfil", "Nada guardado ainda.")}
