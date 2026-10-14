@@ -1,8 +1,12 @@
 """As rotas da tela Arquivos: recebem arquivos, devolvem o resultado.
 
 Nada fica guardado. Os arquivos vão para uma pasta temporária enquanto chegam,
-o resultado sai como resposta, e a pasta é apagada depois que a resposta foi
-inteira — ou na hora, se o pedido falhar. O vault não é tocado.
+o resultado sai como resposta, e a pasta é apagada quando a resposta termina —
+inteira, com erro ou com a conexão caindo no meio. O que nem isso alcança (o
+serviço morto no meio de uma conversão, a máquina desligada) a varredura
+apaga: pastas `aide-arquivos-*` com mais de uma hora somem ao subir o serviço
+e a cada operação. O /tmp desta máquina fica em disco, e são documentos seus.
+O vault não é tocado.
 
 Sem auditoria: a trilha registra o que mudou nos seus dados, e aqui nada muda.
 A fronteira de escrita (Host, Origin, X-Aide) vale como em toda rota que não é
@@ -14,9 +18,12 @@ os arquivos colados na ordem do plano. Cada um tem o tamanho dito no plano.
 
 from __future__ import annotations
 
+import functools
 import json
+import os
 import shutil
 import tempfile
+import time
 from pathlib import Path
 
 from aide.arquivos import MAXIMO_DE_ARQUIVOS, PLANO_MAXIMO, TAMANHO_MAXIMO, converter, pdf
@@ -26,6 +33,32 @@ ROTA_DE_CONVERTER = "/api/arquivos/converter"
 ROTA_DE_IMAGENS = "/api/arquivos/imagens"
 ROTA_DE_WORD = "/api/arquivos/word"
 DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+PREFIXO = "aide-arquivos-"
+# uma conversão grava na pasta ao menos a cada 120 s (o prazo de cada
+# arquivo): uma hora sem mudar é pasta esquecida, não trabalho em andamento
+ESQUECIDA = 3600
+
+
+def varrer(base: Path | None = None, idade: float = ESQUECIDA) -> int:
+    """Apaga as pastas temporárias desta tela que ficaram para trás. Só as
+    nossas: o prefixo, dono igual a nós, pasta de verdade (link não)."""
+    base = Path(base or tempfile.gettempdir())
+    limite = time.time() - idade
+    apagadas = 0
+    try:
+        candidatas = list(base.iterdir())
+    except OSError:
+        return 0
+    for pasta in candidatas:
+        try:
+            info = pasta.lstat()
+        except OSError:
+            continue
+        if (pasta.name.startswith(PREFIXO) and not pasta.is_symlink() and pasta.is_dir()
+                and info.st_uid == os.getuid() and info.st_mtime < limite):
+            shutil.rmtree(pasta, ignore_errors=True)
+            apagadas += 1
+    return apagadas
 
 
 class PedidoInvalido(ValueError):
@@ -130,11 +163,39 @@ def word_de_todos(caminhos: list[Path], nomes: list[str], pasta: Path,
     return _um_ou_zip(docs, nomes, "docx", DOCX, pasta)
 
 
+@functools.cache
+def resposta_que_limpa():
+    """A classe da resposta: o FastAPI só é importado quando a web sobe."""
+    from fastapi.responses import FileResponse
+
+    class RespostaQueLimpa(FileResponse):
+        """O arquivo e, saia como sair, a pasta dele apagada. O BackgroundTask
+        do FileResponse só roda se a resposta for até o fim: Range inválido
+        (400/416) ou conexão caída pulavam a limpeza. E Range é ignorado:
+        nenhuma destas rotas entrega pedaço de arquivo."""
+
+        def __init__(self, caminho: Path, pasta: Path, **kwargs):
+            super().__init__(caminho, **kwargs)
+            self.pasta = pasta
+
+        async def __call__(self, scope, receive, send):
+            sem_range = [(k, v) for k, v in scope.get("headers", []) if k.lower() != b"range"]
+            try:
+                await super().__call__({**scope, "headers": sem_range}, receive, send)
+            finally:
+                shutil.rmtree(self.pasta, ignore_errors=True)
+
+    return RespostaQueLimpa
+
+
 def instalar(app) -> None:
     from fastapi import HTTPException, Request
-    from fastapi.responses import FileResponse
-    from starlette.background import BackgroundTask
     from starlette.concurrency import run_in_threadpool
+
+    RespostaQueLimpa = resposta_que_limpa()
+
+    # o que um desligamento deixou para trás some ao subir
+    varrer()
 
     async def receber(request, pasta: Path) -> tuple[dict, list[Path]]:
         """Lê o plano e grava os arquivos em `pasta` enquanto os bytes chegam,
@@ -182,11 +243,12 @@ def instalar(app) -> None:
             raise PedidoInvalido("vieram menos bytes do que o plano diz")
         return plano, caminhos
 
-    async def operar(request, fazer) -> FileResponse:
+    async def operar(request, fazer):
         """Recebe, roda `fazer(plano, caminhos, pasta)` fora do laço de eventos
         e devolve o arquivo que ela produziu. A pasta some no fim, dê certo ou
         não."""
-        pasta = Path(tempfile.mkdtemp(prefix="aide-arquivos-"))
+        varrer()
+        pasta = Path(tempfile.mkdtemp(prefix=PREFIXO))
         try:
             plano, caminhos = await receber(request, pasta)
             resultado, tipo = await run_in_threadpool(fazer, plano, caminhos, pasta)
@@ -199,8 +261,8 @@ def instalar(app) -> None:
         except BaseException:
             shutil.rmtree(pasta, ignore_errors=True)
             raise
-        return FileResponse(resultado, media_type=tipo, headers={"cache-control": "no-store"},
-                            background=BackgroundTask(shutil.rmtree, pasta, ignore_errors=True))
+        return RespostaQueLimpa(resultado, pasta, media_type=tipo,
+                                headers={"cache-control": "no-store"})
 
     def fazer_montagem(plano, caminhos, pasta):
         destino = pasta / "resultado.pdf"
