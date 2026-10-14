@@ -36,6 +36,13 @@ PRAZO = 120
 # páginas segura o .zip (uma A4 dá uns 200 KB)
 DPI = 150
 MAXIMO_DE_IMAGENS = 300
+# Uma página de 200 x 200 polegadas a 150 dpi são 30000 x 30000 px, uns 2,7 GB
+# de memória: a resolução desce até a maior página caber em PIXELS_POR_PAGINA
+# (uma A0 a 150 dpi tem 70 milhões) e o documento todo em PIXELS_NO_TOTAL.
+# Abaixo de DPI_MINIMO a imagem não se lê, e aí é recusa
+PIXELS_POR_PAGINA = 50_000_000
+PIXELS_NO_TOTAL = 1_500_000_000
+DPI_MINIMO = 36
 
 # a extensão diz o filtro ao LibreOffice; o conteúdo tem de ser da mesma família
 ZIP, OLE = b"PK\x03\x04", b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
@@ -185,6 +192,22 @@ def _rodar(comando: list[str], nome: str, pasta: Path, ambiente: dict | None = N
     return processo.returncode == 0
 
 
+def resolucao(paginas, nome: str) -> int:
+    """O dpi para desenhar `paginas` (do pypdf) sem estourar a memória."""
+    areas = []
+    for pagina in paginas:
+        caixa = pagina.cropbox  # o pdftoppm desenha a cropbox
+        unidade = float(pagina.user_unit or 1)
+        areas.append(abs(float(caixa.width) * float(caixa.height)) * unidade ** 2 / 72 ** 2)
+    maior, total = max(areas, default=0), sum(areas)
+    dpi = float(DPI)
+    if maior:
+        dpi = min(dpi, (PIXELS_POR_PAGINA / maior) ** 0.5, (PIXELS_NO_TOTAL / total) ** 0.5)
+    if dpi < DPI_MINIMO:
+        raise ConversaoFalhou(f"as páginas de {nome} são grandes demais para virar imagem")
+    return int(dpi)
+
+
 def para_imagens(entrada: Path, nome: str, saida: Path) -> list[Path]:
     """Cada página de `entrada` como PNG em `saida`, na ordem das páginas."""
     from aide.arquivos import pdf
@@ -195,8 +218,9 @@ def para_imagens(entrada: Path, nome: str, saida: Path) -> list[Path]:
     leitor = pdf.abrir(entrada, nome)
     if len(leitor.pages) > MAXIMO_DE_IMAGENS:
         raise ConversaoFalhou(f"{nome} tem mais de {MAXIMO_DE_IMAGENS} páginas")
+    dpi = resolucao(leitor.pages, nome)
     saida.mkdir(parents=True, exist_ok=True)
-    if not _rodar([pdftoppm, "-png", "-r", str(DPI), str(entrada), str(saida / "p")], nome,
+    if not _rodar([pdftoppm, "-png", "-r", str(dpi), str(entrada), str(saida / "p")], nome,
                   entrada.parent):
         raise ConversaoFalhou(f"não deu para desenhar as páginas de {nome}")
     # p-1.png … ou p-01.png …: o pdftoppm completa com zeros pelo total

@@ -330,3 +330,68 @@ def test_sem_bwrap_cai_para_unshare_e_avisa(monkeypatch, caplog):
         assert "vê os seus arquivos" in caplog.text or "sem isolamento" in caplog.text
     finally:
         converter._isolamento.cache_clear()
+
+
+# ---------- página gigante ----------
+
+def paginas_de(*tamanhos):
+    from pypdf import PdfWriter
+
+    escritor = PdfWriter()
+    for largura, altura in tamanhos:
+        escritor.add_blank_page(width=largura, height=altura)
+    return escritor.pages
+
+
+def test_a4_continua_a_150_dpi():
+    assert converter.resolucao(paginas_de((595, 842)), "a.pdf") == converter.DPI
+
+
+def test_pagina_gigante_desce_a_resolucao_ate_caber():
+    """A revisão de 13/10: 200 x 200 pol a 150 dpi eram 2,7 GB de memória."""
+    dpi = converter.resolucao(paginas_de((595, 842), (14400, 3600)), "g.pdf")
+    assert converter.DPI_MINIMO <= dpi < converter.DPI
+    assert (14400 / 72 * dpi) * (3600 / 72 * dpi) <= converter.PIXELS_POR_PAGINA
+
+
+def test_muitas_paginas_grandes_respeitam_o_total():
+    a1 = (1684, 2384)
+    dpi = converter.resolucao(paginas_de(*[a1] * 290), "muitas.pdf")
+    area = 1684 / 72 * 2384 / 72
+    assert 290 * area * dpi ** 2 <= converter.PIXELS_NO_TOTAL
+
+
+def test_grande_demais_ate_para_a_menor_resolucao():
+    with pytest.raises(converter.ConversaoFalhou, match="grandes demais para virar imagem"):
+        converter.resolucao(paginas_de((14400, 14400)), "enorme.pdf")
+
+
+def test_user_unit_conta_no_tamanho():
+    """/UserUnit multiplica a unidade da página: 200 pt com UserUnit 75 é
+    uma página de 208 polegadas, não de 3."""
+    from pypdf.generic import FloatObject, NameObject
+
+    paginas = paginas_de((200, 200))
+    paginas[0][NameObject("/UserUnit")] = FloatObject(75)
+    with pytest.raises(converter.ConversaoFalhou, match="grandes demais"):
+        converter.resolucao(paginas, "unidade.pdf")
+
+
+@com_pdftoppm
+def test_pagina_gigante_vira_imagem_que_cabe(tmp_path):
+    from PIL import Image
+
+    imagens = converter.para_imagens(pdf_de_tamanho(tmp_path / "g.pdf", 7200, 7200), "g.pdf",
+                                     tmp_path / "saida")
+    with Image.open(imagens[0]) as imagem:
+        assert imagem.width * imagem.height <= converter.PIXELS_POR_PAGINA
+
+
+def pdf_de_tamanho(caminho, largura, altura):
+    from pypdf import PdfWriter
+
+    escritor = PdfWriter()
+    escritor.add_blank_page(width=largura, height=altura)
+    with caminho.open("wb") as f:
+        escritor.write(f)
+    return caminho
