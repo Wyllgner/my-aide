@@ -395,3 +395,18 @@ def pdf_de_tamanho(caminho, largura, altura):
     with caminho.open("wb") as f:
         escritor.write(f)
     return caminho
+
+
+def test_falha_nao_poe_o_nome_do_arquivo_no_log(tmp_path, monkeypatch, caplog):
+    falso = tmp_path / "soffice"
+    falso.write_text("#!/bin/sh\necho quebrou >&2\nexit 1\n")
+    falso.chmod(0o755)
+    monkeypatch.setattr(converter.shutil, "which",
+                        lambda nome: str(falso) if nome == "soffice" else None)
+    monkeypatch.setattr(converter, "_isolamento", lambda: "")
+    entrada = tmp_path / "entrada-0"
+    entrada.write_text("x")
+    with caplog.at_level("INFO"), pytest.raises(converter.ConversaoFalhou):
+        converter.para_pdf(entrada, "exame-de-sangue.txt", tmp_path / "saida")
+    assert "quebrou" in caplog.text
+    assert "exame-de-sangue" not in caplog.text
