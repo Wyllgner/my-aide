@@ -1264,3 +1264,17 @@ def test_teto_gasto_ate_o_fim_pinta_a_linha_inteira(cliente, app, registry, com_
     # a que ainda tem folga continua como era
     assert graficos.COMPLETO not in html[html.index('title="barbearia"') - 200:
                                          html.index("sobram R$ 17,00")]
+
+
+def test_memoria_avisa_do_perfil_que_espera_confirmacao(cliente, app, registry):
+    """Gravado por agente de fora: a página mostra, escapado, e diz como aceitar."""
+    from aide.tools.registry import ToolContext
+
+    conn = app.state.conn_factory()
+    de_fora = ToolContext(config=app.state.config, conn=conn, actor="mcp")
+    registry.call("memory.save", {"kind": "profile", "key": "cidade",
+                                  "value": "<script>alert(1)</script>"}, de_fora)
+    conn.commit()
+    html = cliente.get("/memoria").text
+    assert "Aguardando você" in html and "myaide perfil-confirmar" in html
+    assert "&lt;script&gt;" in html and "<script>alert" not in html
