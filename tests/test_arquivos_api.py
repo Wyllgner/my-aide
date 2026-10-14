@@ -388,3 +388,56 @@ def test_varre_ao_subir(config, tmp_path, monkeypatch):
     os.utime(sobra, (time.time() - 7200,) * 2)
     criar_app(config)
     assert not sobra.exists()
+
+
+# ---------- a fila ----------
+
+def test_conversoes_esperam_sem_ocupar_thread(app, monkeypatch):
+    """Duas conversões ao mesmo tempo: a segunda espera a vez no laço de
+    eventos, e a fila (uma vaga) nunca deixa duas rodarem juntas."""
+    import threading
+    import time
+
+    from aide.web import arquivos_api
+
+    rodando, maximo, trava = 0, 0, threading.Lock()
+
+    def conversao_lenta(caminhos, nomes, pasta):
+        nonlocal rodando, maximo
+        with trava:
+            rodando += 1
+            maximo = max(maximo, rodando)
+        time.sleep(0.3)
+        with trava:
+            rodando -= 1
+        saida = pasta / "r.pdf"
+        saida.write_bytes(b"%PDF-1.7")
+        return saida, "application/pdf"
+
+    monkeypatch.setattr(arquivos_api, "converter_todos", conversao_lenta)
+    respostas = []
+    # `with`: um laço de eventos só para todos os pedidos, como no servidor
+    with TestClient(app, base_url="http://127.0.0.1:8787") as cliente:
+        def pedir():
+            respostas.append(cliente.post("/api/arquivos/converter",
+                                          content=corpo_conversao({"a.txt": b"x"}),
+                                          headers=ESCRITA))
+
+        fios = [threading.Thread(target=pedir) for _ in range(3)]
+        for fio in fios:
+            fio.start()
+        for fio in fios:
+            fio.join(timeout=20)
+    assert [r.status_code for r in respostas] == [200, 200, 200]
+    assert maximo == 1
+
+
+def test_fila_cheia_responde_na_hora(app, monkeypatch):
+    from aide.web import arquivos_api
+
+    monkeypatch.setattr(arquivos_api, "FILA_MAXIMA", 0)
+    cliente = TestClient(app, base_url="http://127.0.0.1:8787")
+    resposta = cliente.post("/api/arquivos/converter", content=corpo_conversao({"a.txt": b"x"}),
+                            headers=ESCRITA)
+    assert resposta.status_code == 503
+    assert "tente de novo" in resposta.json()["detail"]

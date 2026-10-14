@@ -34,6 +34,13 @@ ROTA_DE_IMAGENS = "/api/arquivos/imagens"
 ROTA_DE_WORD = "/api/arquivos/word"
 DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 PREFIXO = "aide-arquivos-"
+# Quantas operações de cada tipo rodam ao mesmo tempo. Quem espera a vez
+# espera no laço de eventos, não numa thread: o grupo de threads é o mesmo das
+# outras telas, e conversões na fila (até 120 s cada) o esgotariam.
+VAGAS = {"converter": 1, "montar": 2}
+# acima disto na fila, a resposta é "tente de novo", antes de receber o envio
+FILA_MAXIMA = 4
+
 # uma conversão grava na pasta ao menos a cada 120 s (o prazo de cada
 # arquivo): uma hora sem mudar é pasta esquecida, não trabalho em andamento
 ESQUECIDA = 3600
@@ -189,8 +196,8 @@ def resposta_que_limpa():
 
 
 def instalar(app) -> None:
+    import anyio
     from fastapi import HTTPException, Request
-    from starlette.concurrency import run_in_threadpool
 
     RespostaQueLimpa = resposta_que_limpa()
 
@@ -243,15 +250,33 @@ def instalar(app) -> None:
             raise PedidoInvalido("vieram menos bytes do que o plano diz")
         return plano, caminhos
 
-    async def operar(request, fazer):
-        """Recebe, roda `fazer(plano, caminhos, pasta)` fora do laço de eventos
-        e devolve o arquivo que ela produziu. A pasta some no fim, dê certo ou
-        não."""
+    import asyncio
+    import weakref
+
+    # um conjunto de limitadores por laço de eventos: o limitador pertence ao
+    # laço em que nasceu, e quem espera nele vindo de outro laço nunca acorda.
+    # No servidor há um laço só; nos testes, um por TestClient
+    limitadores: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
+
+    def vaga(tipo: str) -> anyio.CapacityLimiter:
+        deste_laco = limitadores.setdefault(asyncio.get_running_loop(), {})
+        if tipo not in deste_laco:
+            deste_laco[tipo] = anyio.CapacityLimiter(VAGAS[tipo])
+        return deste_laco[tipo]
+
+    async def operar(request, fazer, tipo: str):
+        """Recebe, roda `fazer(plano, caminhos, pasta)` numa thread quando
+        chega a vez dela e devolve o arquivo que produziu. A pasta some no fim,
+        dê certo ou não."""
+        limitador = vaga(tipo)
+        if limitador.statistics().tasks_waiting >= FILA_MAXIMA:
+            raise HTTPException(503, "há operações demais na fila; tente de novo em instantes")
         varrer()
         pasta = Path(tempfile.mkdtemp(prefix=PREFIXO))
         try:
             plano, caminhos = await receber(request, pasta)
-            resultado, tipo = await run_in_threadpool(fazer, plano, caminhos, pasta)
+            resultado, tipo_resultado = await anyio.to_thread.run_sync(
+                fazer, plano, caminhos, pasta, limiter=limitador)
         except PedidoInvalido as erro:
             shutil.rmtree(pasta, ignore_errors=True)
             raise HTTPException(400, str(erro)) from None
@@ -261,7 +286,7 @@ def instalar(app) -> None:
         except BaseException:
             shutil.rmtree(pasta, ignore_errors=True)
             raise
-        return RespostaQueLimpa(resultado, pasta, media_type=tipo,
+        return RespostaQueLimpa(resultado, pasta, media_type=tipo_resultado,
                                 headers={"cache-control": "no-store"})
 
     def fazer_montagem(plano, caminhos, pasta):
@@ -285,19 +310,19 @@ def instalar(app) -> None:
 
     async def montar(request):
         """O PDF com as páginas pedidas, na ordem pedida."""
-        return await operar(request, fazer_montagem)
+        return await operar(request, fazer_montagem, "montar")
 
     async def converter_rota(request):
         """Documentos em PDF: um vira um PDF, vários viram um .zip."""
-        return await operar(request, fazer_conversao)
+        return await operar(request, fazer_conversao, "converter")
 
     async def imagens(request):
         """PDFs em PNG, uma imagem por página."""
-        return await operar(request, fazer_imagens)
+        return await operar(request, fazer_imagens, "converter")
 
     async def word(request):
         """PDFs em .docx, mantendo a aparência ou só o texto."""
-        return await operar(request, fazer_word)
+        return await operar(request, fazer_word, "converter")
 
     # `from __future__ import annotations` deixa a anotação como texto, e o
     # FastAPI a procuraria nos globais, onde Request não está: vai o objeto,
