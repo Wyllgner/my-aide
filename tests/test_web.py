@@ -71,6 +71,8 @@ def test_o_servidor_so_escuta_em_loopback(monkeypatch, config, tmp_path):
     ServidorWeb(config, lambda: connect(tmp_path / "s.db"))
     assert capturado["host"] == "127.0.0.1"
     assert capturado["host"] not in ("0.0.0.0", "::", "")
+    # origem só do transporte: X-Forwarded-For forjaria a conta da conexão
+    assert capturado["proxy_headers"] is False
 
 
 def test_a_url_anunciada_e_local(config, tmp_path, monkeypatch):

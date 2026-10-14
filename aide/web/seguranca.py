@@ -117,13 +117,77 @@ def limite_do_corpo(metodo: str, caminho: str) -> int:
     return CORPO_MAXIMO
 
 
+# ---------- quem está do outro lado da conexão ----------
+#
+# Escutar em 127.0.0.1 deixa de fora as outras máquinas, mas não as outras
+# contas desta: um serviço do sistema rodando como outro usuário leria tudo
+# com um curl, privado incluído, passando por cima da permissão da sua pasta
+# pessoal. O Linux diz, em /proc/net/tcp, de que conta é cada socket: a ponta
+# do cliente de cada conexão com esta porta tem o uid de quem a abriu.
+
+TABELA_TCP = "/proc/net/tcp"
+
+
+def _hex_ipv4(ip: str, porta: int) -> str:
+    """'127.0.0.1', 8787 -> '0100007F:2253', como o /proc/net/tcp escreve."""
+    import ipaddress
+    import struct
+
+    numero = struct.unpack("<I", ipaddress.IPv4Address(ip).packed)[0]
+    return f"{numero:08X}:{porta:04X}"
+
+
+def conta_da_conexao(cliente: tuple[str, int], servidor: tuple[str, int],
+                     tabela: str = TABELA_TCP) -> int | None:
+    """O uid de quem abriu a conexão, ou None se não deu para saber."""
+    try:
+        origem, destino = _hex_ipv4(*cliente), _hex_ipv4(*servidor)
+        with open(tabela) as f:
+            next(f, None)
+            for linha in f:
+                campos = linha.split()
+                if len(campos) > 7 and campos[1] == origem and campos[2] == destino:
+                    return int(campos[7])
+    except (OSError, ValueError):
+        return None
+    return None
+
+
+def conexao_permitida(scope) -> str | None:
+    """None se a conexão é da conta dona do servidor; senão, o motivo.
+
+    Na dúvida, recusa: sem saber de quem é, não entrega o privado. O cliente
+    que não é endereço IP é o TestClient, que não abre conexão nenhuma — o
+    endereço vem do transporte, nunca de cabeçalho (proxy_headers desligado
+    no servidor; ver servidor.py)."""
+    import ipaddress
+    import os
+
+    cliente, servidor = scope.get("client"), scope.get("server")
+    if not cliente or not servidor:
+        return "conexão sem origem conhecida"
+    try:
+        ipaddress.ip_address(cliente[0])
+    except ValueError:
+        return None
+    dono = conta_da_conexao(tuple(cliente), tuple(servidor))
+    if dono is None:
+        return "não deu para saber de que conta vem a conexão"
+    if dono != os.getuid():
+        return "conexão de outra conta desta máquina"
+    return None
+
+
 def instalar(app) -> None:
     from fastapi.responses import PlainTextResponse
 
     @app.middleware("http")
     async def fronteira(request, call_next):
         host = request.headers.get("host", "")
-        if not host_permitido(host):
+        outra_conta = conexao_permitida(request.scope)
+        if outra_conta:
+            resposta = PlainTextResponse(outra_conta, status_code=403)
+        elif not host_permitido(host):
             resposta = PlainTextResponse("host não permitido", status_code=421)
         else:
             motivo = escrita_permitida(

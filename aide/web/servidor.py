@@ -25,6 +25,11 @@ class ServidorWeb:
             # ENDERECO é constante de propósito; ver aide/web/app.py
             host=ENDERECO, port=porta,
             log_level="warning", access_log=False,
+            # Desligado de propósito: ligado, o uvicorn aceita o endereço de
+            # origem que vier em X-Forwarded-For de qualquer conexão local, e
+            # outra conta da máquina se passaria por uma conexão sua para a
+            # checagem de dono (seguranca.conexao_permitida)
+            proxy_headers=False, server_header=False,
         ))
         self._thread: threading.Thread | None = None
 
