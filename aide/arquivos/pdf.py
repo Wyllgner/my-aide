@@ -12,7 +12,6 @@ contrato em A4, vira uma folha A4 com a foto centralizada.
 from __future__ import annotations
 
 import io
-import warnings
 from pathlib import Path
 
 # o PDF pode ter lixo antes da marca; a especificação tolera até 1 KB
@@ -51,16 +50,21 @@ def _tamanho(pagina) -> tuple[float, float]:
 
 
 def _abrir_imagem(caminho: Path, nome: str):
+    """Só JPEG e PNG, e o tamanho conferido pelo cabeçalho antes de
+    decodificar. Sem mexer no MAX_IMAGE_PIXELS global nem em filtro de aviso:
+    os dois valem para o processo inteiro, e duas montagens rodam juntas."""
     from PIL import Image, ImageOps
 
-    Image.MAX_IMAGE_PIXELS = MAXIMO_DE_PIXELS
     try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", Image.DecompressionBombWarning)
-            with Image.open(caminho) as aberta:
-                imagem = ImageOps.exif_transpose(aberta)
-                imagem.load()
-    except (Image.DecompressionBombError, Image.DecompressionBombWarning):
+        with Image.open(caminho, formats=["JPEG", "PNG"]) as aberta:
+            largura, altura = aberta.size
+            if largura * altura > MAXIMO_DE_PIXELS:
+                raise PdfInvalido(f"{nome} é grande demais")
+            imagem = ImageOps.exif_transpose(aberta)
+            imagem.load()
+    except PdfInvalido:
+        raise
+    except Image.DecompressionBombError:
         raise PdfInvalido(f"{nome} é grande demais") from None
     except (OSError, ValueError, SyntaxError) as erro:
         raise PdfInvalido(f"{nome} não é uma imagem que dê para abrir") from erro

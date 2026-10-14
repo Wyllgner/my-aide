@@ -188,7 +188,10 @@ def _rodar(comando: list[str], nome: str, pasta: Path, ambiente: dict | None = N
             processo.wait()
             raise ConversaoFalhou(f"{nome} demorou mais de {PRAZO} s para converter") from None
     if processo.returncode != 0:
-        log.info("conversão de %s falhou: %s", nome, erro.decode(errors="replace")[-500:])
+        # sem o nome do arquivo: o log do sistema guarda por semanas, e nome
+        # de documento pode ser sensível ("exame", "processo"…)
+        log.info("conversão falhou (%s): %s", Path(comando[0]).name,
+                 erro.decode(errors="replace")[-500:])
     return processo.returncode == 0
 
 

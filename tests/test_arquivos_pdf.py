@@ -197,3 +197,24 @@ def test_album_cada_foto_na_propria_orientacao(tmp_path):
     saida = tmp_path / "s.pdf"
     pdf.montar([deitada, em_pe], [(0, 0), (1, 0)], saida, imagem_na_vizinha=False)
     assert tamanhos(saida) == [(842, 595), (595, 842)]
+
+
+def test_so_abre_jpeg_e_png(tmp_path):
+    """O Pillow detecta dezenas de formatos sozinho; aqui só os dois que a
+    tela aceita chegam ao decodificador."""
+    from PIL import Image
+
+    bmp = tmp_path / "x.bmp"
+    Image.new("RGB", (10, 10)).save(bmp, "BMP")
+    with pytest.raises(pdf.PdfInvalido, match="não é uma imagem que dê para abrir"):
+        pdf._abrir_imagem(bmp, "x")
+
+
+def test_limite_de_pixels_nao_mexe_no_pillow_do_processo(tmp_path, monkeypatch):
+    from PIL import Image
+
+    antes = Image.MAX_IMAGE_PIXELS
+    monkeypatch.setattr(pdf, "MAXIMO_DE_PIXELS", 99)
+    with pytest.raises(pdf.PdfInvalido, match="grande demais"):
+        pdf._abrir_imagem(foto(tmp_path / "f.png", (10, 10), formato="PNG"), "x")
+    assert Image.MAX_IMAGE_PIXELS == antes
