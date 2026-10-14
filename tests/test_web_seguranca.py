@@ -329,3 +329,83 @@ def test_pdfjs_nao_importa_nada_de_fora(cliente):
     for nome in ("pdf.js", "pdf.worker.js"):
         texto = cliente.get(f"/vendor/pdfjs/{nome}").text
         assert not re.search(r"""(?:from|import)\s*\(?\s*["']https?://""", texto), nome
+
+
+# ---------- de que conta vem a conexão ----------
+
+def test_endereco_no_formato_do_proc_net_tcp():
+    from aide.web.seguranca import _hex_ipv4
+
+    assert _hex_ipv4("127.0.0.1", 8787) == "0100007F:2253"
+
+
+def test_acha_o_uid_da_ponta_do_cliente(tmp_path):
+    from aide.web.seguranca import conta_da_conexao
+
+    tabela = tmp_path / "tcp"
+    tabela.write_text(
+        "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid\n"
+        "   0: 0100007F:2253 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000\n"
+        "   1: 0100007F:C350 0100007F:2253 01 00000000:00000000 00:00000000 00000000   117\n"
+        "   2: 0100007F:2253 0100007F:C350 01 00000000:00000000 00:00000000 00000000  1000\n")
+    # a ponta do cliente (porta 50000 → 8787) é da conta 117, não a do servidor
+    assert conta_da_conexao(("127.0.0.1", 50000), ("127.0.0.1", 8787), str(tabela)) == 117
+    assert conta_da_conexao(("127.0.0.1", 50001), ("127.0.0.1", 8787), str(tabela)) is None
+
+
+@pytest.mark.parametrize("dono, esperado", [("eu", 200), ("outra", 403), (None, 403)])
+def test_so_a_conta_dona_le_a_pagina(app, monkeypatch, dono, esperado):
+    """Um serviço do sistema rodando como outro usuário não lê o privado
+    pela porta, mesmo sem conseguir abrir a sua pasta pessoal."""
+    import os
+
+    from fastapi.testclient import TestClient
+
+    from aide.web import seguranca
+
+    uid = {"eu": os.getuid(), "outra": os.getuid() + 1, None: None}[dono]
+    monkeypatch.setattr(seguranca, "conta_da_conexao", lambda cliente, servidor: uid)
+    cliente = TestClient(app, base_url="http://127.0.0.1:8787", client=("127.0.0.1", 50000))
+    resposta = cliente.get("/notas")
+    assert resposta.status_code == esperado
+    if esperado == 403:
+        assert "SEGREDO" not in resposta.text and "<nav>" not in resposta.text
+
+
+def test_servidor_de_verdade_reconhece_a_conexao_e_ignora_forwarded(config, tmp_path):
+    """Sockets reais: o pedido desta conta passa, e um X-Forwarded-For forjado
+    não muda a origem (com proxy_headers ligado, a origem viraria 10.0.0.1 e
+    a conta não seria achada)."""
+    import http.client
+    import socket
+    import time
+
+    from aide.storage import connect
+    from aide.web.servidor import ServidorWeb
+
+    with socket.socket() as livre:
+        livre.bind(("127.0.0.1", 0))
+        porta = livre.getsockname()[1]
+
+    def pedir(cabecalhos):
+        # http.client direto no loopback: o conftest barra o urlopen em teste
+        conexao = http.client.HTTPConnection("127.0.0.1", porta, timeout=5)
+        try:
+            conexao.request("GET", "/saude", headers=cabecalhos)
+            return conexao.getresponse().status
+        finally:
+            conexao.close()
+
+    servidor = ServidorWeb(config, lambda: connect(tmp_path / "s.db"), porta=porta)
+    servidor.start()
+    try:
+        for _ in range(50):
+            try:
+                pedir({})
+                break
+            except OSError:
+                time.sleep(0.1)
+        assert pedir({}) == 200
+        assert pedir({"X-Forwarded-For": "10.0.0.1"}) == 200
+    finally:
+        servidor.stop()
