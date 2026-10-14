@@ -1,6 +1,8 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+import pytest
+
 from aide.storage import ical
 
 TZ = ZoneInfo("America/Sao_Paulo")
@@ -191,3 +193,33 @@ def test_job_sem_calendario_e_no_op(ctx):
     deps = jobs.JobDeps(config=ctx.config, llm=None, notifier=ConsoleNotifier(),
                         conn=ctx.conn)
     assert jobs.sync_calendar(deps) == 0
+
+
+@pytest.mark.parametrize("url", ["http://agenda.example/secreto.ics", "ftp://x/y.ics",
+                                 "file:///etc/passwd", "javascript:alert(1)"])
+def test_so_https_leva_o_endereco_secreto(url):
+    with pytest.raises(ValueError, match="https ou webcal"):
+        ical.baixar(url)
+
+
+def test_webcal_vira_https_e_agenda_grande_demais_e_recusada(monkeypatch):
+    pedidos = []
+
+    class Resposta:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self, limite):
+            return b"x" * limite
+
+    def abrir(req, timeout):
+        pedidos.append(req.full_url)
+        return Resposta()
+
+    monkeypatch.setattr("urllib.request.urlopen", abrir)
+    with pytest.raises(ValueError, match="passou de 5 MB"):
+        ical.baixar("webcal://agenda.example/secreto.ics")
+    assert pedidos == ["https://agenda.example/secreto.ics"]
