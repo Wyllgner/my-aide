@@ -603,3 +603,14 @@ def test_compra_ja_em_andamento_lanca_so_o_que_falta(ctx, registry):
 
 def test_parcela_atual_alem_do_total_e_recusada(ctx, registry):
     assert not _parcelado(ctx, registry, first_installment=4).ok
+
+
+def test_ultima_parcela_lanca_so_ela_com_o_valor_dito(ctx, registry):
+    # "81,64 parcela do cartão, era a última, 4/4": o valor dito é o da
+    # parcela, e sem amount_is_installment ele seria dividido por 4.
+    gasto = _parcelado(ctx, registry, amount="81,64", amount_is_installment=True,
+                       installments=4, first_installment=4)
+    assert gasto.ok
+    assert gasto.data["parcela"] == "4/4"
+    assert gasto.data["valor"] == "R$ 81,64"
+    assert [r["cents"] for r in _parcelas(ctx)] == [8164]
