@@ -58,7 +58,9 @@ def mcp_config() -> None:
 
     binario = str(Path(sys.executable).parent / "myaide-mcp")
     bloco = {"mcpServers": {"my-aide": {"command": binario, "args": []}}}
-    console.print(json.dumps(bloco, indent=2))
+    # o bloco é para colar: sem quebra de linha do rich no meio de um caminho
+    # longo (que viraria JSON inválido) e sem ele ler [colchetes] como estilo
+    console.print(json.dumps(bloco, indent=2), soft_wrap=True, markup=False, highlight=False)
     console.print("\n[dim]Cole em claude_desktop_config.json (ou no cliente MCP que usar).[/]")
     console.print("[dim]Linux: ~/.config/Claude/claude_desktop_config.json[/]")
 
