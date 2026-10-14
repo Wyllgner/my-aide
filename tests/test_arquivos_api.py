@@ -307,3 +307,84 @@ def test_modo_invalido_e_400(cliente):
                             headers=ESCRITA)
     assert resposta.status_code == 400
     assert "aparencia ou texto" in resposta.json()["detail"]
+
+
+# ---------- nada fica para trás ----------
+
+@pytest.mark.parametrize("faixa", ["bytes=abc", "bytes=999999-", "bytes=0-10"])
+def test_range_nao_pula_a_limpeza_nem_corta_o_arquivo(cliente, temporarios, faixa):
+    """A revisão de 13/10 achou: Range inválido respondia 400/416 sem apagar
+    a pasta, com os seus documentos dentro."""
+    resposta = cliente.post(ROTA, content=corpo([pdf_com([101, 102])], [[0, 1], [0, 0]]),
+                            headers={**ESCRITA, "Range": faixa})
+    assert resposta.status_code == 200
+    assert larguras(resposta) == [102, 101]          # o arquivo inteiro
+    assert list(temporarios.iterdir()) == []
+
+
+def test_conexao_caida_no_meio_tambem_apaga(temporarios):
+    """Quem baixava fecha a aba no meio: o envio falha e a pasta some igual."""
+    import asyncio
+
+    from aide.web.arquivos_api import resposta_que_limpa
+
+    pasta = temporarios / "aide-arquivos-caiu"
+    pasta.mkdir()
+    (pasta / "resultado.pdf").write_bytes(b"%PDF-1.7" + b"x" * 200_000)
+    resposta = resposta_que_limpa()(pasta / "resultado.pdf", pasta, media_type="application/pdf")
+
+    async def envio_que_cai(mensagem):
+        if mensagem["type"] == "http.response.body":
+            raise OSError("conexão fechada")
+
+    async def receber():
+        return {"type": "http.request"}
+
+    escopo = {"type": "http", "method": "POST", "headers": [], "path": ROTA}
+    with pytest.raises(OSError):
+        asyncio.run(resposta(escopo, receber, envio_que_cai))
+    assert not pasta.exists()
+
+
+def test_varredura_apaga_so_as_nossas_esquecidas(tmp_path):
+    import os
+    import time
+
+    from aide.web.arquivos_api import varrer
+
+    velha = tmp_path / "aide-arquivos-velha"
+    nova = tmp_path / "aide-arquivos-nova"
+    alheia = tmp_path / "outro-programa-velho"
+    alvo = tmp_path / "alvo-do-link"
+    for pasta in (velha, nova, alheia, alvo):
+        pasta.mkdir()
+    (velha / "contrato.pdf").write_bytes(b"segredo")
+    (alvo / "nao-apague.txt").write_text("x")
+    link = tmp_path / "aide-arquivos-link"
+    link.symlink_to(alvo)
+    duas_horas = time.time() - 7200
+    for caminho in (velha, alheia, alvo):
+        os.utime(caminho, (duas_horas, duas_horas))
+    os.utime(link, (duas_horas, duas_horas), follow_symlinks=False)
+
+    assert varrer(tmp_path) == 1
+    assert not velha.exists()                       # esquecida: some
+    assert nova.exists()                            # em uso: fica
+    assert alheia.exists()                          # não é nossa: fica
+    assert (alvo / "nao-apague.txt").exists()       # link nunca é seguido
+
+
+def test_varre_ao_subir(config, tmp_path, monkeypatch):
+    import os
+    import time
+
+    from aide.web.app import criar_app
+
+    base = tmp_path / "tmp"
+    base.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(base))
+    sobra = base / "aide-arquivos-do-desligamento"
+    sobra.mkdir()
+    os.utime(sobra, (time.time() - 7200,) * 2)
+    criar_app(config)
+    assert not sobra.exists()
