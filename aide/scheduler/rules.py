@@ -50,12 +50,19 @@ def _rows(conn, sql: str, params: tuple = ()) -> list:
     return conn.execute(sql, params).fetchall()
 
 
+def _sem_privadas(ver_privado: bool) -> str:
+    """O trecho de SQL que tira a tarefa privada. Os achados viram aviso no
+    desktop, no Telegram, no briefing e em ordem de trabalho para agente de
+    fora — nenhum desses é o dono olhando a própria máquina."""
+    return "" if ver_privado else " AND private = 0"
+
+
 @rule("atrasadas")
-def atrasadas(conn, now: datetime, config=None) -> list[Finding]:
+def atrasadas(conn, now: datetime, config=None, ver_privado: bool = False) -> list[Finding]:
     rows = _rows(
         conn,
         "SELECT id, title, due_at FROM tasks WHERE deleted_at IS NULL AND status = 'open'"
-        " AND due_at IS NOT NULL AND due_at < ? ORDER BY due_at",
+        " AND due_at IS NOT NULL AND due_at < ?" + _sem_privadas(ver_privado) + " ORDER BY due_at",
         (now.isoformat(timespec="minutes"),),
     )
     if not rows:
@@ -95,12 +102,13 @@ def _venceu(dias: int) -> str:
 
 
 @rule("adiada_demais")
-def adiada_demais(conn, now: datetime, config=None) -> list[Finding]:
+def adiada_demais(conn, now: datetime, config=None, ver_privado: bool = False) -> list[Finding]:
     """Adiar três vezes é a tarefa dizendo que não vai acontecer."""
     rows = _rows(
         conn,
         "SELECT id, title, snooze_count FROM tasks WHERE deleted_at IS NULL"
-        " AND status = 'open' AND snooze_count >= ? ORDER BY snooze_count DESC",
+        " AND status = 'open' AND snooze_count >= ?" + _sem_privadas(ver_privado)
+        + " ORDER BY snooze_count DESC",
         (SNOOZE_LIMITE,),
     )
     return [
@@ -116,13 +124,13 @@ def adiada_demais(conn, now: datetime, config=None) -> list[Finding]:
 
 
 @rule("projeto_parado")
-def projeto_parado(conn, now: datetime, config=None) -> list[Finding]:
+def projeto_parado(conn, now: datetime, config=None, ver_privado: bool = False) -> list[Finding]:
     limite = (now - timedelta(days=PROJETO_PARADO_DIAS)).isoformat(timespec="minutes")
     rows = _rows(
         conn,
         "SELECT project, COUNT(*) n, MAX(COALESCE(last_touched_at, created_at)) ultimo"
         "  FROM tasks WHERE deleted_at IS NULL AND status = 'open' AND project IS NOT NULL"
-        " GROUP BY project HAVING ultimo < ?",
+        + _sem_privadas(ver_privado) + " GROUP BY project HAVING ultimo < ?",
         (limite,),
     )
     return [
@@ -138,14 +146,15 @@ def projeto_parado(conn, now: datetime, config=None) -> list[Finding]:
 
 
 @rule("zumbi")
-def zumbi(conn, now: datetime, config=None) -> list[Finding]:
+def zumbi(conn, now: datetime, config=None, ver_privado: bool = False) -> list[Finding]:
     """Criada faz tempo, sem prazo, nunca tocada. Provavelmente morreu."""
     limite = (now - timedelta(days=ZUMBI_DIAS)).isoformat(timespec="minutes")
     rows = _rows(
         conn,
         "SELECT id, title FROM tasks WHERE deleted_at IS NULL AND status = 'open'"
         " AND due_at IS NULL AND created_at < ?"
-        " AND COALESCE(last_touched_at, created_at) < ? ORDER BY created_at",
+        " AND COALESCE(last_touched_at, created_at) < ?" + _sem_privadas(ver_privado)
+        + " ORDER BY created_at",
         (limite, limite),
     )
     return [
@@ -160,7 +169,7 @@ def zumbi(conn, now: datetime, config=None) -> list[Finding]:
 
 
 @rule("contato_atrasado")
-def contato_atrasado(conn, now: datetime, config=None) -> list[Finding]:
+def contato_atrasado(conn, now: datetime, config=None, ver_privado: bool = False) -> list[Finding]:
     rows = _rows(
         conn,
         "SELECT id, name, last_contact_at, cadence_days FROM people"
@@ -194,7 +203,7 @@ FATOR_ATIPICO = 3
 
 
 @rule("orcamento_categoria")
-def orcamento_categoria(conn, now: datetime, config=None) -> list[Finding]:
+def orcamento_categoria(conn, now: datetime, config=None, ver_privado: bool = False) -> list[Finding]:
     """Categoria que passou (ou está perto de passar) do teto do mês.
 
     Sem teto declarado (no config ou pela conversa) esta regra não diz nada: o assessor não
@@ -250,7 +259,7 @@ def orcamento_categoria(conn, now: datetime, config=None) -> list[Finding]:
 
 
 @rule("gasto_atipico")
-def gasto_atipico(conn, now: datetime, config=None) -> list[Finding]:
+def gasto_atipico(conn, now: datetime, config=None, ver_privado: bool = False) -> list[Finding]:
     """Um lançamento muito acima do que você costuma gastar.
 
     Compara com a mediana dos últimos 90 dias, não com a média: uma compra
@@ -302,18 +311,21 @@ def _reais(centavos: int) -> str:
 
 
 def evaluate(conn, now: datetime, only: list[str] | None = None,
-             config=None) -> list[Finding]:
+             config=None, ver_privado: bool = False) -> list[Finding]:
     """Roda todas as regras. Uma regra quebrada não derruba as outras.
 
     `config` é opcional porque nem toda regra depende dela; a de orçamento
     depende, e sem config ela se cala em vez de inventar um teto.
+
+    `ver_privado` nasce falso, como na camada das tools: só a web local e o
+    terminal do dono pedem os achados das tarefas privadas.
     """
     achados: list[Finding] = []
     for name, fn in _RULES:
         if only and name not in only:
             continue
         try:
-            achados.extend(fn(conn, now, config))
+            achados.extend(fn(conn, now, config, ver_privado))
         except Exception:
             # uma regra quebrada não pode derrubar o daemon nem calar as outras
             log.exception("regra %s falhou", name)

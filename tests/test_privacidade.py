@@ -316,3 +316,89 @@ def test_desenho_privado_editado_no_obsidian_continua_fora_do_modelo(com_segredo
     for nome, args in (("notes.search", {"query": "terapia"}),
                        ("notes.drawing", {"caminho": "Segredo.excalidraw"})):
         assert SEGREDO not in registry.call(nome, args, modelo).to_json(), nome
+
+
+# ---------- o que sai sozinho: avisos, briefings, Telegram, fila ----------
+
+@pytest.fixture
+def tarefa_privada_em_todas_as_regras(ctx):
+    """Uma tarefa privada atrasada, adiada demais e de um projeto parado, e
+    outra sem prazo esquecida: dispara toda regra de tarefa que existe."""
+    from datetime import timedelta
+
+    from aide.core.context import now_in
+
+    velho = (now_in(ctx.config.timezone) - timedelta(days=60)).isoformat(timespec="minutes")
+    ctx.conn.execute(
+        "INSERT INTO tasks (title, due_at, private, snooze_count, project, created_at,"
+        " last_touched_at) VALUES (?, ?, 1, 9, ?, ?, ?)",
+        (f"{SEGREDO} atrasada", velho, f"PROJETO-{SEGREDO}", velho, velho))
+    ctx.conn.execute(
+        "INSERT INTO tasks (title, private, created_at, last_touched_at) VALUES (?, 1, ?, ?)",
+        (f"{SEGREDO} esquecida", velho, velho))
+    ctx.conn.commit()
+    return ctx
+
+
+def test_nenhuma_regra_conta_o_privado_a_quem_nao_e_o_dono(tarefa_privada_em_todas_as_regras):
+    """Varre todas as regras, como a varredura das tools: a próxima regra
+    nasce com a mesma obrigação."""
+    from aide.core.context import now_in
+    from aide.scheduler import rules
+
+    ctx = tarefa_privada_em_todas_as_regras
+    agora = now_in(ctx.config.timezone)
+    publico = rules.evaluate(ctx.conn, agora, config=ctx.config)
+    assert not [f.summary for f in publico if SEGREDO in f.summary]
+    # o dono continua vendo, na web e no terminal
+    do_dono = rules.evaluate(ctx.conn, agora, config=ctx.config, ver_privado=True)
+    assert {f.rule for f in do_dono if SEGREDO in f.summary} >= {
+        "atrasadas", "adiada_demais", "projeto_parado", "zumbi"}
+
+
+@pytest.mark.parametrize("tipo", ["manha", "noite", "semanal"])
+def test_briefing_nao_conta_o_privado(tarefa_privada_em_todas_as_regras, tipo):
+    from aide.core.context import now_in
+    from aide.scheduler import briefing
+
+    ctx = tarefa_privada_em_todas_as_regras
+    mensagem = briefing.gerar(ctx.conn, ctx.config, None, now_in(ctx.config.timezone), tipo).mensagem
+    assert SEGREDO not in repr(mensagem)
+
+
+def test_aviso_e_fila_de_trabalho_nao_contam_o_privado(tarefa_privada_em_todas_as_regras):
+    """O aviso "Precisa de você" vai para o desktop e o Telegram; a ordem de
+    trabalho, para agente de fora pelo MCP."""
+    from aide.scheduler import jobs
+
+    ctx = tarefa_privada_em_todas_as_regras
+
+    class Notificador:
+        def __init__(self):
+            self.mandado = []
+
+        def send(self, titulo, corpo, urgency="normal"):
+            self.mandado.append(titulo + corpo)
+            return True
+
+        def enviar(self, mensagem, urgency="normal"):
+            self.mandado.append(repr(mensagem))
+            return True
+
+    notificador = Notificador()
+    deps = jobs.JobDeps(config=ctx.config, llm=None, notifier=notificador, conn=ctx.conn)
+    jobs.eval_conditions(deps)
+    jobs.queue_work(deps)
+    assert not [m for m in notificador.mandado if SEGREDO in m]
+    ordens = ctx.conn.execute("SELECT goal || ' ' || COALESCE(context, '') FROM work_orders").fetchall()
+    assert not [o for (o,) in ordens if SEGREDO in o]
+
+
+def test_checar_do_telegram_nao_conta_o_privado(tarefa_privada_em_todas_as_regras):
+    from aide.channels.telegram_bot import TelegramBot
+    from aide.tools import registry as tool_registry
+
+    ctx = tarefa_privada_em_todas_as_regras
+    object.__setattr__(ctx.config.telegram, "token", "x")
+    bot = TelegramBot(ctx.config, lambda: ctx.conn, None, tool_registry)
+    assert SEGREDO not in bot._comando(42, "checar")
