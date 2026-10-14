@@ -96,16 +96,28 @@ def parse(conteudo: str, timezone: str = "UTC") -> list[dict]:
     return sorted(eventos, key=lambda e: e["start_at"])
 
 
+# uma agenda pessoal de anos cabe em poucos MB; acima disso é erro ou abuso
+TAMANHO_MAXIMO = 5 * 1024 * 1024
+
+
 def baixar(url: str, timeout: int = 30) -> str:
+    """O endereço secreto da agenda é a senha dela: só https, que não o
+    expõe a quem estiver na mesma rede. webcal:// é https com outro nome."""
     import urllib.request
 
-    if not url.startswith(("http://", "https://", "webcal://")):
-        raise ValueError("o endereço do calendário precisa ser http(s) ou webcal")
-    url = url.replace("webcal://", "https://", 1)
+    url = url.strip()
+    if url.lower().startswith("webcal://"):
+        url = "https://" + url[len("webcal://"):]
+    if not url.lower().startswith("https://"):
+        raise ValueError("o endereço do calendário precisa ser https ou webcal: "
+                         "em http o endereço secreto viaja aberto")
 
     req = urllib.request.Request(url, headers={"User-Agent": "my-aide/0.1"})
     with urllib.request.urlopen(req, timeout=timeout) as resposta:
-        return resposta.read().decode("utf-8", errors="replace")
+        dados = resposta.read(TAMANHO_MAXIMO + 1)
+    if len(dados) > TAMANHO_MAXIMO:
+        raise ValueError("o calendário passou de 5 MB; não foi importado")
+    return dados.decode("utf-8", errors="replace")
 
 
 def conflitos(eventos: list[dict]) -> list[tuple[dict, dict]]:
