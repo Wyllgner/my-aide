@@ -105,7 +105,9 @@ def abrir(caminho: Path, nome: str):
             raise PdfInvalido(f"{nome} não é um PDF")
     try:
         leitor = PdfReader(caminho)
-        if leitor.is_encrypted:
+        # protegido só contra edição (a senha de abertura é vazia) abre em
+        # qualquer leitor, e aqui também; com senha de abertura de verdade, não
+        if leitor.is_encrypted and not leitor.decrypt(""):
             raise PdfInvalido(f"{nome} está protegido por senha")
         leitor.pages[0]  # o índice de páginas só é lido aqui
     except PdfInvalido:

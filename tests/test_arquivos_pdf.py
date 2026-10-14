@@ -218,3 +218,16 @@ def test_limite_de_pixels_nao_mexe_no_pillow_do_processo(tmp_path, monkeypatch):
     with pytest.raises(pdf.PdfInvalido, match="grande demais"):
         pdf._abrir_imagem(foto(tmp_path / "f.png", (10, 10), formato="PNG"), "x")
     assert Image.MAX_IMAGE_PIXELS == antes
+
+
+def test_protegido_so_contra_edicao_abre(a, tmp_path):
+    """Senha só de dono (a de abertura é vazia): todo leitor abre, então a
+    tela também. O pdf.js do navegador já contava as páginas dele."""
+    escritor = PdfWriter(clone_from=a)
+    escritor.encrypt(user_password="", owner_password="dono")
+    so_edicao = tmp_path / "so-edicao.pdf"
+    with so_edicao.open("wb") as f:
+        escritor.write(f)
+    saida = tmp_path / "s.pdf"
+    pdf.montar([so_edicao], [(0, 2), (0, 0)], saida)
+    assert larguras(saida) == [103, 101]
