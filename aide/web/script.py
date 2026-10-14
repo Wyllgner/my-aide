@@ -596,6 +596,11 @@ JS = r"""
 
     svg.querySelectorAll("a.no").forEach(function (no) {
       function destacar() {
+        // no SVG quem vem por último fica por cima: o desenho ampliado não
+        // pode ficar escondido atrás das vizinhas
+        if (no.classList.contains("desenho") && no.parentNode.lastElementChild !== no) {
+          no.parentNode.appendChild(no);
+        }
         var perto = (no.dataset.vizinhos || "").split(" ");
         perto.push(no.dataset.id);
         svg.classList.add("focado");
