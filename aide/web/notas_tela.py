@@ -18,7 +18,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 from aide.channels import formato
-from aide.storage import anexos, desenhos, links, vault
+from aide.storage import anexos, desenhos, links, previas, vault
 from aide.web import consultas, grafo, markdown, visao
 from aide.web.icones import icone
 from aide.web.notas_api import TAMANHO_MAXIMO
@@ -467,7 +467,8 @@ def _caminho_novo(raiz: Path, caminho: str, desenho: bool = False) -> str | None
 
 
 def _grafo_local(mapa: grafo.Mapa, indice: links.Indice, aberto: str,
-                 caminhos_de_desenho: list[str] | None = None) -> str:
+                 caminhos_de_desenho: list[str] | None = None,
+                 desenhos_do_grafo: dict | None = None) -> str:
     """A nota aberta e as vizinhas (e os desenhos que ela cita), no mesmo
     desenho do grafo do vault."""
     from aide.web import grafo_svg
@@ -479,8 +480,25 @@ def _grafo_local(mapa: grafo.Mapa, indice: links.Indice, aberto: str,
     return (f'<section class="local"><p class="eyebrow">Grafo local · '
             f'{formato.plural(len(nos) - 1, "vizinha")}'
             f' <span class="dica-grafo">Ctrl + roda para zoom</span></p>'
-            f'{grafo_svg.desenhar(nos, arestas, aberto, classe="grafo local", largura=420, altura=300)}'
+            f'{grafo_svg.desenhar(nos, arestas, aberto, classe="grafo local", largura=420, altura=300, **(desenhos_do_grafo or {}))}'
             f'</section>')
+
+
+def _desenhos_do_grafo(config, raiz: Path) -> dict:
+    """Prévia e privacidade de cada desenho, para o grafo: as duas perguntas
+    passam pela mesma porta das outras leituras de desenho."""
+    from functools import partial
+
+    data_dir = Path(config.data_dir)
+
+    def privado(caminho: str) -> bool:
+        try:
+            _, dados = desenhos.ler(desenhos.resolver(raiz, caminho))
+        except (OSError, ValueError):
+            dados = None  # sem ler, conta como privado
+        return desenhos.privado_de_fato(data_dir, caminho, dados)
+
+    return {"previa": partial(previas.previa_de, data_dir, raiz), "privado": privado}
 
 
 def _editor(raiz: Path, aberto: str, agora: datetime, indice: links.Indice,
@@ -682,16 +700,17 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
                  f'{formato.plural(len(arestas), "ligação", "ligações")}</p>'
                  f'<span class="onde">arraste para mover · roda do mouse para zoom ·'
                  f' clique numa nota para abrir</span></div>'
-                 + grafo_svg.desenhar(nos, arestas, aberto))
+                 + grafo_svg.desenhar(nos, arestas, aberto,
+                                      **_desenhos_do_grafo(ctx.config, raiz)))
     elif geral:
         corpo = _visao_geral(raiz, agora, indice, ctx.conn)
     elif aberto:
         from functools import partial
 
-        from aide.storage import previas
 
         corpo = _editor(raiz, aberto, agora, indice, _modo(modo), entradas,
-                        _grafo_local(mapa, indice, aberto, caminhos_de_desenho),
+                        _grafo_local(mapa, indice, aberto, caminhos_de_desenho,
+                                     _desenhos_do_grafo(ctx.config, raiz)),
                         partial(previas.previa_de, Path(ctx.config.data_dir), raiz),
                         indice_desenhos)
     else:

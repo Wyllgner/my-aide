@@ -822,3 +822,16 @@ def test_a_impressao_leva_so_o_nome_e_a_previa():
     for escondido in (".lateral", ".notas-lateral", ".editor-acoes", ".campo", ".ao-redor"):
         assert escondido in impressao.split("display: none !important")[0]
     assert ".area .previa { display: block !important" in impressao
+
+
+def test_desenho_ilegivel_conta_como_privado_no_grafo(config, tmp_path):
+    """Sem ler o desenho não dá para saber se é privado: na dúvida, cadeado."""
+    from aide.web.notas_tela import _desenhos_do_grafo
+
+    raiz = tmp_path / "vault"
+    (raiz / "D").mkdir(parents=True)
+    (raiz / "D" / "Quebrado.excalidraw").write_text("{isto não é json")
+    object.__setattr__(config, "data_dir", tmp_path / "data")
+    funcoes = _desenhos_do_grafo(config, raiz)
+    assert funcoes["privado"]("D/Quebrado.excalidraw") is True
+    assert funcoes["previa"]("D/Quebrado.excalidraw") is None
