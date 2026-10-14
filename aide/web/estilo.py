@@ -518,6 +518,25 @@ button.atalho-visao { width: 100%; border: 0; background: none; font: inherit; f
 .grafo.focado a.no:not(.perto), .grafo.focado line:not(.perto) { opacity: .15; }
 .grafo.focado line.perto { stroke: var(--accent); stroke-width: 1.5; }
 .grafo text.so-perto { display: none; }
+/* desenho: cartão com a miniatura; o mouse (ou o foco) amplia para reconhecer */
+.grafo a.no.desenho rect.moldura { fill: #fff; stroke: var(--accent); stroke-width: 1.5;
+  vector-effect: non-scaling-stroke; }
+.grafo a.no.desenho.solto rect.moldura { stroke: var(--faint); }
+.grafo a.no.desenho:hover rect.moldura, .grafo a.no.desenho.atual rect.moldura {
+  stroke: var(--ink); }
+.grafo a.desenho .icone { fill: none; stroke: var(--muted); stroke-width: 1.5;
+  vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; }
+.grafo a.desenho .cartao { transform-box: fill-box; transform-origin: center;
+  transition: transform .15s ease; }
+/* 2.6 é grafo_svg.AMPLIACAO; o nome desce o que a borda desceu (--desce) */
+.grafo a.desenho:hover .cartao, .grafo a.desenho:focus .cartao {
+  transform: scale(2.6); filter: drop-shadow(0 4px 10px rgba(21,23,28,.18)); }
+.grafo a.desenho text { transition: transform .15s ease; }
+.grafo a.desenho:hover text, .grafo a.desenho:focus text {
+  transform: translate(var(--anda), var(--desce));
+  display: inline; font-weight: 600; fill: var(--ink); }
+/* ligação com desenho: citar uma imagem não é ligar duas ideias */
+.grafo line.com-desenho { stroke-dasharray: 4 3; }
 .ao-redor { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px;
             align-items: start; }
 .ao-redor > :only-child { grid-column: 1 / -1; }

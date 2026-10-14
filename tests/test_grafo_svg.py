@@ -115,3 +115,72 @@ def test_ligacao_de_desenho_para_nota_pelo_link_do_elemento(tmp_path):
     mapa = grafo.mapa(tmp_path)
     assert grafo_svg.do_mapa(mapa, ["B.md"]) == set()
     assert grafo_svg.do_mapa(mapa, ["B.md", "Casa.excalidraw"]) == {("B.md", "Casa.excalidraw")}
+
+
+# ---------- desenho como cartão com a miniatura ----------
+
+NOS = ["Obra.md", "Desenhos/Planta baixa.excalidraw", "Desenhos/Rascunho.excalidraw"]
+ARESTAS = {("Obra.md", "Desenhos/Planta baixa.excalidraw")}
+
+
+def _no(svg: str, caminho: str) -> str:
+    """O <a> inteiro de um nó do grafo."""
+    inicio = svg.index(f"caminho={caminho.replace(' ', '%20')}")
+    return svg[svg.rindex("<a ", 0, inicio):svg.index("</a>", inicio)]
+
+
+def test_desenho_com_previa_mostra_a_miniatura():
+    svg = grafo_svg.desenhar(NOS, ARESTAS, previa=lambda c: "abc123" if "Planta" in c else None)
+    planta = _no(svg, "Desenhos/Planta baixa.excalidraw")
+    assert '<image href="/api/desenhos/previa?caminho=Desenhos/Planta%20baixa.excalidraw&amp;v=abc123"' in planta
+    assert "<circle" not in planta and 'class="moldura"' in planta
+
+
+def test_sem_previa_ou_sem_saber_mostra_o_lapis():
+    """Sem a função de prévia o grafo não sabe de imagem nenhuma: lápis, o caso seguro."""
+    from aide.web.icones import TRACOS
+
+    for svg in (grafo_svg.desenhar(NOS, ARESTAS, previa=lambda c: None),
+                grafo_svg.desenhar(NOS, ARESTAS)):
+        rascunho = _no(svg, "Desenhos/Rascunho.excalidraw")
+        assert "<image" not in rascunho and TRACOS["desenho"] in rascunho
+
+
+def test_desenho_privado_mostra_o_cadeado_e_nunca_a_imagem():
+    """O grafo é a visão de tudo de uma vez: o conteúdo do privado não aparece
+    nem quando a prévia existe."""
+    from aide.web.icones import TRACOS
+
+    svg = grafo_svg.desenhar(NOS, ARESTAS, previa=lambda c: "abc123",
+                             privado=lambda c: "Planta" in c)
+    planta = _no(svg, "Desenhos/Planta baixa.excalidraw")
+    assert "<image" not in planta and "/api/desenhos/previa" not in planta
+    assert TRACOS["privada"] in planta and "desenho privado" in planta
+    assert "<image" in _no(svg, "Desenhos/Rascunho.excalidraw")
+
+
+def test_ligacao_com_desenho_e_tracejada():
+    svg = grafo_svg.desenhar(["A.md", "B.md", "D.excalidraw"],
+                             {("A.md", "B.md"), ("A.md", "D.excalidraw")})
+    linhas = re.findall(r"<line [^>]*/>", svg)
+    assert sum('class="com-desenho"' in linha for linha in linhas) == 1
+
+
+def test_desenho_sem_ligacao_fica_cinza_como_a_orfa():
+    svg = grafo_svg.desenhar(NOS, ARESTAS)
+    assert 'class="no desenho solto"' in _no(svg, "Desenhos/Rascunho.excalidraw")
+    assert "solto" not in _no(svg, "Desenhos/Planta baixa.excalidraw")
+
+
+def test_perto_da_borda_o_cartao_cresce_para_dentro():
+    """Ampliado na borda, metade do cartão e o nome ficavam fora do quadro."""
+    assert grafo_svg._ancora(50, 600, 1000, 640) == (0.0, 1.0)      # canto de baixo à esquerda
+    assert grafo_svg._ancora(500, 320, 1000, 640) == (0.5, 0.5)     # meio
+    assert grafo_svg._ancora(950, 30, 1000, 640) == (1.0, 0.0)      # canto de cima à direita
+
+
+def test_o_nome_do_desenho_anda_com_o_cartao():
+    svg = grafo_svg.desenhar(NOS, ARESTAS, previa=lambda c: "x")
+    texto = re.search(r"<text [^>]*>Planta baixa</text>", svg).group(0)
+    assert "--desce:" in texto and "--anda:" in texto
+    assert "--desce" not in re.search(r"<text [^>]*>Obra</text>", svg).group(0)
