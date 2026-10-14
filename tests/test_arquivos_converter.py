@@ -3,6 +3,7 @@
 import shutil
 import subprocess
 import zipfile
+from pathlib import Path
 
 import pytest
 from pypdf import PdfReader
@@ -104,7 +105,7 @@ def test_prazo_estourado_mata_o_grupo_e_avisa(tmp_path, monkeypatch):
     falso.chmod(0o755)
     monkeypatch.setattr(converter.shutil, "which",
                         lambda nome: str(falso) if nome == "soffice" else None)
-    monkeypatch.setattr(converter, "_isolamento", lambda: ())
+    monkeypatch.setattr(converter, "_isolamento", lambda: "")
     monkeypatch.setattr(converter, "PRAZO", 0.5)
     entrada = tmp_path / "entrada-0"
     entrada.write_text("x")
@@ -120,7 +121,7 @@ def test_libreoffice_que_falha_vira_erro_legivel(tmp_path, monkeypatch):
     falso.chmod(0o755)
     monkeypatch.setattr(converter.shutil, "which",
                         lambda nome: str(falso) if nome == "soffice" else None)
-    monkeypatch.setattr(converter, "_isolamento", lambda: ())
+    monkeypatch.setattr(converter, "_isolamento", lambda: "")
     entrada = tmp_path / "entrada-0"
     entrada.write_text("x")
     with pytest.raises(converter.ConversaoFalhou, match="não conseguiu converter x.txt"):
@@ -232,3 +233,100 @@ def test_pdf_sem_texto_avisa_que_parece_escaneado(tmp_path):
 def test_modo_desconhecido(tmp_path):
     with pytest.raises(converter.ConversaoFalhou, match="modo desconhecido"):
         converter.para_word(tmp_path / "x", "x.pdf", tmp_path / "saida", "ocr")
+
+
+# ---------- a caixa ----------
+
+com_bwrap = pytest.mark.skipif(converter._isolamento() != "bwrap", reason="sem bwrap")
+
+
+def odt_com_imagem_ligada(caminho, alvo):
+    """Um .odt cuja imagem é um link para um arquivo da máquina: o
+    LibreOffice embute a imagem ao converter, se conseguir ler."""
+    content = f'''<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" xmlns:xlink="http://www.w3.org/1999/xlink" office:version="1.2">
+<office:body><office:text><text:p>Imagem:<draw:frame draw:name="i" text:anchor-type="paragraph" svg:width="6cm" svg:height="4cm"><draw:image xlink:href="file://{alvo}" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/></draw:frame></text:p></office:text></office:body></office:document-content>'''
+    manifest = ('<?xml version="1.0" encoding="UTF-8"?><manifest:manifest '
+                'xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.2">'
+                '<manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.text"/>'
+                '<manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>'
+                '</manifest:manifest>')
+    with zipfile.ZipFile(caminho, "w") as z:
+        z.writestr(zipfile.ZipInfo("mimetype"), "application/vnd.oasis.opendocument.text")
+        z.writestr("content.xml", content)
+        z.writestr("META-INF/manifest.xml", manifest)
+    return caminho
+
+
+@com_libreoffice
+@com_bwrap
+def test_documento_nao_puxa_imagem_de_fora_da_pasta_da_conversao(tmp_path):
+    """O ataque que a revisão de 13/10 achou: sem a caixa, o PDF saía com a
+    foto da máquina dentro."""
+    from PIL import Image
+
+    fora = tmp_path / "fora"
+    fora.mkdir()
+    Image.new("RGB", (300, 200), (255, 0, 0)).save(fora / "foto-privada.png")
+    trabalho = tmp_path / "trabalho"
+    trabalho.mkdir()
+    entrada = odt_com_imagem_ligada(trabalho / "entrada-0", fora / "foto-privada.png")
+    pdf = converter.para_pdf(entrada, "convite.odt", trabalho / "saida")
+    imagens = [img for pagina in PdfReader(pdf).pages for img in pagina.images]
+    assert not imagens
+
+
+@com_bwrap
+def test_a_caixa_nao_ve_home_nem_rede(tmp_path):
+    """Só o sistema, as fontes e a pasta da conversão."""
+    script = (f"test ! -e {Path.home()}/.ssh && test ! -e {Path.home()}/Documentos"
+              " && test ! -e /sys/class/net/eth0 && touch ok")
+    assert converter._rodar(["sh", "-c", script], "x", tmp_path)
+    assert (tmp_path / "ok").exists()
+    rede = converter._rodar(["sh", "-c", "cat /proc/net/dev | grep -v ' lo:' | tail -n +3 | grep -q ."],
+                            "x", tmp_path)
+    assert not rede  # só a interface de loopback
+
+
+@com_bwrap
+def test_a_caixa_escreve_so_na_pasta_da_conversao(tmp_path):
+    assert converter._rodar(["sh", "-c", "echo oi > dentro.txt"], "x", tmp_path)
+    assert (tmp_path / "dentro.txt").read_text() == "oi\n"
+    # fora da pasta, o /tmp da caixa é memória descartável: o que se escreve
+    # ali some com ela e nunca chega ao disco
+    converter._rodar(["sh", "-c", f"echo oi > {tmp_path.parent}/fora.txt"], "x", tmp_path)
+    assert not (tmp_path.parent / "fora.txt").exists()
+    assert not converter._rodar(["sh", "-c", "echo oi > /usr/fora.txt"], "x", tmp_path)
+
+
+@com_bwrap
+def test_prazo_estourado_mata_tambem_o_que_esta_na_caixa(tmp_path, monkeypatch):
+    monkeypatch.setattr(converter, "PRAZO", 0.5)
+    with pytest.raises(converter.ConversaoFalhou, match="demorou"):
+        converter._rodar(["sh", "-c", "sleep 30; touch tarde"], "x", tmp_path)
+    vivos = subprocess.run(["pgrep", "-f", "sleep 30; touch tarde"], capture_output=True,
+                           check=False).stdout
+    assert not vivos
+
+
+@com_libreoffice
+def test_o_perfil_nasce_com_as_macros_desligadas(tmp_path):
+    entrada = tmp_path / "entrada-0"
+    entrada.write_text("x")
+    converter.para_pdf(entrada, "x.txt", tmp_path / "saida")
+    ajustes = (tmp_path / "perfil-entrada-0" / "user" / "registrymodifications.xcu").read_text()
+    assert 'oor:name="DisableMacrosExecution"' in ajustes
+    assert "<value>true</value>" in ajustes
+
+
+def test_sem_bwrap_cai_para_unshare_e_avisa(monkeypatch, caplog):
+    converter._isolamento.cache_clear()
+    monkeypatch.setattr(converter.shutil, "which",
+                        lambda nome: None if nome == "bwrap" else f"/usr/bin/{nome}")
+    try:
+        with caplog.at_level("WARNING"):
+            modo = converter._isolamento()
+        assert modo in ("unshare", "")
+        assert "vê os seus arquivos" in caplog.text or "sem isolamento" in caplog.text
+    finally:
+        converter._isolamento.cache_clear()

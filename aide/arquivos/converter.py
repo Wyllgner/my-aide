@@ -6,10 +6,16 @@ temporária: o perfil de quem usa o LibreOffice no dia a dia nunca é tocado, e
 duas conversões não disputam a mesma trava. Uma de cada vez, com prazo: o
 LibreOffice travado num arquivo estranho não pode segurar o servidor.
 
-Sem rede, quando o sistema deixa (`unshare -rn`): um .docx pode apontar uma
-imagem para um endereço de fora, e abrir o documento não pode avisar ninguém
-que ele foi aberto. Sem namespaces de usuário, converte assim mesmo e deixa
-no log que foi sem isolamento.
+Numa caixa, quando o sistema deixa. Um documento pode apontar uma imagem para
+um endereço de fora — abrir não pode avisar ninguém — ou para um arquivo desta
+máquina, e o LibreOffice embute a imagem no PDF: uma foto da sua pasta
+pessoal iria junto no arquivo que você devolve a quem mandou o documento. Com
+o `bwrap`, o conversor só enxerga o sistema (só leitura), as suas fontes e a
+pasta temporária da conversão; sem rede, sem /home. Sem bwrap, `unshare -rn`
+ao menos corta a rede; sem nenhum dos dois, converte e deixa no log.
+
+As macros ficam desligadas no perfil de cada conversão, não só no nível alto
+que o LibreOffice já traz.
 """
 
 from __future__ import annotations
@@ -71,13 +77,60 @@ def confere(caminho: Path, nome: str) -> str:
     return ext
 
 
+# fontes não são segredo e mudam como o documento sai: o conversor vê as suas
+FONTES_DO_USUARIO = ("~/.fonts", "~/.local/share/fonts")
+
+
+def _caixa(pasta: Path) -> list[str]:
+    """O bwrap que só deixa ver o sistema, as fontes e `pasta`."""
+    comando = [shutil.which("bwrap") or "bwrap", "--unshare-all", "--die-with-parent",
+               "--new-session",
+               "--ro-bind", "/usr", "/usr", "--ro-bind", "/etc", "/etc",
+               "--symlink", "usr/lib", "/lib", "--symlink", "usr/lib64", "/lib64",
+               "--symlink", "usr/bin", "/bin", "--symlink", "usr/sbin", "/sbin",
+               "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp"]
+    # o cache de fontes do sistema: sem ele cada conversão reconstrói o cache
+    # e leva o dobro do tempo
+    for fonte in (*FONTES_DO_USUARIO, "/var/cache/fontconfig"):
+        caminho = Path(fonte).expanduser()
+        if caminho.is_dir():
+            comando += ["--ro-bind", str(caminho), str(caminho)]
+    return [*comando, "--bind", str(pasta), str(pasta), "--chdir", str(pasta)]
+
+
 @functools.cache
-def _isolamento() -> tuple[str, ...]:
+def _isolamento() -> str:
+    """'bwrap', 'unshare' ou '' — o mais fechado que esta máquina permite."""
+    if shutil.which("bwrap"):
+        teste = subprocess.run([*_caixa(Path("/usr")), "true"], capture_output=True, check=False)
+        if teste.returncode == 0:
+            return "bwrap"
     unshare = shutil.which("unshare")
-    if unshare and subprocess.run([unshare, "-rn", "true"], capture_output=True, check=False).returncode == 0:
-        return (unshare, "-rn")
-    log.warning("unshare -rn indisponível: o LibreOffice converte com acesso à rede")
-    return ()
+    if unshare and subprocess.run([unshare, "-rn", "true"], capture_output=True,
+                                  check=False).returncode == 0:
+        log.warning("bwrap indisponível: o conversor roda sem rede, mas vê os seus arquivos")
+        return "unshare"
+    log.warning("bwrap e unshare indisponíveis: o conversor roda sem isolamento nenhum")
+    return ""
+
+
+def _prefixo(pasta: Path) -> list[str]:
+    modo = _isolamento()
+    if modo == "bwrap":
+        return _caixa(pasta)
+    if modo == "unshare":
+        return [shutil.which("unshare") or "unshare", "-rn"]
+    return []
+
+
+# o perfil de cada conversão nasce com as macros desligadas de vez
+MACROS_DESLIGADAS = """<?xml version="1.0" encoding="UTF-8"?>
+<oor:items xmlns:oor="http://openoffice.org/2001/registry" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<item oor:path="/org.openoffice.Office.Common/Security/Scripting"><prop oor:name="MacroSecurityLevel" oor:op="fuse"><value>3</value></prop></item>
+<item oor:path="/org.openoffice.Office.Common/Security/Scripting"><prop oor:name="DisableMacrosExecution" oor:op="fuse"><value>true</value></prop></item>
+<item oor:path="/org.openoffice.Office.Common/Security/Scripting"><prop oor:name="BlockUntrustedRefererLinks" oor:op="fuse"><value>true</value></prop></item>
+</oor:items>
+"""
 
 
 def para_pdf(entrada: Path, nome: str, saida: Path) -> Path:
@@ -97,25 +150,28 @@ def _libreoffice(soffice: str, arquivo: Path, formato: str, ext: str, nome: str,
                  filtro: str | None = None) -> Path:
     """`arquivo` convertido para `formato` em `saida`, com perfil próprio."""
     perfil = arquivo.parent / f"perfil-{arquivo.stem}"
+    (perfil / "user").mkdir(parents=True, exist_ok=True)
+    (perfil / "user" / "registrymodifications.xcu").write_text(MACROS_DESLIGADAS)
     saida.mkdir(parents=True, exist_ok=True)
     comando = [soffice, "--headless", "--norestore", "--nolockcheck",
                "--nodefault", f"-env:UserInstallation={perfil.as_uri()}",
                *([f"--infilter={filtro}"] if filtro else []),
                "--convert-to", formato, "--outdir", str(saida), str(arquivo)]
-    ok = _rodar(comando, nome, {"HOME": str(perfil)})
+    ok = _rodar(comando, nome, arquivo.parent, {"HOME": str(perfil)})
     resultado = saida / f"{arquivo.stem}.{ext}"
     if not ok or not resultado.is_file() or not resultado.stat().st_size:
         raise ConversaoFalhou(f"o LibreOffice não conseguiu converter {nome}")
     return resultado
 
 
-def _rodar(comando: list[str], nome: str, ambiente: dict | None = None) -> bool:
-    """Roda sem rede (quando dá), um de cada vez e com prazo. Devolve se
-    terminou bem; o motivo da falha vai para o log, não para a tela."""
+def _rodar(comando: list[str], nome: str, pasta: Path, ambiente: dict | None = None) -> bool:
+    """Roda na caixa que só vê `pasta` (quando dá), um de cada vez e com
+    prazo. Devolve se terminou bem; o motivo da falha vai para o log, não
+    para a tela."""
     with _uma_por_vez:
         # sessão própria: no prazo estourado morre o grupo inteiro, não só o
         # lançador (o soffice.bin de verdade é filho dele)
-        processo = subprocess.Popen([*_isolamento(), *comando], stdout=subprocess.DEVNULL,
+        processo = subprocess.Popen([*_prefixo(pasta), *comando], stdout=subprocess.DEVNULL,
                                     stderr=subprocess.PIPE, start_new_session=True,
                                     env={**os.environ, **(ambiente or {})})
         try:
@@ -140,7 +196,8 @@ def para_imagens(entrada: Path, nome: str, saida: Path) -> list[Path]:
     if len(leitor.pages) > MAXIMO_DE_IMAGENS:
         raise ConversaoFalhou(f"{nome} tem mais de {MAXIMO_DE_IMAGENS} páginas")
     saida.mkdir(parents=True, exist_ok=True)
-    if not _rodar([pdftoppm, "-png", "-r", str(DPI), str(entrada), str(saida / "p")], nome):
+    if not _rodar([pdftoppm, "-png", "-r", str(DPI), str(entrada), str(saida / "p")], nome,
+                  entrada.parent):
         raise ConversaoFalhou(f"não deu para desenhar as páginas de {nome}")
     # p-1.png … ou p-01.png …: o pdftoppm completa com zeros pelo total
     imagens = sorted(saida.glob("p-*.png"), key=lambda c: int(c.stem.rsplit("-", 1)[1]))
@@ -179,7 +236,8 @@ def para_word(entrada: Path, nome: str, saida: Path, modo: str = "aparencia") ->
     if not pdftotext:
         raise ConversaoFalhou("o pdftotext (poppler-utils) não está instalado nesta máquina")
     texto = entrada.with_suffix(".txt")
-    if not _rodar([pdftotext, "-enc", "UTF-8", str(entrada), str(texto)], nome) or not texto.is_file():
+    if (not _rodar([pdftotext, "-enc", "UTF-8", str(entrada), str(texto)], nome, entrada.parent)
+            or not texto.is_file()):
         raise ConversaoFalhou(f"não deu para tirar o texto de {nome}")
     conteudo = texto.read_text(encoding="utf-8", errors="replace")
     if not conteudo.strip():
