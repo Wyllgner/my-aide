@@ -374,8 +374,10 @@ def _filtro_privado(ctx: ToolContext) -> str:
             "amount_is_installment": {
                 "type": "boolean",
                 "description": (
-                    "true quando o valor dito é o de cada parcela ('10x de 50'); "
-                    "false ou ausente quando é o total da compra ('500 em 10x')."
+                    "true quando o valor dito é o de cada parcela ('10x de 50'), e "
+                    "sempre que a pessoa usar a palavra parcela junto do valor "
+                    "('81,64 parcela do cartão', 'parcela 3 de 10, 200 reais'); "
+                    "false ou ausente só quando é o total da compra ('500 em 10x')."
                 ),
             },
         },
