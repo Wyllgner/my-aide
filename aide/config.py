@@ -102,10 +102,28 @@ class Config:
         return self.data_dir / "aide.db"
 
 
+def _avisar_se_aberto(*caminhos: Path) -> None:
+    """O .env tem as chaves; o config.local.yaml, renda e tetos. Legível por
+    outra conta da máquina, avisa — não corrige sozinho: mexer em permissão
+    de arquivo seu sem perguntar seria pior."""
+    import logging
+
+    for caminho in caminhos:
+        try:
+            modo = caminho.stat().st_mode
+        except OSError:
+            continue
+        if modo & 0o077:
+            logging.getLogger(__name__).warning(
+                "%s é legível por outras contas (permissão %o); use chmod 600",
+                caminho.name, modo & 0o777)
+
+
 def load_config(root: Path | None = None) -> Config:
     """Carrega a config. `AIDE_ROOT` aponta para outra raiz — útil para testar
     e para rodar uma instância separada sem tocar nos seus dados."""
     root = root or Path(os.getenv("AIDE_ROOT") or ROOT)
+    _avisar_se_aberto(root / ".env", root / "config.local.yaml")
     load_dotenv(root / ".env")
 
     raw: dict[str, Any] = {}
