@@ -1,25 +1,6 @@
-"""O JavaScript da tela de desenho, servido em /desenho.js.
-
-Módulo à parte do /app.js porque importa o Excalidraw (`/vendor/excalidraw/`),
-e só esta tela precisa dele: as notas não carregam 3 MB que não usam. Arquivo,
-e não <script> embutido, pela mesma CSP (`script-src 'self'`).
-
-Salva sozinho um segundo depois da última mudança, e na hora com Ctrl+S. Se o
-arquivo mudou por fora desde que abriu, para e pergunta qual versão fica, como
-as notas. A caixa de privado é o único caminho que manda `privada`: o
-salvamento comum deixa o servidor manter o que está no disco.
-
-A biblioteca de formas é uma só para todos os desenhos (Biblioteca.excalidrawlib
-na raiz do vault) e salva à parte. Se ela não abriu, nunca é gravada: seria
-trocar a sua biblioteca por uma vazia.
-
-O link de um elemento (Ctrl+K) que é [[Nota]], Nota.md ou [[x.excalidraw]]
-abre aqui mesmo, depois de salvar; site de fora, em outra aba sem `opener`.
-"""
-
-from __future__ import annotations
-
-JS = r"""
+// A tela de desenho. Separado do app.js porque importa o Excalidraw (3 MB)
+// e so esta tela precisa dele. Arquivo, e nao <script> embutido, pela CSP
+// (script-src 'self').
 import {
   createElement, createRoot, Excalidraw, exportToBlob, serializeAsJSON,
 } from "/vendor/excalidraw/excalidraw.js";
@@ -598,4 +579,3 @@ async function abrir() {
 }
 
 abrir();
-"""
