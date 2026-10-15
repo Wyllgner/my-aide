@@ -15,6 +15,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 from aide.storage import desenhos, vault
+from aide.web import estaticos
 from aide.web.icones import icone
 
 
@@ -132,8 +133,8 @@ def instalar(app) -> None:
         citam = grafo.mapa(raiz).citam_desenho(caminho)
         return pagina(caminho, _voltar(raiz, de), _citado_por(citam))
 
+    js = estaticos.ler("js/desenho.js")
+
     @app.get("/desenho.js")
     def script() -> Response:
-        from aide.web.desenho_script import JS
-
-        return Response(JS, media_type="text/javascript", headers={"cache-control": "no-cache"})
+        return Response(js, media_type="text/javascript", headers={"cache-control": "no-cache"})
