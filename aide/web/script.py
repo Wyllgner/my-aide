@@ -545,8 +545,10 @@ JS = r"""
       var form = document.createElement("form");
       form.className = "renomear-pasta-form";
       var campo = document.createElement("input");
-      campo.value = de;
-      campo.setAttribute("aria-label", "caminho da pasta");
+      // só o nome; com "/" no meio, vale como caminho desde a raiz do vault
+      var mae = de.lastIndexOf("/") >= 0 ? de.slice(0, de.lastIndexOf("/") + 1) : "";
+      campo.value = de.slice(mae.length);
+      campo.setAttribute("aria-label", "nome da pasta");
       campo.spellcheck = false;
       var erro = document.createElement("span");
       erro.className = "erro";
@@ -555,13 +557,14 @@ JS = r"""
       resumo.hidden = true;
       resumo.parentNode.insertBefore(form, resumo.nextSibling);
       campo.focus();
-      campo.setSelectionRange(de.lastIndexOf("/") + 1, de.length);
+      campo.select();
       function fechar() { form.remove(); resumo.hidden = false; }
       campo.addEventListener("keydown", function (ev) { if (ev.key === "Escape") { fechar(); } });
       campo.addEventListener("click", function (ev) { ev.stopPropagation(); });
       form.addEventListener("submit", function (ev) {
         ev.preventDefault();
         var para = campo.value.trim().replace(/^\/+|\/+$/g, "");
+        if (para && para.indexOf("/") < 0) { para = mae + para; }
         if (!para || para === de) { fechar(); return; }
         var editorAberto = document.getElementById("editor");
         var antes = editorAberto ? editorAberto.dataset.caminho : null;
@@ -1481,15 +1484,13 @@ JS = r"""
     renomear.hidden = false;
     erroRenomear.textContent = "";
     campoCaminho.focus();
-    // seleciona só o nome, como o Obsidian: o caso comum é renomear
-    var barra = campoCaminho.value.lastIndexOf("/");
-    campoCaminho.setSelectionRange(barra + 1, campoCaminho.value.length);
+    campoCaminho.select();
   }
 
   function fecharRenomear() {
     renomear.hidden = true;
     titulo.hidden = false;
-    campoCaminho.value = caminho.replace(/\.md$/i, "");
+    campoCaminho.value = caminho.replace(/^.*\//, "").replace(/\.md$/i, "");
   }
 
   titulo.addEventListener("click", abrirRenomear);
@@ -1501,6 +1502,10 @@ JS = r"""
     e.preventDefault();
     var novo = campoCaminho.value.trim().replace(/^\/+|\/+$/g, "");
     if (!novo) { return; }
+    // o campo é só o nome; com uma "/" no meio, vale como caminho desde a
+    // raiz do vault (mudar de pasta, no dia a dia, é arrastar na árvore)
+    var pastaAtual = caminho.lastIndexOf("/") >= 0 ? caminho.slice(0, caminho.lastIndexOf("/") + 1) : "";
+    if (novo.indexOf("/") < 0) { novo = pastaAtual + novo; }
     if (!/\.md$/i.test(novo)) { novo += ".md"; }
     if (novo === caminho) { fecharRenomear(); return; }
     // o que ainda não foi salvo vai antes: o arquivo muda de lugar
