@@ -97,11 +97,11 @@ def criar_app(config=None, conn_factory=None):
     def saude() -> dict:
         return {"ok": True, "escutando": ENDERECO}
 
+    js = estaticos.ler("js/app.js")
+
     @app.get("/app.js")
     def script() -> Response:
-        from aide.web.script import JS
-
-        return Response(JS, media_type="text/javascript",
+        return Response(js, media_type="text/javascript",
                         headers={"cache-control": "no-cache"})
 
     js_arquivos = estaticos.ler("js/arquivos.js")
