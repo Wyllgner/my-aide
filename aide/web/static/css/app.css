@@ -32,6 +32,8 @@
   --accent:#C4432B; --accent-forte:#A63722; --soft:#FCF1EE;
   --r-card:16px; --r-inner:10px; --r-pill:999px;
   --sombra:0 1px 2px rgba(21,23,28,.04);
+  --mono:'IBM Plex Mono', ui-monospace, monospace;
+  --azul:#2B5FA8; --verde:#3F7A54; --ok:#3E9C6B;
 }
 * { box-sizing: border-box; }
 html, body { height: 100%; }
@@ -43,7 +45,7 @@ body {
 a { color: var(--accent); text-decoration: none; }
 a:hover { color: var(--accent-forte); }
 
-.mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .h1 { font-family: 'Instrument Serif', Georgia, serif; font-weight: 400;
       font-size: 34px; letter-spacing: -.015em; margin: 0; }
 .eyebrow { font-size: 11px; letter-spacing: .07em; text-transform: uppercase;
@@ -71,7 +73,7 @@ main { flex: 1; padding: 34px 40px; min-width: 0; }
          font-family: 'Instrument Serif', Georgia, serif; font-size: 21px;
          letter-spacing: -.01em; color: var(--ink); }
 .marca:hover { color: var(--ink); }
-.vivo { width: 7px; height: 7px; border-radius: var(--r-pill); background: #3E9C6B; }
+.vivo { width: 7px; height: 7px; border-radius: var(--r-pill); background: var(--ok); }
 .vivo[data-parado="1"] { background: var(--faint); }
 
 nav { display: flex; flex-direction: column; gap: 2px; }
@@ -241,7 +243,7 @@ nav a svg { flex-shrink: 0; }
 [hidden] { display: none !important; }
 #editor { flex: 1; min-height: 58vh; width: 100%; resize: vertical; padding: 14px 16px;
           border: 1px solid var(--line); border-radius: var(--r-inner); background: var(--paper);
-          font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 13.5px;
+          font-family: var(--mono); font-size: 13.5px;
           line-height: 1.7; color: var(--ink); tab-size: 2; }
 #editor:focus { outline: none; border-color: var(--faint); background: var(--surface); }
 
@@ -271,7 +273,7 @@ nav a svg { flex-shrink: 0; }
 .realce { position: absolute; inset: 0; margin: 0; overflow: hidden; pointer-events: none;
           padding: 14px 16px; border: 1px solid transparent; border-radius: var(--r-inner);
           background: var(--paper); white-space: pre-wrap; overflow-wrap: break-word;
-          font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 13.5px;
+          font-family: var(--mono); font-size: 13.5px;
           line-height: 1.7; color: var(--ink); tab-size: 2; scrollbar-gutter: stable; }
 #editor.colorido { color: transparent; caret-color: var(--ink); background: transparent;
                    position: relative; scrollbar-gutter: stable; }
@@ -282,12 +284,12 @@ nav a svg { flex-shrink: 0; }
 .realce .r-marca { color: var(--faint); }
 .realce .r-forte { font-weight: 600; }
 .realce .r-italico { font-style: italic; }
-.realce .r-codigo { color: #3F7A54; }
+.realce .r-codigo { color: var(--verde); }
 .realce .r-link { color: var(--accent); }
 .realce .r-url { color: var(--muted); }
 .realce .r-citacao { color: var(--muted); }
 .realce .r-front { color: var(--faint); }
-.realce .r-tag { color: #2B5FA8; }
+.realce .r-tag { color: var(--azul); }
 .area[data-modo="ler"] .previa, .area[data-modo="vivo"] .previa {
   border-color: transparent; background: transparent; padding: 4px 2px; }
 
@@ -347,7 +349,7 @@ nav a svg { flex-shrink: 0; }
   color: var(--faint); text-decoration: line-through; text-decoration-color: var(--faint); }
 .previa li.tarefa input { margin: 0 6px 0 0; vertical-align: -1px; cursor: pointer;
                           accent-color: var(--accent); }
-.previa code { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 12.5px;
+.previa code { font-family: var(--mono); font-size: 12.5px;
                background: var(--line-soft); padding: 1px 5px; border-radius: 5px; }
 .previa pre { background: var(--line-soft); padding: 12px 14px; border-radius: var(--r-inner);
               overflow: auto; }
@@ -355,16 +357,16 @@ nav a svg { flex-shrink: 0; }
 .previa blockquote { border-left: 3px solid var(--line); padding-left: 12px; color: var(--muted); }
 /* callouts (> [!tipo]): caixa tingida pela cor do tipo, título com ícone.
    Tipo desconhecido fica com a cor da nota */
-.previa .callout { --cor: #2B5FA8; border: 0; border-radius: var(--r-inner); padding: 10px 14px;
+.previa .callout { --cor: var(--azul); border: 0; border-radius: var(--r-inner); padding: 10px 14px;
   background: color-mix(in srgb, var(--cor) 9%, transparent); color: var(--ink); }
 .previa .callout[data-callout="abstract"] { --cor: #1F8A8A; }
 .previa .callout[data-callout="tip"] { --cor: #1F8A8A; }
-.previa .callout[data-callout="success"] { --cor: #3F7A54; }
+.previa .callout[data-callout="success"] { --cor: var(--verde); }
 .previa .callout[data-callout="question"] { --cor: #B7791F; }
 .previa .callout[data-callout="warning"] { --cor: #B7791F; }
-.previa .callout[data-callout="failure"] { --cor: #C4432B; }
-.previa .callout[data-callout="danger"] { --cor: #C4432B; }
-.previa .callout[data-callout="bug"] { --cor: #C4432B; }
+.previa .callout[data-callout="failure"] { --cor: var(--accent); }
+.previa .callout[data-callout="danger"] { --cor: var(--accent); }
+.previa .callout[data-callout="bug"] { --cor: var(--accent); }
 .previa .callout[data-callout="example"] { --cor: #7A4FB5; }
 .previa .callout[data-callout="quote"] { --cor: #6B7280; }
 .previa .callout-titulo { display: flex; align-items: center; gap: 8px; font-weight: 600;
@@ -383,9 +385,9 @@ nav a svg { flex-shrink: 0; }
 .previa .wikilink { border-bottom: 1px solid var(--soft); }
 /* #tag: etiqueta azul, a mesma cor da tag no editor; leva às notas com ela */
 .previa a.tag { display: inline-block; padding: 0 7px; border-radius: var(--r-pill);
-  font-size: .88em; line-height: 1.6; text-decoration: none; color: #2B5FA8;
-  background: color-mix(in srgb, #2B5FA8 10%, transparent); }
-.previa a.tag:hover { background: color-mix(in srgb, #2B5FA8 18%, transparent); }
+  font-size: .88em; line-height: 1.6; text-decoration: none; color: var(--azul);
+  background: color-mix(in srgb, var(--azul) 10%, transparent); }
+.previa a.tag:hover { background: color-mix(in srgb, var(--azul) 18%, transparent); }
 .previa .wikilink.quebrado { color: var(--faint); border-bottom: 1px dashed var(--faint);
                              cursor: pointer; }
 .previa .wikilink.quebrado:hover { color: var(--accent); border-color: var(--accent); }
@@ -399,7 +401,7 @@ nav a svg { flex-shrink: 0; }
                 margin: 0 0 16px; padding: 10px 12px; border-radius: var(--r-inner);
                 background: var(--paper); border: 1px solid var(--line-soft);
                 font-size: 12.5px; }
-.propriedades dt { color: var(--faint); font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+.propriedades dt { color: var(--faint); font-family: var(--mono); }
 .propriedades dd { margin: 0; color: var(--muted); overflow-wrap: anywhere; }
 
 /* renomear */
@@ -467,7 +469,7 @@ nav a svg { flex-shrink: 0; }
 .atalhos { display: flex; flex-direction: column; gap: 1px; margin-bottom: 2px; }
 button.atalho-visao { width: 100%; border: 0; background: none; font: inherit; font-size: 13px;
   text-align: left; cursor: pointer; }
-.atalho-visao kbd { margin-left: auto; font-family: 'IBM Plex Mono', ui-monospace, monospace;
+.atalho-visao kbd { margin-left: auto; font-family: var(--mono);
   font-size: 10.5px; color: var(--faint); }
 
 /* abrir nota rápido (Ctrl+O): a caixa no meio da tela, por cima de tudo */
@@ -756,7 +758,7 @@ button.atalho-visao { width: 100%; border: 0; background: none; font: inherit; f
 .juntar .alca { color: var(--faint); font-size: 15px; letter-spacing: -2px; }
 .juntar .mover { width: 32px; justify-content: center; padding: 0; font-size: 15px; }
 .juntar .quando + .mover { margin-left: 8px; }
-.juntar .quando[data-estado="pronto"] { color: #3E9C6B; font-weight: 600; }
+.juntar .quando[data-estado="pronto"] { color: var(--ok); font-weight: 600; }
 .juntar .quando[data-estado="erro"] { color: var(--accent); font-weight: 600; }
 .juntar .quando[data-estado="convertendo"] { color: var(--muted); }
 .escolha-word { display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
