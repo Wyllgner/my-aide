@@ -134,77 +134,114 @@ JS = r"""
     });
   }
 
-  // ---------- árvore: arrastar nota para outra pasta ----------
-  // solta numa pasta (ou em "Pastas", a raiz do vault) e ela muda de lugar,
-  // com os links das outras notas atualizados, como no renomear. Parada em
-  // cima de uma pasta fechada, ela abre
+  // ---------- árvore: arrastar nota ou pasta para outra pasta ----------
+  // solta em qualquer ponto de uma pasta — no nome dela, numa nota de dentro,
+  // no vazio dela — e o item vai para lá; fora de qualquer pasta, vai para a
+  // raiz do vault. Os links das outras notas acompanham, como no renomear.
+  // Parada em cima de uma pasta fechada, ela abre
   var TIPO_NOTA = "application/x-aide-nota";
+  var TIPO_PASTA = "application/x-aide-pasta";
   var arvoreArrasto = document.querySelector(".arvore");
   if (arvoreArrasto && arvoreArrasto.querySelector(".arvore-topo")) {
     var abrirAoParar = null;
-    var temNota = function (e) {
-      return e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], TIPO_NOTA) >= 0;
+    // o que está sendo arrastado: o dataTransfer só se lê no drop
+    var arrastado = null;
+    var tipoDe = function (e) {
+      var tipos = Array.prototype.slice.call((e.dataTransfer && e.dataTransfer.types) || []);
+      return tipos.indexOf(TIPO_PASTA) >= 0 ? "pasta" : tipos.indexOf(TIPO_NOTA) >= 0 ? "nota" : null;
     };
-    var alvoDe = function (e) {
-      var alvo = e.target.closest && e.target.closest("summary, .arvore-topo");
-      return alvo && arvoreArrasto.contains(alvo) ? alvo : null;
+    var pastaDe = function (caminho) {
+      return caminho.lastIndexOf("/") >= 0 ? caminho.slice(0, caminho.lastIndexOf("/")) : "";
+    };
+    // a pasta onde cai: a <details> mais próxima, ou a raiz ("")
+    var destinoDe = function (e) {
+      if (!e.target.closest || !arvoreArrasto.contains(e.target)) { return null; }
+      if (e.target.closest(".filtro-arvore")) { return null; }
+      var pasta = e.target.closest("details[data-pasta]");
+      return pasta && arvoreArrasto.contains(pasta) ? pasta : arvoreArrasto;
+    };
+    var marcaDe = function (destino) {
+      return destino === arvoreArrasto ? arvoreArrasto.querySelector(".arvore-topo")
+                                       : destino.querySelector(":scope > summary");
+    };
+    // a pasta não entra nela mesma nem em uma de dentro; e soltar onde já
+    // está não muda nada
+    var aceita = function (destino) {
+      if (!arrastado) { return false; }
+      var pasta = destino === arvoreArrasto ? "" : destino.dataset.pasta;
+      if (pasta === pastaDe(arrastado.caminho)) { return false; }
+      if (arrastado.tipo === "pasta" &&
+          (pasta === arrastado.caminho || pasta.indexOf(arrastado.caminho + "/") === 0)) { return false; }
+      return true;
     };
     var limparAlvos = function () {
       arvoreArrasto.querySelectorAll(".alvo-soltar").forEach(function (el) { el.classList.remove("alvo-soltar"); });
     };
-    arvoreArrasto.querySelectorAll(".arquivo[title]").forEach(function (a) {
-      a.addEventListener("dragstart", function (e) {
-        e.dataTransfer.setData(TIPO_NOTA, a.getAttribute("title"));
+    var comecar = function (el, tipo, caminho) {
+      el.addEventListener("dragstart", function (e) {
+        e.stopPropagation();
+        arrastado = { tipo: tipo, caminho: caminho };
+        e.dataTransfer.setData(tipo === "pasta" ? TIPO_PASTA : TIPO_NOTA, caminho);
         e.dataTransfer.effectAllowed = "move";
-        a.classList.add("arrastando");
+        el.classList.add("arrastando");
       });
-      a.addEventListener("dragend", function () {
-        a.classList.remove("arrastando");
+      el.addEventListener("dragend", function () {
+        el.classList.remove("arrastando");
+        arrastado = null;
         limparAlvos();
         clearTimeout(abrirAoParar);
       });
+    };
+    arvoreArrasto.querySelectorAll(".arquivo[title]").forEach(function (a) {
+      comecar(a, "nota", a.getAttribute("title"));
+    });
+    arvoreArrasto.querySelectorAll("details[data-pasta] > summary").forEach(function (resumo) {
+      resumo.draggable = true;
+      comecar(resumo, "pasta", resumo.parentElement.dataset.pasta);
     });
     arvoreArrasto.addEventListener("dragover", function (e) {
-      var alvo = alvoDe(e);
-      if (!temNota(e) || !alvo) { return; }
+      var destino = destinoDe(e);
+      if (!tipoDe(e) || !destino || !aceita(destino)) { limparAlvos(); return; }
       e.preventDefault();
       e.dataTransfer.dropEffect = "move";
-      if (alvo.classList.contains("alvo-soltar")) { return; }
+      var marca = marcaDe(destino);
+      if (marca.classList.contains("alvo-soltar")) { return; }
       limparAlvos();
-      alvo.classList.add("alvo-soltar");
+      marca.classList.add("alvo-soltar");
       clearTimeout(abrirAoParar);
-      var pasta = alvo.parentElement;
-      if (pasta.tagName === "DETAILS" && !pasta.open) {
-        abrirAoParar = setTimeout(function () { pasta.open = true; }, 700);
+      if (destino.tagName === "DETAILS" && !destino.open) {
+        abrirAoParar = setTimeout(function () { destino.open = true; }, 700);
       }
     });
     arvoreArrasto.addEventListener("dragleave", function (e) {
-      var alvo = alvoDe(e);
-      if (alvo && !alvo.contains(e.relatedTarget)) { alvo.classList.remove("alvo-soltar"); }
+      if (!arvoreArrasto.contains(e.relatedTarget)) { limparAlvos(); clearTimeout(abrirAoParar); }
     });
     arvoreArrasto.addEventListener("drop", function (e) {
-      var alvo = alvoDe(e);
-      if (!temNota(e) || !alvo) { return; }
+      var destino = destinoDe(e);
+      var tipo = tipoDe(e);
+      if (!tipo || !destino || !aceita(destino)) { return; }
       e.preventDefault();
       limparAlvos();
       clearTimeout(abrirAoParar);
-      var de = e.dataTransfer.getData(TIPO_NOTA);
-      var pasta = alvo.parentElement.tagName === "DETAILS" ? alvo.parentElement.dataset.pasta : "";
+      var de = e.dataTransfer.getData(tipo === "pasta" ? TIPO_PASTA : TIPO_NOTA);
+      var pasta = destino === arvoreArrasto ? "" : destino.dataset.pasta;
       var para = (pasta ? pasta + "/" : "") + de.replace(/^.*\//, "");
       if (!de || para === de) { return; }
       var editorAberto = document.getElementById("editor");
       var aberta = editorAberto ? editorAberto.dataset.caminho : "";
       // a nota aberta pode ser a que muda, ou ter links nela reescritos: salva antes
       var guardar = window.aideSalvar ? window.aideSalvar() : Promise.resolve();
-      // desenho tem a sua rota; nota tem a dela, que também reescreve os links
-      var rota = /\.excalidraw$/i.test(de) ? "/api/desenhos/mover" : "/api/notas/mover";
+      // pasta e desenho têm a sua rota; nota tem a dela, que também reescreve os links
+      var rota = tipo === "pasta" ? "/api/notas/mover-pasta"
+        : /\.excalidraw$/i.test(de) ? "/api/desenhos/mover" : "/api/notas/mover";
       guardar.then(function () {
         return pedir("POST", rota, { de: de, para: para });
       }).then(function (r) {
         if (!r.ok) { return erroDe(r).then(function (m) { throw new Error(m); }); }
         return r.json().then(function (d) {
           guardarAviso(d);
-          if (aberta === de) { abrir(d.caminho); } else { location.reload(); }
+          var depois = tipo === "pasta" ? d.notas_movidas[aberta] : aberta === de && d.caminho;
+          if (depois) { abrir(depois); } else { location.reload(); }
         });
       }).catch(function (e2) {
         var aviso = arvoreArrasto.querySelector(".filtro-vazio");
