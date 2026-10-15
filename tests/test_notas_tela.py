@@ -656,9 +656,18 @@ def test_arrastar_desenho_usa_a_rota_de_desenho():
     """A de nota recusaria o .excalidraw (e reescreve links de nota)."""
     from aide.web.script import JS
 
-    assert ('var rota = /\\.excalidraw$/i.test(de) ? "/api/desenhos/mover" : "/api/notas/mover";'
-            in JS)
+    assert ': /\\.excalidraw$/i.test(de) ? "/api/desenhos/mover" : "/api/notas/mover";' in JS
     assert 'return pedir("POST", rota, { de: de, para: para });' in JS
+
+
+def test_arrastar_pasta_usa_a_rota_de_pasta_e_nao_entra_nela_mesma():
+    """A pasta move com tudo dentro; soltar nela mesma ou numa de dentro
+    criaria um ciclo, e o arrasto nem é aceito."""
+    from aide.web.script import JS
+
+    assert 'var rota = tipo === "pasta" ? "/api/notas/mover-pasta"' in JS
+    assert 'pasta.indexOf(arrastado.caminho + "/") === 0' in JS
+    assert 'resumo.draggable = true;' in JS
 
 
 def test_botao_de_novo_desenho_no_topo_e_em_cada_pasta(cliente, raiz):
