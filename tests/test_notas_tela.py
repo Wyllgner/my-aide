@@ -347,7 +347,7 @@ def test_desenho_que_existe_nao_e_quebrado(cliente, raiz):
 
 
 def test_criar_desenho_quebrado_vai_pela_api_de_desenhos():
-    from aide.web.script import JS
+    JS = estaticos.ler("js/app.js")
 
     criar = JS[JS.index('document.querySelectorAll(".criar-quebrado")'):]
     criar = criar[:criar.index("// ---------- ligar")]
@@ -655,7 +655,7 @@ def test_nome_de_desenho_sai_escapado_na_arvore(cliente, raiz):
 
 def test_arrastar_desenho_usa_a_rota_de_desenho():
     """A de nota recusaria o .excalidraw (e reescreve links de nota)."""
-    from aide.web.script import JS
+    JS = estaticos.ler("js/app.js")
 
     assert ': /\\.excalidraw$/i.test(de) ? "/api/desenhos/mover" : "/api/notas/mover";' in JS
     assert 'return pedir("POST", rota, { de: de, para: para });' in JS
@@ -664,7 +664,7 @@ def test_arrastar_desenho_usa_a_rota_de_desenho():
 def test_arrastar_pasta_usa_a_rota_de_pasta_e_nao_entra_nela_mesma():
     """A pasta move com tudo dentro; soltar nela mesma ou numa de dentro
     criaria um ciclo, e o arrasto nem é aceito."""
-    from aide.web.script import JS
+    JS = estaticos.ler("js/app.js")
 
     assert 'var rota = tipo === "pasta" ? "/api/notas/mover-pasta"' in JS
     assert 'pasta.indexOf(arrastado.caminho + "/") === 0' in JS
@@ -679,7 +679,7 @@ def test_botao_de_novo_desenho_no_topo_e_em_cada_pasta(cliente, raiz):
 
 
 def test_script_cria_desenho_pela_rota_dele_e_abre_a_tela():
-    from aide.web.script import JS
+    JS = estaticos.ler("js/app.js")
 
     assert 'desenho: "/api/desenhos/arquivo"' in JS
     assert 'criando === "desenho" && !/\\.excalidraw$/i.test(caminho)' in JS
@@ -689,7 +689,7 @@ def test_script_cria_desenho_pela_rota_dele_e_abre_a_tela():
 
 
 def test_link_quebrado_de_desenho_cria_desenho_e_nao_nota():
-    from aide.web.script import JS
+    JS = estaticos.ler("js/app.js")
 
     trecho = JS[JS.index("function criarDoLink"):]
     trecho = trecho[:trecho.index("// ---------- tarefa marcada")]
@@ -718,7 +718,7 @@ def test_tela_passa_os_desenhos_para_o_autocompletar(cliente, raiz):
 
 
 def test_autocompletar_sugere_desenho_marcado_como_desenho():
-    from aide.web.script import JS
+    JS = estaticos.ler("js/app.js")
 
     assert "return notas.concat(desenhosDoVault).filter(function (n) {" in JS
     assert 'onde: DESENHO.test(n) ? "desenho · " + n : n,' in JS

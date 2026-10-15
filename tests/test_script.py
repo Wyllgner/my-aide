@@ -11,7 +11,9 @@ import subprocess
 import pytest
 
 from aide.storage import vault
-from aide.web.script import JS
+from aide.web import estaticos
+
+JS = estaticos.ler("js/app.js")
 
 node = shutil.which("node")
 pytestmark = pytest.mark.skipif(node is None, reason="sem node")
