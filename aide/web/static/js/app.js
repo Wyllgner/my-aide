@@ -1,4 +1,9 @@
-
+// As notas. Arquivo, e nao <script> embutido, porque a CSP so deixa rodar
+// script vindo daqui (script-src 'self'): um <script> que um dia escapasse
+// do escape de uma tela nao roda. Sem framework e sem build.
+//
+// Faz so o que o servidor nao consegue: salvar enquanto voce digita, avisar
+// do conflito com quem escreveu por fora, e os botoes de criar e apagar.
 "use strict";
 (function () {
   // a marca que seguranca.py exige em toda escrita
