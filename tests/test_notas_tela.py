@@ -6,7 +6,7 @@ fastapi = pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient
 
 from aide.storage import connect, migrate
-from aide.web import criar_app
+from aide.web import criar_app, estaticos
 
 
 @pytest.fixture
@@ -137,7 +137,7 @@ def test_busca_lista_o_caminho_de_cada_achado(cliente, registry, config):
 
 def test_hidden_vence_o_display_das_classes():
     """O campo de criar aparecia vazio, aberto, porque .criar tem display:flex."""
-    from aide.web.estilo import CSS
+    CSS = estaticos.ler("css/app.css")
 
     assert "[hidden] { display: none !important; }" in CSS
 
@@ -826,7 +826,7 @@ def test_a_nota_tem_exportar_em_md_e_pdf(cliente):
 def test_a_impressao_leva_so_o_nome_e_a_previa():
     """O PDF sai da impressão do navegador: lateral, botões e campo ficam de
     fora, e a prévia aparece mesmo no modo editar, onde ela fica escondida."""
-    from aide.web.estilo import CSS
+    CSS = estaticos.ler("css/app.css")
 
     impressao = CSS[CSS.index("@media print"):]
     for escondido in (".lateral", ".notas-lateral", ".editor-acoes", ".campo", ".ao-redor"):

@@ -14,7 +14,7 @@ fastapi = pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient
 
 from aide.storage import connect, migrate
-from aide.web import criar_app, seguranca
+from aide.web import criar_app, estaticos, seguranca
 from aide.web.paginas import TELAS
 
 LOCAL = "http://127.0.0.1:8787"
@@ -195,7 +195,7 @@ def test_a_pagina_nao_chama_nada_de_fora(cliente):
 
 
 def test_fontes_servidas_pelo_proprio_site(cliente):
-    from aide.web.estilo import CSS
+    CSS = estaticos.ler("css/app.css")
 
     nomes = __import__("re").findall(r"url\(/fontes/([^)]+)\)", CSS)
     assert len(nomes) == 8
