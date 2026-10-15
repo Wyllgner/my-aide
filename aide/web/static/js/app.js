@@ -1,16 +1,9 @@
-"""O único JavaScript da página, servido em /app.js.
-
-Arquivo, e não <script> embutido, porque a CSP só deixa rodar script vindo
-daqui (`script-src 'self'`): um <script> que um dia escapasse do escape de
-uma tela não roda. Sem framework e sem build, como o resto.
-
-Faz só o que o servidor não consegue: salvar enquanto você digita, avisar do
-conflito com quem escreveu por fora, e os botões de criar e apagar.
-"""
-
-from __future__ import annotations
-
-JS = r"""
+// As notas. Arquivo, e nao <script> embutido, porque a CSP so deixa rodar
+// script vindo daqui (script-src 'self'): um <script> que um dia escapasse
+// do escape de uma tela nao roda. Sem framework e sem build.
+//
+// Faz so o que o servidor nao consegue: salvar enquanto voce digita, avisar
+// do conflito com quem escreveu por fora, e os botoes de criar e apagar.
 "use strict";
 (function () {
   // a marca que seguranca.py exige em toda escrita
@@ -2260,4 +2253,3 @@ JS = r"""
     });
   });
 })();
-"""

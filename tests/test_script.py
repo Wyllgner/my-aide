@@ -11,7 +11,9 @@ import subprocess
 import pytest
 
 from aide.storage import vault
-from aide.web.script import JS
+from aide.web import estaticos
+
+JS = estaticos.ler("js/app.js")
 
 node = shutil.which("node")
 pytestmark = pytest.mark.skipif(node is None, reason="sem node")
@@ -25,6 +27,12 @@ def _front(texto: str):
               "console.log(JSON.stringify(m ? [m[1] || '', t.slice(m[0].length)] : null));")
     saida = subprocess.run([node, "-e", codigo], capture_output=True, text=True, check=True)
     return json.loads(saida.stdout)
+
+
+def test_o_script_e_javascript_valido():
+    """Erro de sintaxe derruba as notas inteiras sem nenhum teste Python notar."""
+    subprocess.run([node, "--check", str(estaticos.PASTA / "js" / "app.js")], check=True,
+                   capture_output=True)
 
 
 @pytest.mark.parametrize("texto", [
