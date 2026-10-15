@@ -1,9 +1,13 @@
 """A tela Arquivos: a moldura que o servidor monta."""
 
+import shutil
+import subprocess
+
 import pytest
 from fastapi.testclient import TestClient
 
 from aide.storage import connect, migrate
+from aide.web import estaticos
 from aide.web.app import criar_app
 
 
@@ -57,6 +61,15 @@ def test_o_script_e_arquivo_da_casa(cliente):
     assert resposta.status_code == 200
     assert resposta.headers["content-type"].startswith("text/javascript")
     assert "dataTransfer" in resposta.text
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="sem node")
+def test_o_script_e_javascript_valido(tmp_path):
+    """Erro de sintaxe derruba a tela inteira sem nenhum teste Python notar."""
+    arquivo = tmp_path / "arquivos.mjs"
+    arquivo.write_text(estaticos.ler("js/arquivos.js"))
+    subprocess.run([shutil.which("node"), "--check", str(arquivo)], check=True,
+                   capture_output=True)
 
 
 def test_soltar_nao_manda_nada_ao_servidor(cliente):

@@ -104,11 +104,11 @@ def criar_app(config=None, conn_factory=None):
         return Response(JS, media_type="text/javascript",
                         headers={"cache-control": "no-cache"})
 
+    js_arquivos = estaticos.ler("js/arquivos.js")
+
     @app.get("/arquivos.js")
     def script_arquivos() -> Response:
-        from aide.web.arquivos_script import JS
-
-        return Response(JS, media_type="text/javascript",
+        return Response(js_arquivos, media_type="text/javascript",
                         headers={"cache-control": "no-cache"})
 
     from pathlib import Path
