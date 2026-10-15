@@ -112,7 +112,7 @@ def test_script_e_servido_como_modulo(cliente):
 
 
 def test_script_importa_so_o_que_o_bundle_exporta(cliente):
-    from aide.web.desenho_script import JS
+    JS = estaticos.ler("js/desenho.js")
 
     importado = re.search(r"import \{([^}]*)\} from", JS).group(1)
     nomes = {n.strip() for n in importado.split(",")} - {""}
@@ -124,7 +124,7 @@ def test_script_importa_so_o_que_o_bundle_exporta(cliente):
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="sem node")
 def test_script_e_javascript_valido(tmp_path):
-    from aide.web.desenho_script import JS
+    JS = estaticos.ler("js/desenho.js")
 
     arquivo = tmp_path / "desenho.mjs"
     arquivo.write_text(JS)
@@ -134,7 +134,7 @@ def test_script_e_javascript_valido(tmp_path):
 
 def test_todo_elemento_que_o_script_procura_existe_na_tela(cliente):
     """Um id trocado de um lado só deixa a página quebrada sem erro no Python."""
-    from aide.web.desenho_script import JS
+    JS = estaticos.ler("js/desenho.js")
 
     html = _tela(cliente).text
     ids = set(re.findall(r'getElementById\("([^"]+)"\)', JS))
@@ -150,7 +150,7 @@ def test_conflito_comeca_escondido(cliente):
 def test_script_salva_com_a_marca_da_pagina_e_so_a_caixa_mexe_no_privado():
     """Sem X-Aide a fronteira recusa. E `privada` só vai no pedido quando a
     caixa mudou: no salvamento comum o servidor mantém o que está no disco."""
-    from aide.web.desenho_script import JS
+    JS = estaticos.ler("js/desenho.js")
 
     assert '"X-Aide": "1"' in JS
     assert re.findall(r"corpo\.privada\s*=\s*\w+", JS) == ["corpo.privada = pedida"]
@@ -167,7 +167,7 @@ def test_desenho_privado_desliga_o_corretor_quando_o_campo_nasce():
     """O corretor avançado do Chrome manda o texto para o Google. O campo de
     texto do Excalidraw nasce na hora de editar, e evento de foco nem sempre
     dispara: vale o MutationObserver, e a troca da caixa reaplica."""
-    from aide.web.desenho_script import JS
+    JS = estaticos.ler("js/desenho.js")
 
     assert "campo.spellcheck = !caixaPrivada.checked" in JS
     assert ".observe(raiz, { childList: true, subtree: true })" in JS
@@ -177,7 +177,7 @@ def test_desenho_privado_desliga_o_corretor_quando_o_campo_nasce():
 
 def test_desenho_grande_demais_avisa_o_limite():
     """O 413 vem da fronteira, antes da rota, e não é JSON."""
-    from aide.web.desenho_script import JS
+    JS = estaticos.ler("js/desenho.js")
 
     assert "resposta.status === 413" in JS and "20 MB" in JS
 
@@ -190,7 +190,7 @@ def test_procurar_bibliotecas_escondido():
 
 def test_apagar_pede_dois_cliques_e_para_de_salvar():
     """Um salvamento depois de apagar recriaria o desenho."""
-    from aide.web.desenho_script import JS
+    JS = estaticos.ler("js/desenho.js")
 
     clique = JS[JS.index('botaoApagar.addEventListener("click"'):]
     assert clique.index("if (!armado)") < clique.index('method: "DELETE"')
@@ -208,7 +208,7 @@ def test_botao_apagar_na_barra(cliente):
 def test_previa_so_da_versao_salva_e_com_a_marca_da_pagina():
     """Exportar com mudança por salvar mostraria na nota o que não está no
     arquivo; e a imagem vai presa à assinatura que o servidor devolveu."""
-    from aide.web.desenho_script import JS
+    JS = estaticos.ler("js/desenho.js")
 
     gerar = JS[JS.index("async function gerarPrevia"):JS.index("function textoDaBiblioteca")]
     assert "apagado || pendente()) return;" in gerar
@@ -229,7 +229,7 @@ def test_renomear_na_barra_com_o_caminho_sem_extensao(cliente):
 
 
 def test_renomear_salva_antes_e_para_de_salvar_no_caminho_velho():
-    from aide.web.desenho_script import JS
+    JS = estaticos.ler("js/desenho.js")
 
     envio = JS[JS.index('formRenomear.addEventListener("submit"'):]
     envio = envio[:envio.index("\n});\n")]
@@ -284,7 +284,7 @@ def test_trecho_de_quem_cita_sai_escapado(cliente, app):
 
 
 def test_lista_de_quem_cita_fecha_com_clique_fora_e_esc():
-    from aide.web.desenho_script import JS
+    JS = estaticos.ler("js/desenho.js")
 
     assert 'getElementById("citado-por")' in JS
     assert "!citadoPor.contains(evento.target)) citadoPor.open = false;" in JS
@@ -294,7 +294,7 @@ def test_lista_de_quem_cita_fecha_com_clique_fora_e_esc():
 def test_link_do_elemento_passa_pelo_my_aide():
     """Link de site abre em outra aba sem opener nem Referer, e só http,
     https e mailto; o resto vai ao servidor, que só leva a nota ou desenho."""
-    from aide.web.desenho_script import JS
+    JS = estaticos.ler("js/desenho.js")
 
     assert "onLinkOpen: abrirLink," in JS
     abrir = JS[JS.index("function abrirLink("):JS.index("async function irPeloVault(")]
@@ -305,7 +305,7 @@ def test_link_do_elemento_passa_pelo_my_aide():
 
 
 def test_sair_pelo_link_so_com_tudo_salvo():
-    from aide.web.desenho_script import JS
+    JS = estaticos.ler("js/desenho.js")
 
     sair = JS[JS.index("async function sair("):]
     sair = sair[:sair.index("\n}\n")]
@@ -315,7 +315,7 @@ def test_sair_pelo_link_so_com_tudo_salvo():
 
 def test_link_para_o_que_falta_pergunta_antes_de_criar(cliente):
     """O clique no link não diz que vai criar arquivo: a faixa pergunta."""
-    from aide.web.desenho_script import JS
+    JS = estaticos.ler("js/desenho.js")
 
     assert re.search(r'<div id="link-faltando"[^>]*\bhidden\b', _tela(cliente).text)
     vault = JS[JS.index("async function irPeloVault("):JS.index("function hrefDe(")]
@@ -328,7 +328,7 @@ def test_link_para_o_que_falta_pergunta_antes_de_criar(cliente):
 def test_link_da_pagina_so_sai_para_a_mesma_origem():
     """"/\\t/site" passa no startsWith("/"), mas o navegador tira o tab e
     lê "//site": outro servidor, na mesma aba."""
-    from aide.web.desenho_script import JS
+    JS = estaticos.ler("js/desenho.js")
 
     abrir = JS[JS.index("function abrirLink("):JS.index("async function irPeloVault(")]
     pagina = abrir[abrir.index('if (link.startsWith("/")) {'):]
