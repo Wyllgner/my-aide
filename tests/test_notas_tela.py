@@ -367,10 +367,11 @@ def test_nota_enorme_nao_abre_no_editor(cliente, raiz):
 
 # ---------- renomear ----------
 
-def test_titulo_abre_o_renomear_com_o_caminho(cliente):
+def test_titulo_abre_o_renomear_so_com_o_nome(cliente):
+    """Mudar de pasta é arrastar na árvore; o campo fica com o nome só."""
     html = _tela(cliente, "Projetos/Casa/Telhado.md")
     assert '<h2 id="titulo" class="titulo-nota"' in html
-    assert 'id="renomear-caminho" autocomplete="off" spellcheck="false"\n        value="Projetos/Casa/Telhado"' in html
+    assert 'id="renomear-caminho" autocomplete="off" spellcheck="false"\n        value="Telhado"' in html
     assert 'id="botao-renomear"' in html
 
 
@@ -458,7 +459,7 @@ def test_nota_fora_de_utf8_nao_derruba_a_tela(cliente, raiz):
 def test_os_botoes_da_nota_tem_icone_e_dica(cliente):
     html = _tela(cliente, "Inbox/Ideia.md")
     assert 'role="toolbar" aria-label="ações da nota"' in html
-    assert 'title="renomear ou mover · F2"' in html
+    assert 'title="renomear · F2"' in html
     assert 'class="botao botao-perigo"' in html
     assert '<span class="rotulo">apagar</span>' in html
     assert "Ctrl+E alterna com ler" in html

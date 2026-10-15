@@ -67,7 +67,7 @@ def _ramo(itens: list[dict], aberto: str) -> str:
                      f' title="novo desenho nesta pasta"'
                      f' aria-label="novo desenho em {escape(item["nome"])}">{icone("desenho", 14)}</button>'
                      f'<button type="button" class="renomear-pasta" data-pasta="{caminho}"'
-                     f' title="renomear ou mover a pasta"'
+                     f' title="renomear a pasta (para mover, arraste)"'
                      f' aria-label="renomear {escape(item["nome"])}">{icone("renomear", 14)}</button>'
                      f'<button type="button" class="apagar-pasta" data-pasta="{caminho}"'
                      f' title="mandar a pasta para a lixeira (pede um segundo clique)"'
@@ -539,11 +539,11 @@ def _editor(raiz: Path, aberto: str, agora: datetime, indice: links.Indice,
   <div style="min-width:0">
     <p class="mono" style="margin:0 0 4px;font-size:11.5px;overflow:hidden;
        text-overflow:ellipsis;white-space:nowrap">{trilha}{escape(nome)}</p>
-    <h2 id="titulo" class="titulo-nota" title="clique para renomear ou mover">{escape(arquivo.stem)}</h2>
+    <h2 id="titulo" class="titulo-nota" title="clique para renomear">{escape(arquivo.stem)}</h2>
     <form id="renomear" class="renomear" hidden>
       <input id="renomear-caminho" autocomplete="off" spellcheck="false"
-        value="{escape(aberto.removesuffix(".md"))}" aria-label="caminho da nota">
-      <span class="dica">Enter salva · Esc cancela · mude a pasta para mover</span>
+        value="{escape(arquivo.stem)}" aria-label="nome da nota">
+      <span class="dica">Enter salva · Esc cancela · para mudar de pasta, arraste na árvore</span>
       <span id="renomear-erro" class="erro"></span>
     </form>
   </div>
@@ -569,7 +569,7 @@ def _editor(raiz: Path, aberto: str, agora: datetime, indice: links.Indice,
           {icone("ler", 15)}<span>PDF</span></button>
       </div>
     </details>
-    <button type="button" id="botao-renomear" class="botao" title="renomear ou mover · F2">
+    <button type="button" id="botao-renomear" class="botao" title="renomear · F2">
       {icone("renomear", 15)}<span>renomear</span></button>
     <button type="button" id="apagar" class="botao botao-perigo"
       title="mandar para a lixeira do vault (pede um segundo clique)">
