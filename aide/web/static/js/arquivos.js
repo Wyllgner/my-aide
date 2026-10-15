@@ -1,19 +1,4 @@
-"""O JavaScript da tela Arquivos, servido em /arquivos.js.
 
-Módulo à parte do /app.js pela mesma razão do desenho: importa o pdf.js
-(`/vendor/pdfjs/`, deploy/pdfjs/build.sh), e só esta tela precisa dele.
-Arquivo, e não <script> embutido, pela CSP (`script-src 'self'`).
-
-Os arquivos ficam na memória da página até você escolher a ação: soltar não
-manda nada para o servidor. O PDF é lido aqui mesmo, pelo pdf.js, para contar
-as páginas e desenhar as miniaturas. O tipo aqui sai da extensão e só decide quais
-ações acendem; quem confere o conteúdo de verdade é o servidor, na hora da
-operação.
-"""
-
-from __future__ import annotations
-
-JS = r"""
 import * as pdfjs from "/vendor/pdfjs/pdf.js";
 
 pdfjs.GlobalWorkerOptions.workerSrc = "/vendor/pdfjs/pdf.worker.js";
@@ -958,4 +943,3 @@ soltar.addEventListener("drop", (e) => {
   delete soltar.dataset.sobre;
   if (e.dataTransfer && e.dataTransfer.files.length) acrescentar(e.dataTransfer.files);
 });
-"""
