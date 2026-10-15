@@ -59,7 +59,7 @@ def tela(ctx, registry, agora) -> str:
 <div class="acoes" id="arq-acoes">{acoes}</div>
 <p class="arq-aviso" id="arq-aviso" role="status"></p>
 <section class="card editor-pdf" id="arq-editor" hidden>
-  <div class="editor-topo">
+  <div class="arq-secao-topo">
     <h2 id="arq-editor-nome"></h2>
     <span class="resumo mono" id="arq-editor-resumo"></span>
     <button type="button" class="botao" id="arq-desfazer" disabled
@@ -83,7 +83,7 @@ def tela(ctx, registry, agora) -> str:
   </div>
 </section>
 <section class="card juntar" id="arq-juntar" hidden>
-  <div class="editor-topo">
+  <div class="arq-secao-topo">
     <h2 id="arq-juntar-titulo">Juntar PDFs</h2>
     <span class="resumo mono" id="arq-juntar-resumo"></span>
   </div>
@@ -95,7 +95,7 @@ def tela(ctx, registry, agora) -> str:
   </div>
 </section>
 <section class="card juntar" id="arq-lote" hidden>
-  <div class="editor-topo">
+  <div class="arq-secao-topo">
     <h2 id="arq-lote-titulo"></h2>
     <span class="resumo mono" id="arq-lote-nota"></span>
   </div>
