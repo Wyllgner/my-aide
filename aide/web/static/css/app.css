@@ -103,12 +103,11 @@ nav a svg { flex-shrink: 0; }
                  position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto; }
 .notas-editor { padding: 22px 26px; display: flex; flex-direction: column; gap: 10px;
                 min-height: 60vh; }
-.notas-botoes { display: flex; gap: 6px; padding: 2px 2px 8px;
+.notas-botoes { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 2px 8px;
                 border-bottom: 1px solid var(--line-soft); }
 .notas-botoes .botao { flex: 1; justify-content: center; padding: 0 10px; }
 /* três botões não cabem lado a lado na lateral: o principal fica sozinho em
    cima, pasta e desenho dividem a linha de baixo */
-.notas-botoes { flex-wrap: wrap; }
 .notas-botoes #nova-nota { flex-basis: 100%; }
 /* .botao vem depois nesta folha: as duas classes juntas para valer sobre ele */
 .botao.botao-principal, .botao.botao-principal svg { color: #fff; }
@@ -358,10 +357,7 @@ nav a svg { flex-shrink: 0; }
    Tipo desconhecido fica com a cor da nota */
 .previa .callout { --cor: #2B5FA8; border: 0; border-radius: var(--r-inner); padding: 10px 14px;
   background: color-mix(in srgb, var(--cor) 9%, transparent); color: var(--ink); }
-.previa .callout[data-callout="note"] { --cor: #2B5FA8; }
 .previa .callout[data-callout="abstract"] { --cor: #1F8A8A; }
-.previa .callout[data-callout="info"] { --cor: #2B5FA8; }
-.previa .callout[data-callout="todo"] { --cor: #2B5FA8; }
 .previa .callout[data-callout="tip"] { --cor: #1F8A8A; }
 .previa .callout[data-callout="success"] { --cor: #3F7A54; }
 .previa .callout[data-callout="question"] { --cor: #B7791F; }
@@ -714,7 +710,7 @@ button.atalho-visao { width: 100%; border: 0; background: none; font: inherit; f
 .arq-aviso[data-erro] { color: var(--accent); }
 .fila-arq .linha[data-erro] .quando { color: var(--accent); }
 /* organizar: as páginas em grade, cada uma com o número embaixo */
-.editor-pdf { padding: 18px 20px 20px; }
+.editor-pdf { position: relative; padding: 18px 20px 20px; }
 .arq-secao-topo { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
 .arq-secao-topo h2 { font-size: 16px; margin: 0 8px 0 0; overflow-wrap: anywhere; }
 .arq-secao-topo .resumo { color: var(--muted); font-size: 12.5px; margin-right: auto; }
@@ -748,7 +744,6 @@ button.atalho-visao { width: 100%; border: 0; background: none; font: inherit; f
 .inserir-antes:hover, .inserir-antes[aria-expanded="true"] { background: var(--accent);
   border-color: var(--accent); }
 .inserir-antes:hover svg, .inserir-antes[aria-expanded="true"] svg { color: #fff; }
-.editor-pdf { position: relative; }
 /* juntar: uma linha por PDF, na ordem do resultado */
 .juntar { padding: 18px 20px 20px; margin-top: 14px; }
 .juntar .linha { padding: 10px 6px; cursor: grab; position: relative; border-radius: 8px; }
