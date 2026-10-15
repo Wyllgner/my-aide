@@ -142,6 +142,15 @@ def test_hidden_vence_o_display_das_classes():
     assert "[hidden] { display: none !important; }" in CSS
 
 
+def test_o_topo_da_nota_e_so_da_nota():
+    """A tela Arquivos usava a mesma classe e, vindo depois na folha, deixava o
+    titulo da nota com 16px, centralizado e com margem embaixo."""
+    CSS = estaticos.ler("css/app.css")
+
+    assert CSS.count(".editor-topo {") == 1
+    assert ".editor-topo h2" not in CSS
+
+
 def test_nota_privada_abre_sem_corretor(cliente):
     """O corretor avançado do Chrome manda o texto para o Google."""
     assert 'spellcheck="false"' in _tela(cliente, "Projetos/Casa/Telhado.md")
