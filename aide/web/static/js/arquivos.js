@@ -1,4 +1,10 @@
-
+// A tela Arquivos. Separado do app.js porque importa o pdf.js
+// (deploy/pdfjs/build.sh) e so esta tela precisa dele. Arquivo, e nao
+// <script> embutido, pela CSP (script-src 'self').
+//
+// Os arquivos ficam na memoria da pagina ate voce escolher a acao: soltar
+// nao manda nada para o servidor. O tipo sai da extensao e so decide quais
+// acoes acendem; quem confere o conteudo de verdade e o servidor.
 import * as pdfjs from "/vendor/pdfjs/pdf.js";
 
 pdfjs.GlobalWorkerOptions.workerSrc = "/vendor/pdfjs/pdf.worker.js";
