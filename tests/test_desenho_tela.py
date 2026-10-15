@@ -10,7 +10,7 @@ fastapi = pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient
 
 from aide.storage import connect, desenhos, migrate
-from aide.web import criar_app
+from aide.web import criar_app, estaticos
 
 LOCAL = "http://127.0.0.1:8787"
 
@@ -183,7 +183,7 @@ def test_desenho_grande_demais_avisa_o_limite():
 
 
 def test_procurar_bibliotecas_escondido():
-    from aide.web.estilo import CSS
+    CSS = estaticos.ler("css/app.css")
 
     assert ".library-menu-browse-button {\n  display: none; }" in CSS
 

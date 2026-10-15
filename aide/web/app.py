@@ -24,7 +24,7 @@ import logging
 
 from aide.storage import connect, migrate
 from aide.tools.registry import ToolContext
-from aide.web import seguranca
+from aide.web import estaticos, seguranca
 
 log = logging.getLogger(__name__)
 
@@ -153,11 +153,11 @@ def criar_app(config=None, conn_factory=None):
             return Response(status_code=304, headers=cabecalhos)
         return Response(conteudo, media_type=tipos_vendor[arquivo.suffix], headers=cabecalhos)
 
+    css = estaticos.ler("css/app.css")
+
     @app.get("/app.css")
     def folha_de_estilo() -> Response:
-        from aide.web.estilo import CSS
-
-        return Response(CSS, media_type="text/css",
+        return Response(css, media_type="text/css",
                         headers={"cache-control": "no-cache"})
 
     # Uma rota por tela. As que ainda não têm conteúdo respondem a moldura com
