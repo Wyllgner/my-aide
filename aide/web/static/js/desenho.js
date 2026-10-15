@@ -1,4 +1,6 @@
-
+// A tela de desenho. Separado do app.js porque importa o Excalidraw (3 MB)
+// e so esta tela precisa dele. Arquivo, e nao <script> embutido, pela CSP
+// (script-src 'self').
 import {
   createElement, createRoot, Excalidraw, exportToBlob, serializeAsJSON,
 } from "/vendor/excalidraw/excalidraw.js";
