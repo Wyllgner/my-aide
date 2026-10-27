@@ -31,6 +31,18 @@
     location.href = "/notas?arquivo=" + encodeURIComponent(caminho).replace(/%2F/g, "/");
   }
 
+  // o editor (mais abaixo, so na tela de uma nota) publica o salvar em
+  // window.aideSalvar: quem move, renomeia ou sai manda salvar antes
+  function salvarAberta() {
+    return window.aideSalvar ? window.aideSalvar() : Promise.resolve();
+  }
+
+  // o caminho da nota aberta, ou "" quando a tela e so a lista
+  function notaAberta() {
+    var el = document.getElementById("editor");
+    return el ? el.dataset.caminho : "";
+  }
+
   function erroDe(resposta) {
     return resposta.json().then(
       function (d) { return d.detail || d.erro || "erro " + resposta.status; },
@@ -228,10 +240,9 @@
       var pasta = destino === arvoreArrasto ? "" : destino.dataset.pasta;
       var para = (pasta ? pasta + "/" : "") + de.replace(/^.*\//, "");
       if (!de || para === de) { return; }
-      var editorAberto = document.getElementById("editor");
-      var aberta = editorAberto ? editorAberto.dataset.caminho : "";
+      var aberta = notaAberta();
       // a nota aberta pode ser a que muda, ou ter links nela reescritos: salva antes
-      var guardar = window.aideSalvar ? window.aideSalvar() : Promise.resolve();
+      var guardar = salvarAberta();
       // pasta e desenho têm a sua rota; nota tem a dela, que também reescreve os links
       var rota = tipo === "pasta" ? "/api/notas/mover-pasta"
         : /\.excalidraw$/i.test(de) ? "/api/desenhos/mover" : "/api/notas/mover";
@@ -417,7 +428,7 @@
 
   // quem sai da nota salva antes; se não deu para salvar, fica e avisa
   function irDoSeletor(item) {
-    var guardar = window.aideSalvar ? window.aideSalvar() : Promise.resolve();
+    var guardar = salvarAberta();
     guardar.then(function () {
       if (!item.criar) { abrir(item.caminho); return; }
       return pedir("POST", "/api/notas/arquivo", { caminho: item.caminho }).then(function (r) {
@@ -518,7 +529,7 @@
   document.querySelectorAll(".ligar-quebrado").forEach(function (botao) {
     botao.addEventListener("click", function () {
       botao.disabled = true;
-      var guardar = window.aideSalvar ? window.aideSalvar() : Promise.resolve();
+      var guardar = salvarAberta();
       guardar.then(function () {
         return pedir("POST", "/api/notas/ligar", { alvo: botao.dataset.alvo, para: botao.dataset.para });
       }).then(function (r) {
@@ -568,9 +579,8 @@
         var para = campo.value.trim().replace(/^\/+|\/+$/g, "");
         if (para && para.indexOf("/") < 0) { para = mae + para; }
         if (!para || para === de) { fechar(); return; }
-        var editorAberto = document.getElementById("editor");
-        var antes = editorAberto ? editorAberto.dataset.caminho : null;
-        var guardar = window.aideSalvar ? window.aideSalvar() : Promise.resolve();
+        var antes = notaAberta();
+        var guardar = salvarAberta();
         guardar.then(function () {
           return pedir("POST", "/api/notas/mover-pasta", { de: de, para: para });
         }).then(function (r) {
@@ -679,9 +689,8 @@
         return;
       }
       var pasta = botao.dataset.pasta;
-      var editorAberto = document.getElementById("editor");
-      var aberta = editorAberto ? editorAberto.dataset.caminho : "";
-      var guardar = window.aideSalvar ? window.aideSalvar() : Promise.resolve();
+      var aberta = notaAberta();
+      var guardar = salvarAberta();
       guardar.then(function () {
         return pedir("DELETE", "/api/notas/pasta?caminho=" + encodeURIComponent(pasta));
       }).then(function (r) {
