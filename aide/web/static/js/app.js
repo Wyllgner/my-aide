@@ -725,6 +725,14 @@
     estado.dataset.estado = tipo;
   }
 
+  // o motivo que o servidor deu, na barra de estado da nota
+  function mostrarErro(r) {
+    return erroDe(r).then(function (m) { mostrar(m, "erro"); });
+  }
+
+  // a promessa que estourou no caminho (sem conexao, ou o erro ja traduzido)
+  function mostrarFalha(e) { mostrar(e.message, "erro"); }
+
   // ao vivo (mais abaixo): o bloco aberto, a prévia que chegou enquanto ele
   // estava aberto, e de que texto a prévia na tela veio. `mudancas` são os
   // blocos já fechados que mudaram de tamanho depois dela: com eles, as
@@ -770,7 +778,7 @@
             mostrar("conflito", "erro");
           });
         }
-        return erroDe(r).then(function (m) { mostrar(m, "erro"); });
+        return mostrarErro(r);
       })
       .catch(function () { mostrar("sem conexão; não salvo", "erro"); })
       .then(function () {
@@ -851,7 +859,7 @@
       document.title = nomeDaNota.replace(/\.md$/i, "");
       window.addEventListener("afterprint", function () { document.title = titulo; }, { once: true });
       window.print();
-    }).catch(function (e) { mostrar(e.message, "erro"); });
+    }).catch(mostrarFalha);
   });
 
   document.addEventListener("click", function (e) {
@@ -1563,17 +1571,17 @@
         if (r.ok || r.status === 409) {
           location.href = hrefDoDesenho(novo, caminho);
         } else {
-          erroDe(r).then(function (m) { mostrar(m, "erro"); });
+          mostrarErro(r);
         }
-      }).catch(function (e) { mostrar(e.message, "erro"); });
+      }).catch(mostrarFalha);
       return;
     }
     if (!/\.md$/i.test(novo)) { novo += ".md"; }
     garantirSalvo().then(function () {
       return pedir("POST", "/api/notas/arquivo", { caminho: novo });
     }).then(function (r) {
-      if (r.ok || r.status === 409) { abrir(novo); } else { erroDe(r).then(function (m) { mostrar(m, "erro"); }); }
-    }).catch(function (e) { mostrar(e.message, "erro"); });
+      if (r.ok || r.status === 409) { abrir(novo); } else { mostrarErro(r); }
+    }).catch(mostrarFalha);
   }
   // ---------- tarefa marcada na prévia ----------
   // a caixa diz a linha; o script troca [ ] por [x] no texto e salva. Se o
@@ -1679,7 +1687,7 @@
       inserirNoCursor(links.join("\n"));
     }).catch(function (e) {
       if (links.length) { inserirNoCursor(links.join("\n")); }
-      mostrar(e.message, "erro");
+      mostrarFalha(e);
     });
   }
 
@@ -2265,7 +2273,7 @@
         salvo = editor.value;
         location.href = "/notas";
       } else {
-        erroDe(r).then(function (m) { mostrar(m, "erro"); });
+        mostrarErro(r);
       }
     });
   });
