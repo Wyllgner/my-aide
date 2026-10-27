@@ -48,6 +48,12 @@ function avisar(texto, erro) {
   estado.classList.toggle("erro", !!erro);
 }
 
+// "Failed to fetch" e o my-aide fora do ar: o que o fetch diz nao serve para
+// quem esta olhando a tela
+function avisarFalha(e) {
+  avisar(e.message === "Failed to fetch" ? "sem conexão com o my-aide" : e.message, true);
+}
+
 // Muda quando um elemento muda, entra ou sai (versão só cresce; apagado
 // continua na lista com a versão nova) ou quando entra imagem. Rolar a tela e
 // selecionar não mudam: não é motivo para gravar.
@@ -196,7 +202,7 @@ botaoApagar.addEventListener("click", async () => {
     location.href = document.querySelector(".desenho-barra a.botao").getAttribute("href");
   } catch (e) {
     apagado = false;
-    avisar(e.message === "Failed to fetch" ? "sem conexão com o my-aide" : e.message, true);
+    avisarFalha(e);
   }
 });
 
@@ -243,7 +249,7 @@ formRenomear.addEventListener("submit", async (evento) => {
                      + (de ? "&de=" + encodeURIComponent(de) : ""));
   } catch (e) {
     movido = false;
-    avisar(e.message === "Failed to fetch" ? "sem conexão com o my-aide" : e.message, true);
+    avisarFalha(e);
   }
 });
 
@@ -292,7 +298,7 @@ async function irPeloVault(link) {
     dados = await resposta.json().catch(() => ({}));
     if (!resposta.ok) throw new Error(dados.detail || "não consegui abrir o link");
   } catch (e) {
-    avisar(e.message === "Failed to fetch" ? "sem conexão com o my-aide" : e.message, true);
+    avisarFalha(e);
     return;
   }
   if (!dados.existe) {
@@ -347,7 +353,7 @@ botaoCriar.addEventListener("click", async () => {
     }
   } catch (e) {
     botaoCriar.disabled = false;
-    avisar(e.message === "Failed to fetch" ? "sem conexão com o my-aide" : e.message, true);
+    avisarFalha(e);
     return;
   }
   esconderFaltando();
