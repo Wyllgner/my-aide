@@ -391,8 +391,10 @@ async function sair(href) {
 // campo na hora de editar: vale quando ele entra na página, sem depender de
 // evento de foco (que o navegador nem dispara com a janela em segundo plano).
 function corretor(onde) {
-  const campos = onde.matches && onde.matches("textarea, input")
-    ? [onde] : onde.querySelectorAll ? onde.querySelectorAll("textarea, input") : [];
+  // o MutationObserver entrega no de texto tambem, e nele nao se procura campo
+  if (!(onde instanceof Element)) return;
+  const campos = onde.matches("textarea, input")
+    ? [onde] : onde.querySelectorAll("textarea, input");
   for (const campo of campos) campo.spellcheck = !caixaPrivada.checked;
 }
 
