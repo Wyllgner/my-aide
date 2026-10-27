@@ -615,6 +615,10 @@ function paginasDe(it) {
   return it.tipo === "pdf" ? it.paginas : 1;
 }
 
+function somaPaginas(lista) {
+  return lista.reduce((soma, it) => soma + paginasDe(it), 0);
+}
+
 let ordemJuntar = [];
 let juntando = false;
 
@@ -622,8 +626,7 @@ function sincronizarJuntar(marcados) {
   // quem continua marcado mantém o lugar; quem chegou entra no fim
   const modo = LISTAS[escolhida];
   if (!modo) return;
-  const validos = marcados.filter((it) => it.tipo === modo.tipo && !it.erro
-    && (it.tipo !== "pdf" || it.paginas));
+  const validos = marcados.filter((it) => serveAoTipo(it, modo.tipo));
   ordemJuntar = ordemJuntar.filter((it) => validos.includes(it))
     .concat(validos.filter((it) => !ordemJuntar.includes(it)));
 }
@@ -636,7 +639,7 @@ function linhaJuntar(it, i) {
   const tipo = div.querySelector(".tipo");
   tipo.dataset.tipo = it.tipo;
   tipo.textContent = extensao(it.arquivo.name).toUpperCase();
-  const antes = ordemJuntar.slice(0, i).reduce((soma, x) => soma + paginasDe(x), 0);
+  const antes = somaPaginas(ordemJuntar.slice(0, i));
   div.querySelector(".quando").textContent = paginasDe(it) === 1 ? "pág " + (antes + 1)
     : "págs " + (antes + 1) + "–" + (antes + paginasDe(it));
   const subir = div.querySelector('[data-mover="-1"]');
@@ -656,7 +659,7 @@ function desenharJuntar(foco) {
   secaoJuntar.hidden = !visivel;
   if (!visivel) return;
   listaJuntar.replaceChildren(...ordemJuntar.map(linhaJuntar));
-  const total = ordemJuntar.reduce((soma, it) => soma + paginasDe(it), 0);
+  const total = somaPaginas(ordemJuntar);
   document.getElementById("arq-juntar-titulo").textContent = modo.titulo;
   document.getElementById("arq-juntar-resumo").textContent = (modo.tipo === "pdf"
     ? ordemJuntar.length + " PDFs · " : "") + paginas(total) + " no total";
@@ -762,13 +765,10 @@ const LOTES = {
     nota: "uma PNG por página, a 150 dpi",
     rodape: "várias páginas voltam num .zip, numeradas",
     andando: "desenhando…", falha: "não desenhou",
-    botao: (docs) => {
-      const total = docs.reduce((soma, it) => soma + it.paginas, 0);
-      return total === 1 ? "Baixar PNG" : "Baixar .zip com " + total + " imagens";
-    },
+    botao: (docs) => somaPaginas(docs) === 1 ? "Baixar PNG"
+      : "Baixar .zip com " + somaPaginas(docs) + " imagens",
     aviso: () => "Desenhando as páginas…",
-    nome: (docs) => docs.reduce((soma, it) => soma + it.paginas, 0) === 1
-      ? semExtensao(docs[0].arquivo.name) + ".png"
+    nome: (docs) => somaPaginas(docs) === 1 ? semExtensao(docs[0].arquivo.name) + ".png"
       : (docs.length === 1 ? semExtensao(docs[0].arquivo.name) + "-imagens.zip" : "imagens.zip"),
   },
   "pdf-word": {
@@ -799,8 +799,7 @@ let convertendo = false;
 const situacao = new Map();  // item -> "pronto" | "erro" enquanto a lista não muda
 
 function doLote(lote) {
-  return itens.filter((it) => it.marcado && it.tipo === lote.tipo && !it.erro
-    && (it.tipo !== "pdf" || it.paginas));
+  return itens.filter((it) => it.marcado && serveAoTipo(it, lote.tipo));
 }
 
 function desenharLote() {
@@ -887,6 +886,11 @@ function linha(it, i) {
   });
   div.append(caixa, selo(it), rotulo(it), quanto, tirar);
   return div;
+}
+
+// pronto para a acao: do tipo pedido, aberto, e PDF com as paginas contadas
+function serveAoTipo(it, tipo) {
+  return it.tipo === tipo && !it.erro && (it.tipo !== "pdf" || Boolean(it.paginas));
 }
 
 function serve(acao, marcados) {
