@@ -361,7 +361,7 @@ def test_criar_desenho_quebrado_vai_pela_api_de_desenhos():
     criar = JS[JS.index('document.querySelectorAll(".criar-quebrado")'):]
     criar = criar[:criar.index("// ---------- ligar")]
     assert 'desenho ? "/api/desenhos/arquivo" : "/api/notas/arquivo"' in criar
-    assert '"/desenho?caminho=" + encodeURIComponent(caminho)' in criar
+    assert "hrefDoDesenho(caminho, botao.dataset.de)" in criar
 
 
 def test_nota_enorme_nao_abre_no_editor(cliente, raiz):
@@ -692,7 +692,9 @@ def test_script_cria_desenho_pela_rota_dele_e_abre_a_tela():
 
     assert 'desenho: "/api/desenhos/arquivo"' in JS
     assert 'criando === "desenho" && !/\\.excalidraw$/i.test(caminho)' in JS
-    assert 'location.href = "/desenho?caminho=" + encodeURIComponent(caminho)' in JS
+    assert "location.href = hrefDoDesenho(caminho," in JS
+    # o endereço da tela do desenho é montado num lugar só
+    assert JS.count('"/desenho?caminho=" + encodeURIComponent(caminho)') == 1
     # cada id que o script procura existe na tela
     assert 'getElementById("novo-desenho")' in JS
 

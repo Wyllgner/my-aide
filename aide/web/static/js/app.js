@@ -27,6 +27,13 @@
     return corte < 0 ? "" : caminho.slice(0, corte);
   }
 
+  // a tela do desenho, com a nota de onde ele foi aberto: o "Notas" de la
+  // volta para ela
+  function hrefDoDesenho(caminho, de) {
+    return "/desenho?caminho=" + encodeURIComponent(caminho)
+      + (de ? "&de=" + encodeURIComponent(de) : "");
+  }
+
   function abrir(caminho) {
     location.href = "/notas?arquivo=" + encodeURIComponent(caminho).replace(/%2F/g, "/");
   }
@@ -312,10 +319,8 @@
           if (criando === "nota") {
             abrir(caminho);
           } else if (criando === "desenho") {
-            // o "Notas" da tela do desenho volta para a nota que estava aberta
-            var aberta = new URLSearchParams(location.search).get("arquivo");
-            location.href = "/desenho?caminho=" + encodeURIComponent(caminho)
-              + (aberta ? "&de=" + encodeURIComponent(aberta) : "");
+            location.href = hrefDoDesenho(caminho,
+              new URLSearchParams(location.search).get("arquivo"));
           } else {
             location.reload();
           }
@@ -510,8 +515,7 @@
             { caminho: caminho }).then(function (r) {
         if (r.ok || r.status === 409) {
           if (desenho) {
-            location.href = "/desenho?caminho=" + encodeURIComponent(caminho)
-              + "&de=" + encodeURIComponent(botao.dataset.de || "");
+            location.href = hrefDoDesenho(caminho, botao.dataset.de);
           } else {
             abrir(caminho);
           }
@@ -1557,8 +1561,7 @@
         return pedir("POST", "/api/desenhos/arquivo", { caminho: novo });
       }).then(function (r) {
         if (r.ok || r.status === 409) {
-          location.href = "/desenho?caminho=" + encodeURIComponent(novo)
-            + "&de=" + encodeURIComponent(caminho);
+          location.href = hrefDoDesenho(novo, caminho);
         } else {
           erroDe(r).then(function (m) { mostrar(m, "erro"); });
         }
