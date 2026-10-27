@@ -83,7 +83,7 @@ nav a:hover { background: var(--line-soft); color: var(--ink); }
 nav a[aria-current="page"] { background: var(--soft); color: var(--accent); font-weight: 600; }
 nav a svg { flex-shrink: 0; }
 
-/* a lateral já é branca: sem a borda, o bloco não se lê como bloco */
+/* a lateral ja e branca: sem a borda, o bloco nao se le como bloco */
 .saldo { margin-top: auto; display: flex; flex-direction: column; gap: 9px;
          padding: 13px 12px; background: var(--paper);
          border: 1px solid var(--line); border-radius: 12px; }
@@ -98,9 +98,9 @@ nav a svg { flex-shrink: 0; }
 .quando { font-size: 13px; color: var(--muted); margin-left: auto; flex-shrink: 0; }
 .vazio { color: var(--faint); padding: 28px 20px; font-size: 13.5px; }
 
-/* notas: árvore à esquerda, editor à direita */
+/* notas: arvore a esquerda, editor a direita */
 .notas { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 20px; align-items: start; }
-/* a lateral fica no lugar enquanto a nota rola: a árvore está sempre à mão */
+/* a lateral fica no lugar enquanto a nota rola: a arvore esta sempre a mao */
 .notas-lateral { padding: 10px; display: flex; flex-direction: column; gap: 6px;
                  position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto; }
 .notas-editor { padding: 22px 26px; display: flex; flex-direction: column; gap: 10px;
@@ -108,7 +108,7 @@ nav a svg { flex-shrink: 0; }
 .notas-botoes { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 2px 8px;
                 border-bottom: 1px solid var(--line-soft); }
 .notas-botoes .botao { flex: 1; justify-content: center; padding: 0 10px; }
-/* três botões não cabem lado a lado na lateral: o principal fica sozinho em
+/* tres botoes nao cabem lado a lado na lateral: o principal fica sozinho em
    cima, pasta e desenho dividem a linha de baixo */
 .notas-botoes #nova-nota { flex-basis: 100%; }
 /* .botao vem depois nesta folha: as duas classes juntas para valer sobre ele */
@@ -142,7 +142,7 @@ nav a svg { flex-shrink: 0; }
 .arvore .arquivo { display: flex; align-items: center; gap: 7px; padding: 6px 8px;
                    border-radius: var(--r-inner); color: var(--muted); }
 .arvore .arquivo > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* ícone de pasta e de nota: fracos, só para o olho separar um do outro */
+/* icone de pasta e de nota: fracos, so para o olho separar um do outro */
 .arvore summary > svg, .arvore .arquivo > svg { flex-shrink: 0; color: var(--faint); }
 .arvore .arquivo[aria-current="page"] > svg { color: var(--accent); }
 .arvore-topo { display: flex; align-items: center; justify-content: space-between; gap: 6px;
@@ -159,7 +159,7 @@ nav a svg { flex-shrink: 0; }
   color: var(--ink); }
 .filtro-arvore:focus { outline: none; border-color: var(--faint); }
 .filtro-vazio { padding: 2px 8px; }
-/* arrastando uma nota ou pasta: ela fica apagada, e a pasta onde cai é marcada */
+/* arrastando uma nota ou pasta: ela fica apagada, e a pasta onde cai e marcada */
 .arvore .arquivo.arrastando, .arvore summary.arrastando { opacity: .45; }
 .arvore summary.alvo-soltar, .arvore-topo.alvo-soltar { background: var(--soft);
   outline: 2px dashed var(--accent); outline-offset: -2px; border-radius: var(--r-inner); }
@@ -179,7 +179,7 @@ nav a svg { flex-shrink: 0; }
                 justify-content: flex-end; }
 .separador { width: 1px; height: 20px; background: var(--borda); margin: 0 2px; }
 
-/* os botões da nota: 32px de altura, ícone e texto, borda que se vê */
+/* os botoes da nota: 32px de altura, icone e texto, borda que se ve */
 .botao, .privada { font: inherit; font-size: 13px; height: 32px; padding: 0 12px;
                    display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
                    border: 1px solid var(--borda); border-radius: var(--r-pill);
@@ -191,7 +191,7 @@ nav a svg { flex-shrink: 0; }
   outline: 2px solid var(--accent); outline-offset: 2px; }
 .botao-perigo:hover, .botao-perigo:hover svg { color: var(--accent); }
 .botao-perigo:hover { border-color: var(--accent); background: var(--soft); }
-/* armado: o segundo clique apaga. Cheio, para não passar por engano */
+/* armado: o segundo clique apaga. Cheio, para nao passar por engano */
 .botao-perigo[data-armado], .botao-perigo[data-armado] svg { color: #fff; }
 .botao-perigo[data-armado] { background: var(--accent); border-color: var(--accent); }
 .botao-perigo .rotulo { min-width: 46px; }
@@ -204,7 +204,7 @@ nav a svg { flex-shrink: 0; }
 .privada:has(input:checked) svg { color: var(--accent); }
 .editor-meta { margin: 0; font-size: 11.5px; color: var(--faint); }
 
-/* exportar: o botão abre as duas saídas embaixo dele */
+/* exportar: o botao abre as duas saidas embaixo dele */
 .exportar { position: relative; }
 .exportar > summary { list-style: none; }
 .exportar > summary::-webkit-details-marker { display: none; }
@@ -215,7 +215,7 @@ nav a svg { flex-shrink: 0; }
                  border-radius: var(--r-inner); box-shadow: 0 6px 18px rgba(0, 0, 0, .08); }
 .exportar-menu .botao { justify-content: flex-start; }
 
-/* PDF: a impressão leva só o nome da nota e a prévia, em qualquer modo */
+/* PDF: a impressao leva so o nome da nota e a previa, em qualquer modo */
 @media print {
   @page { margin: 18mm 16mm; }
   html, body { background: #fff !important; }
@@ -257,18 +257,18 @@ nav a svg { flex-shrink: 0; }
 .modo + .modo { border-left: 1px solid var(--borda); }
 .modo[aria-pressed="true"] { background: var(--soft); color: var(--accent); font-weight: 600; }
 .modo[aria-pressed="true"] svg { color: var(--accent); }
-/* tela estreita: os modos ficam só no ícone, com o nome no title */
+/* tela estreita: os modos ficam so no icone, com o nome no title */
 @media (max-width: 1280px) { .modo span { display: none; } .modo { padding: 0 10px; } }
 .area { flex: 1; display: grid; gap: 16px; min-height: 58vh; border-radius: var(--r-inner); }
-/* arrastando um arquivo por cima: a área inteira aceita */
+/* arrastando um arquivo por cima: a area inteira aceita */
 .area.soltando { outline: 2px dashed var(--accent); outline-offset: 4px; background: var(--soft); }
 .area[data-modo="dividido"] { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .area[data-modo="editar"] .previa, .area[data-modo="ler"] .campo,
 .area[data-modo="vivo"] .campo { display: none; }
 
-/* cores no editor: o campo fica transparente por cima de uma cópia colorida
+/* cores no editor: o campo fica transparente por cima de uma copia colorida
    do mesmo texto (#realce). Os dois precisam quebrar linha no mesmo lugar:
-   mesma fonte, mesmo espaçamento e o mesmo espaço reservado para a barra */
+   mesma fonte, mesmo espacamento e o mesmo espaco reservado para a barra */
 .campo { position: relative; min-width: 0; display: flex; }
 .realce { position: absolute; inset: 0; margin: 0; overflow: hidden; pointer-events: none;
           padding: 14px 16px; border: 1px solid transparent; border-radius: var(--r-inner);
@@ -293,18 +293,18 @@ nav a svg { flex-shrink: 0; }
 .area[data-modo="ler"] .previa, .area[data-modo="vivo"] .previa {
   border-color: transparent; background: transparent; padding: 4px 2px; }
 
-/* a prévia: leitura confortável, mesma família da página */
+/* a previa: leitura confortavel, mesma familia da pagina */
 .previa { min-width: 0; overflow: auto; max-height: 70vh; padding: 14px 18px;
           border: 1px solid var(--line-soft); border-radius: var(--r-inner);
           font-size: 14.5px; line-height: 1.7; color: var(--ink); overflow-wrap: anywhere; }
 .area[data-modo="ler"] .previa { max-height: none; max-width: 760px; }
-/* o "# Título" igual ao nome do arquivo: o nome já está em cima da nota */
+/* o "# Titulo" igual ao nome do arquivo: o nome ja esta em cima da nota */
 .area[data-modo="ler"] .previa h1.repete-nome { display: none; }
 /* ao vivo: clicar num bloco troca ele pelo markdown dele, no mesmo lugar e
-   na mesma letra; o espaço vazio embaixo também aceita clique (escreve no fim) */
+   na mesma letra; o espaco vazio embaixo tambem aceita clique (escreve no fim) */
 .area[data-modo="vivo"] .previa { max-height: none; max-width: 760px; min-height: 58vh;
                                   cursor: text; padding: 4px 10px; }
-/* o padding acima é onde cabem a sobra de 8px do bloco aberto e a sombra
+/* o padding acima e onde cabem a sobra de 8px do bloco aberto e a sombra
    do bloco sob o mouse: sem ele, abrir um bloco criava rolagem para o lado */
 .bloco-caixa { position: relative; width: calc(100% + 16px); margin: -4px -8px .9em; }
 .bloco-vivo { display: block; width: 100%; margin: 0; padding: 4px 8px;
@@ -312,11 +312,11 @@ nav a svg { flex-shrink: 0; }
               font: inherit; line-height: inherit; color: var(--ink); resize: none;
               overflow: hidden; tab-size: 2; }
 .bloco-vivo:focus { outline: none; box-shadow: inset 2px 0 0 var(--accent); }
-/* as cores do bloco: a cópia na mesma letra do campo. A letra aqui não é
-   monoespaçada, então negrito e itálico ficam só na cor — mais largos, eles
+/* as cores do bloco: a copia na mesma letra do campo. A letra aqui nao e
+   monoespacada, entao negrito e italico ficam so na cor - mais largos, eles
    quebrariam a linha num lugar diferente do campo e o cursor desalinharia */
-/* a cópia é um <pre> dentro da prévia: ".previa .bloco-caixa" vence o
-   ".previa pre" (margem, rolagem e padding de bloco de código) */
+/* a copia e um <pre> dentro da previa: ".previa .bloco-caixa" vence o
+   ".previa pre" (margem, rolagem e padding de bloco de codigo) */
 .previa .bloco-caixa .realce { margin: 0; padding: 4px 8px; border: 0; overflow: hidden;
                                background: var(--line-soft); font: inherit;
                                line-height: inherit; scrollbar-gutter: auto; }
@@ -327,11 +327,11 @@ nav a svg { flex-shrink: 0; }
 .bloco-vivo.colorido::selection { background: rgba(196, 67, 43, .18); }
 .bloco-pendente { white-space: pre-wrap; color: var(--muted); margin: 0 0 .9em; }
 /* o bloco sob o mouse ganha um fundo leve: mostra o que o clique vai abrir.
-   Sombra, e não padding, para nada sair do lugar */
+   Sombra, e nao padding, para nada sair do lugar */
 .area[data-modo="vivo"] .previa [data-bloco]:hover { background: var(--line-soft);
   box-shadow: 0 0 0 6px var(--line-soft); border-radius: 2px; }
 .area[data-modo="vivo"] .previa pre:has(> code[data-bloco]:hover) { box-shadow: 0 0 0 3px var(--line); }
-/* a dica embaixo da nota; enquanto um bloco está aberto, os atalhos dele */
+/* a dica embaixo da nota; enquanto um bloco esta aberto, os atalhos dele */
 .area[data-modo="vivo"] .previa::after { display: block; margin-top: 18px; font-size: 12px;
   color: var(--faint); content: "clique num bloco para editar · clique aqui embaixo para escrever no fim"; }
 .area[data-modo="vivo"] .previa:empty::after { margin-top: 0; font-size: 14.5px;
@@ -344,7 +344,7 @@ nav a svg { flex-shrink: 0; }
 .previa p, .previa ul, .previa ol, .previa pre, .previa table, .previa blockquote { margin: 0 0 .9em; }
 .previa ul, .previa ol { padding-left: 1.4em; }
 .previa li.tarefa { list-style: none; margin-left: -1.3em; }
-/* a feita sai riscada e apagada; as subtarefas embaixo dela não */
+/* a feita sai riscada e apagada; as subtarefas embaixo dela nao */
 .previa li.feita > .tarefa-texto, .previa li.feita > p > .tarefa-texto {
   color: var(--faint); text-decoration: line-through; text-decoration-color: var(--faint); }
 .previa li.tarefa input { margin: 0 6px 0 0; vertical-align: -1px; cursor: pointer;
@@ -355,7 +355,7 @@ nav a svg { flex-shrink: 0; }
               overflow: auto; }
 .previa pre code { background: none; padding: 0; }
 .previa blockquote { border-left: 3px solid var(--line); padding-left: 12px; color: var(--muted); }
-/* callouts (> [!tipo]): caixa tingida pela cor do tipo, título com ícone.
+/* callouts (> [!tipo]): caixa tingida pela cor do tipo, titulo com icone.
    Tipo desconhecido fica com a cor da nota */
 .previa .callout { --cor: var(--azul); border: 0; border-radius: var(--r-inner); padding: 10px 14px;
   background: color-mix(in srgb, var(--cor) 9%, transparent); color: var(--ink); }
@@ -383,7 +383,7 @@ nav a svg { flex-shrink: 0; }
 .previa th, .previa td { border: 1px solid var(--line); padding: 5px 10px; text-align: left; }
 .previa hr { border: 0; border-top: 1px solid var(--line); margin: 1.4em 0; }
 .previa .wikilink { border-bottom: 1px solid var(--soft); }
-/* #tag: etiqueta azul, a mesma cor da tag no editor; leva às notas com ela */
+/* #tag: etiqueta azul, a mesma cor da tag no editor; leva as notas com ela */
 .previa a.tag { display: inline-block; padding: 0 7px; border-radius: var(--r-pill);
   font-size: .88em; line-height: 1.6; text-decoration: none; color: var(--azul);
   background: color-mix(in srgb, var(--azul) 10%, transparent); }
@@ -414,8 +414,8 @@ nav a svg { flex-shrink: 0; }
                   border-radius: 8px; }
 .renomear .dica { font-size: 11px; color: var(--faint); }
 
-/* renomear pasta: em tela de toque o lápis fica à vista, fraco — não há
-   "passar o mouse" para fazê-lo aparecer */
+/* renomear pasta: em tela de toque o lapis fica a vista, fraco - nao ha
+   "passar o mouse" para faze-lo aparecer */
 .arvore .nome-pasta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nova-na-pasta, .novo-desenho-na-pasta, .renomear-pasta, .apagar-pasta { font: inherit; font-size: 11.5px; border: 0; background: none;
                                  min-width: 24px; height: 24px; padding: 0 5px;
@@ -423,8 +423,8 @@ nav a svg { flex-shrink: 0; }
                                  justify-content: center; gap: 4px; color: var(--muted);
                                  cursor: pointer; opacity: .45; border-radius: 6px;
                                  flex-shrink: 0; }
-/* com mouse, somem até você passar por cima da pasta: dez pastas com dois
-   ícones cada viram ruído. O apagar esperando o segundo clique fica à vista */
+/* com mouse, somem ate voce passar por cima da pasta: dez pastas com dois
+   icones cada viram ruido. O apagar esperando o segundo clique fica a vista */
 @media (hover: hover) {
   .nova-na-pasta, .novo-desenho-na-pasta, .renomear-pasta, .apagar-pasta {
     opacity: 0; transition: opacity .12s; }
@@ -446,13 +446,13 @@ nav a svg { flex-shrink: 0; }
 .renomear-pasta-form input { font: inherit; font-size: 13px; padding: 5px 8px; width: 100%;
                              border: 1px solid var(--faint); border-radius: 8px; }
 
-/* visão geral do vault */
+/* visao geral do vault */
 .atalho-visao { display: flex; align-items: center; gap: 8px; font-size: 13px;
                 padding: 7px 8px; margin: 0 0 2px;
                 border-radius: var(--r-inner); color: var(--muted); }
 .atalho-visao:hover { background: var(--line-soft); color: var(--ink); }
 .atalho-visao svg, .aviso-quebrados svg { flex-shrink: 0; }
-/* aberto: fica no lugar, marcado como a nota aberta na árvore */
+/* aberto: fica no lugar, marcado como a nota aberta na arvore */
 .atalho-visao[aria-current="page"] { background: var(--soft); color: var(--accent); font-weight: 600; }
 .aviso-quebrados[aria-current="page"] { background: var(--accent); color: #fff; }
 .visao { display: flex; flex-direction: column; gap: 14px; }
@@ -472,7 +472,7 @@ button.atalho-visao { width: 100%; border: 0; background: none; font: inherit; f
 .atalho-visao kbd { margin-left: auto; font-family: var(--mono);
   font-size: 10.5px; color: var(--faint); }
 
-/* abrir nota rápido (Ctrl+O): a caixa no meio da tela, por cima de tudo */
+/* abrir nota rapido (Ctrl+O): a caixa no meio da tela, por cima de tudo */
 .seletor-fundo { position: fixed; inset: 0; z-index: 30; display: flex; justify-content: center;
   align-items: flex-start; padding: 14vh 16px 0; background: rgba(21, 23, 28, .18); }
 .seletor { width: min(560px, 100%); background: var(--surface); border: 1px solid var(--line);
@@ -505,7 +505,7 @@ button.atalho-visao { width: 100%; border: 0; background: none; font: inherit; f
 .grafo.focado a.no:not(.perto), .grafo.focado line:not(.perto) { opacity: .15; }
 .grafo.focado line.perto { stroke: var(--accent); stroke-width: 1.5; }
 .grafo text.so-perto { display: none; }
-/* desenho: cartão com a miniatura; o mouse (ou o foco) amplia para reconhecer */
+/* desenho: cartao com a miniatura; o mouse (ou o foco) amplia para reconhecer */
 .grafo a.no.desenho rect.moldura { fill: #fff; stroke: var(--accent); stroke-width: 1.5;
   vector-effect: non-scaling-stroke; }
 .grafo a.no.desenho.solto rect.moldura { stroke: var(--faint); }
@@ -515,14 +515,14 @@ button.atalho-visao { width: 100%; border: 0; background: none; font: inherit; f
   vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; }
 .grafo a.desenho .cartao { transform-box: fill-box; transform-origin: center;
   transition: transform .15s ease; }
-/* 2.6 é grafo_svg.AMPLIACAO; o nome desce o que a borda desceu (--desce) */
+/* 2.6 e grafo_svg.AMPLIACAO; o nome desce o que a borda desceu (--desce) */
 .grafo a.desenho:hover .cartao, .grafo a.desenho:focus .cartao {
   transform: scale(2.6); filter: drop-shadow(0 4px 10px rgba(21,23,28,.18)); }
 .grafo a.desenho text { transition: transform .15s ease; }
 .grafo a.desenho:hover text, .grafo a.desenho:focus text {
   transform: translate(var(--anda), var(--desce));
   display: inline; font-weight: 600; fill: var(--ink); }
-/* ligação com desenho: citar uma imagem não é ligar duas ideias */
+/* ligacao com desenho: citar uma imagem nao e ligar duas ideias */
 .grafo line.com-desenho { stroke-dasharray: 4 3; }
 .ao-redor { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px;
             align-items: start; }
@@ -543,7 +543,7 @@ button.atalho-visao { width: 100%; border: 0; background: none; font: inherit; f
 .quebrados-topo .eyebrow { margin: 0 0 2px; }
 .quebrados-resumo { margin: 0; font-size: 13px; font-weight: 600; color: var(--ink); }
 .quebrados-explica { margin: 3px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--faint); }
-/* cada nota que falta é um cartão: nome e criar em cima, quem cita embaixo */
+/* cada nota que falta e um cartao: nome e criar em cima, quem cita embaixo */
 .quebrado-item { display: flex; flex-direction: column; gap: 6px; padding: 10px;
                  border: 1px solid var(--line-soft); border-radius: var(--r-inner);
                  background: var(--surface); font-size: 13px; }
@@ -556,7 +556,7 @@ button.atalho-visao { width: 100%; border: 0; background: none; font: inherit; f
                   padding: 4px 10px; color: var(--accent); border-color: var(--soft);
                   background: var(--soft); font-weight: 600; }
 .criar-quebrado:hover { color: #fff; background: var(--accent); border-color: var(--accent); }
-/* "ligar a X": a nota parecida que já existe, para um nome digitado errado */
+/* "ligar a X": a nota parecida que ja existe, para um nome digitado errado */
 .quebrado-sugestao { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
 .quebrado-sugestao .onde { font-size: 11px; color: var(--faint); }
 .ligar-quebrado { display: inline-flex; align-items: center; gap: 5px; font: inherit;
@@ -607,7 +607,7 @@ button.atalho-visao { width: 100%; border: 0; background: none; font: inherit; f
 .sugestoes li[aria-selected="true"] { background: var(--soft); color: var(--accent); }
 .sugestoes .onde { font-size: 11px; color: var(--faint); }
 
-/* uma tela de PC, mas não quebrada num monitor estreito */
+/* uma tela de PC, mas nao quebrada num monitor estreito */
 @media (max-width: 1100px) {
   .lateral { width: 68px; padding: 22px 10px; }
   .lateral .rotulo, .marca span, .saldo { display: none; }
@@ -646,27 +646,27 @@ button.atalho-visao { width: 100%; border: 0; background: none; font: inherit; f
   background: var(--surface); border: 1px solid var(--borda); border-radius: var(--r-inner);
   box-shadow: 0 8px 24px rgba(21,23,28,.12); }
 .desenho-citado-lista .eyebrow { margin: 0 0 4px; }
-/* "Web Embed" e "Mermaid to Excalidraw" não funcionam aqui (a CSP barra
-   iframe de fora; o mermaid ficou fora do pacote). O Excalidraw dá o mesmo
+/* "Web Embed" e "Mermaid to Excalidraw" nao funcionam aqui (a CSP barra
+   iframe de fora; o mermaid ficou fora do pacote). O Excalidraw da o mesmo
    data-testid aos dois. Quatro seletores: o excalidraw.css vem depois com
-   três (.excalidraw .dropdown-menu .dropdown-menu-item-base). A div antes do
-   mermaid é o título "Generate", que ficaria sozinho */
+   tres (.excalidraw .dropdown-menu .dropdown-menu-item-base). A div antes do
+   mermaid e o titulo "Generate", que ficaria sozinho */
 .desenho-editor .excalidraw .dropdown-menu [data-testid="toolbar-embeddable"],
 .desenho-editor .excalidraw .dropdown-menu div:has(+ [data-testid="toolbar-embeddable"]) {
   display: none; }
-/* "Procurar bibliotecas" abre o site do Excalidraw com o endereço daqui, e a
-   volta (baixar a biblioteca escolhida) a CSP barra: o caminho não leva a nada */
+/* "Procurar bibliotecas" abre o site do Excalidraw com o endereco daqui, e a
+   volta (baixar a biblioteca escolhida) a CSP barra: o caminho nao leva a nada */
 .desenho-editor .excalidraw .library-menu-control-buttons .library-menu-browse-button {
   display: none; }
 
-/* ![[desenho.excalidraw]] na nota: a prévia leva ao desenho */
+/* ![[desenho.excalidraw]] na nota: a previa leva ao desenho */
 .desenho-embutido { display: inline-block; max-width: 100%; border: 1px solid var(--line);
   border-radius: var(--r-inner); background: #fff; line-height: 0; }
 .desenho-embutido img { max-width: 100%; height: auto; border-radius: var(--r-inner); }
 .desenho-embutido:hover { border-color: var(--faint); }
 .desenho-embutido.sem-previa { line-height: 1.4; padding: 10px 14px; font-size: 13px;
   color: var(--muted); background: var(--line-soft); }
-/* tela Arquivos: soltar à esquerda, a lista do que veio à direita */
+/* tela Arquivos: soltar a esquerda, a lista do que veio a direita */
 .arq-topo { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
   gap: 18px; margin-bottom: 18px; }
 @media (max-width: 900px) { .arq-topo { grid-template-columns: minmax(0, 1fr); } }
@@ -711,7 +711,7 @@ button.atalho-visao { width: 100%; border: 0; background: none; font: inherit; f
 .arq-aviso { min-height: 20px; margin: 0 0 14px; font-size: 13px; color: var(--muted); }
 .arq-aviso[data-erro] { color: var(--accent); }
 .fila-arq .linha[data-erro] .quando { color: var(--accent); }
-/* organizar: as páginas em grade, cada uma com o número embaixo */
+/* organizar: as paginas em grade, cada uma com o numero embaixo */
 .editor-pdf { position: relative; padding: 18px 20px 20px; }
 .arq-secao-topo { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
 .arq-secao-topo h2 { font-size: 16px; margin: 0 8px 0 0; overflow-wrap: anywhere; }
@@ -721,7 +721,7 @@ button.atalho-visao { width: 100%; border: 0; background: none; font: inherit; f
   position: relative; cursor: grab; border-radius: 8px; }
 .folha:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
 .folha[data-arrastando] { opacity: .35; }
-/* onde a página vai cair: uma barra no lado certo da vizinha */
+/* onde a pagina vai cair: uma barra no lado certo da vizinha */
 .folha[data-cair]::before { content: ""; position: absolute; top: 0; height: 150px; width: 3px;
   border-radius: 2px; background: var(--accent); }
 .folha[data-cair="antes"]::before { left: -11px; }
@@ -773,7 +773,7 @@ button.atalho-visao { width: 100%; border: 0; background: none; font: inherit; f
   box-shadow: 0 8px 24px rgba(21,23,28,.12); }
 .inserir .eyebrow { margin: 4px 8px 8px; }
 .inserir .botao { width: 100%; justify-content: flex-start; margin-top: 6px; }
-/* o .botao do site não tinha estado desligado: até aqui nenhum precisou */
+/* o .botao do site nao tinha estado desligado: ate aqui nenhum precisou */
 .botao:disabled { opacity: .45; cursor: not-allowed; }
 .botao:disabled:hover { background: var(--surface); border-color: var(--borda); }
 .botao.botao-principal:disabled:hover { background: var(--accent); border-color: var(--accent); }
