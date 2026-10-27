@@ -78,6 +78,12 @@ function jsonOuVazio(resposta) {
   return resposta.json().catch(() => ({}));
 }
 
+// a query montada pelo navegador: um encodeURIComponent esquecido quebra o
+// caminho com espaco ou acento, e aqui todo caminho tem um dos dois
+function rota(base, params) {
+  return base + "?" + new URLSearchParams(params);
+}
+
 function pedir(metodo, url, corpo) {
   return fetch(url, {
     method: metodo,
@@ -198,7 +204,7 @@ botaoApagar.addEventListener("click", async () => {
   apagado = true;
   clearTimeout(timer);
   try {
-    const resposta = await fetch("/api/desenhos/arquivo?caminho=" + encodeURIComponent(caminho),
+    const resposta = await fetch(rota("/api/desenhos/arquivo", { caminho: caminho }),
                                  { method: "DELETE", headers: { "X-Aide": "1" } });
     if (!resposta.ok) {
       const dados = await jsonOuVazio(resposta);
@@ -251,8 +257,9 @@ formRenomear.addEventListener("submit", async (evento) => {
     const dados = await jsonOuVazio(resposta);
     if (!resposta.ok) throw new Error(dados.detail || "não consegui renomear");
     const de = new URLSearchParams(location.search).get("de");
-    location.replace("/desenho?caminho=" + encodeURIComponent(dados.caminho)
-                     + (de ? "&de=" + encodeURIComponent(de) : ""));
+    const params = { caminho: dados.caminho };
+    if (de) params.de = de;
+    location.replace(rota("/desenho", params));
   } catch (e) {
     movido = false;
     avisarFalha(e);
@@ -299,8 +306,7 @@ function abrirLink(elemento, evento) {
 async function irPeloVault(link) {
   let dados;
   try {
-    const resposta = await fetch("/api/desenhos/link?caminho=" + encodeURIComponent(caminho)
-                                 + "&alvo=" + encodeURIComponent(link));
+    const resposta = await fetch(rota("/api/desenhos/link", { caminho: caminho, alvo: link }));
     dados = await jsonOuVazio(resposta);
     if (!resposta.ok) throw new Error(dados.detail || "não consegui abrir o link");
   } catch (e) {
@@ -363,8 +369,8 @@ botaoCriar.addEventListener("click", async () => {
     return;
   }
   esconderFaltando();
-  sair(hrefDe(tipo, tipo === "desenho" ? "/desenho?caminho=" + encodeURIComponent(novo)
-                                       : "/notas?arquivo=" + encodeURIComponent(novo)));
+  sair(hrefDe(tipo, tipo === "desenho" ? rota("/desenho", { caminho: novo })
+                                       : rota("/notas", { arquivo: novo })));
 });
 
 // sai da tela só com tudo salvo; com conflito, ou se o salvamento falhou,
@@ -444,8 +450,7 @@ async function gerarPrevia() {
     });
     // a tela mudou durante a exportação: esta imagem já não é a versão salva
     if (!pendente()) {
-      await fetch("/api/desenhos/previa?caminho=" + encodeURIComponent(caminho)
-                  + "&assinatura=" + encodeURIComponent(daVersao),
+      await fetch(rota("/api/desenhos/previa", { caminho: caminho, assinatura: daVersao }),
                   { method: "PUT", headers: { "Content-Type": "image/png", "X-Aide": "1" },
                     body: png });
     }
@@ -534,7 +539,7 @@ window.addEventListener("beforeunload", (evento) => {
 async function abrir() {
   let resposta;
   try {
-    resposta = await fetch("/api/desenhos/arquivo?caminho=" + encodeURIComponent(caminho));
+    resposta = await fetch(rota("/api/desenhos/arquivo", { caminho: caminho }));
   } catch (e) {
     avisar("sem conexão com o my-aide", true);
     return;
