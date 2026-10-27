@@ -72,6 +72,12 @@ function pendente() {
     && (atual() !== salvo || privadaPedida !== null);
 }
 
+// as rotas respondem JSON, menos quando quem recusa e a fronteira (413) ou o
+// servidor caiu no meio: ai o corpo nao e JSON e o detalhe vem vazio
+function jsonOuVazio(resposta) {
+  return resposta.json().catch(() => ({}));
+}
+
 function pedir(metodo, url, corpo) {
   return fetch(url, {
     method: metodo,
@@ -100,7 +106,7 @@ async function salvar() {
   avisar("salvando…");
   try {
     const resposta = await pedir("PUT", "/api/desenhos/arquivo", corpo);
-    const dados = await resposta.json().catch(() => ({}));
+    const dados = await jsonOuVazio(resposta);
     if (resposta.ok) {
       versao = dados.versao;
       salvo = enviada;
@@ -195,7 +201,7 @@ botaoApagar.addEventListener("click", async () => {
     const resposta = await fetch("/api/desenhos/arquivo?caminho=" + encodeURIComponent(caminho),
                                  { method: "DELETE", headers: { "X-Aide": "1" } });
     if (!resposta.ok) {
-      const dados = await resposta.json().catch(() => ({}));
+      const dados = await jsonOuVazio(resposta);
       throw new Error(dados.detail || "não consegui apagar");
     }
     // volta para onde o "Notas" da barra levaria
@@ -242,7 +248,7 @@ formRenomear.addEventListener("submit", async (evento) => {
     await esperarSalvar();
     movido = true;
     const resposta = await pedir("POST", "/api/desenhos/mover", { de: caminho, para: novo });
-    const dados = await resposta.json().catch(() => ({}));
+    const dados = await jsonOuVazio(resposta);
     if (!resposta.ok) throw new Error(dados.detail || "não consegui renomear");
     const de = new URLSearchParams(location.search).get("de");
     location.replace("/desenho?caminho=" + encodeURIComponent(dados.caminho)
@@ -295,7 +301,7 @@ async function irPeloVault(link) {
   try {
     const resposta = await fetch("/api/desenhos/link?caminho=" + encodeURIComponent(caminho)
                                  + "&alvo=" + encodeURIComponent(link));
-    dados = await resposta.json().catch(() => ({}));
+    dados = await jsonOuVazio(resposta);
     if (!resposta.ok) throw new Error(dados.detail || "não consegui abrir o link");
   } catch (e) {
     avisarFalha(e);
@@ -348,7 +354,7 @@ botaoCriar.addEventListener("click", async () => {
                                                              : "/api/notas/arquivo", { caminho: novo });
     // 409: alguém criou no meio; abre o que já existe
     if (!resposta.ok && resposta.status !== 409) {
-      const dados = await resposta.json().catch(() => ({}));
+      const dados = await jsonOuVazio(resposta);
       throw new Error(dados.detail || "não consegui criar");
     }
   } catch (e) {
@@ -475,7 +481,7 @@ async function salvarBiblioteca(texto) {
   try {
     const resposta = await pedir("PUT", "/api/desenhos/biblioteca",
                                  { texto: texto, versao: bibliotecaVersao });
-    const dados = await resposta.json().catch(() => ({}));
+    const dados = await jsonOuVazio(resposta);
     if (resposta.ok) {
       bibliotecaVersao = dados.versao;
       bibliotecaSalva = texto;
@@ -533,7 +539,7 @@ async function abrir() {
     avisar("sem conexão com o my-aide", true);
     return;
   }
-  const dados = await resposta.json().catch(() => ({}));
+  const dados = await jsonOuVazio(resposta);
   if (!resposta.ok) {
     avisar(dados.detail || "não consegui abrir o desenho", true);
     return;
