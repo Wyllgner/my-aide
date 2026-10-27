@@ -16,6 +16,17 @@
     });
   }
 
+  // o nome que aparece na tela: sem a pasta e sem o .md
+  function nomeCurto(caminho) {
+    return caminho.replace(/^.*\//, "").replace(/\.md$/i, "");
+  }
+
+  // a pasta do caminho, sem a barra do fim ("" na raiz do vault)
+  function pastaDe(caminho) {
+    var corte = caminho.lastIndexOf("/");
+    return corte < 0 ? "" : caminho.slice(0, corte);
+  }
+
   function abrir(caminho) {
     location.href = "/notas?arquivo=" + encodeURIComponent(caminho).replace(/%2F/g, "/");
   }
@@ -142,9 +153,6 @@
     var tipoDe = function (e) {
       var tipos = Array.prototype.slice.call((e.dataTransfer && e.dataTransfer.types) || []);
       return tipos.indexOf(TIPO_PASTA) >= 0 ? "pasta" : tipos.indexOf(TIPO_NOTA) >= 0 ? "nota" : null;
-    };
-    var pastaDe = function (caminho) {
-      return caminho.lastIndexOf("/") >= 0 ? caminho.slice(0, caminho.lastIndexOf("/")) : "";
     };
     // a pasta onde cai: a <details> mais próxima, ou a raiz ("")
     var destinoDe = function (e) {
@@ -338,7 +346,7 @@
   // → Telhado). Só no nome: no caminho inteiro, quase tudo casaria
   function pontuar(nota, busca) {
     var tudo = semAcento(nota);
-    var nome = tudo.replace(/^.*\//, "").replace(/\.md$/, "");
+    var nome = nomeCurto(tudo);
     if (nome.indexOf(busca) === 0) { return 0; }
     if (nome.indexOf(busca) >= 0) { return 1; }
     if (tudo.indexOf(busca) >= 0) { return 2; }
@@ -368,7 +376,7 @@
     }
     s.itens = achadas.slice(0, 40).map(function (c) { return { caminho: c }; });
     var exata = achadas.some(function (c) {
-      return semAcento(c.replace(/^.*\//, "").replace(/\.md$/i, "")) === busca || semAcento(c) === busca;
+      return semAcento(nomeCurto(c)) === busca || semAcento(c) === busca;
     });
     if (digitado && !exata) {
       var pasta = form ? form.dataset.pasta : "";
@@ -388,8 +396,8 @@
       li.setAttribute("role", "option");
       li.setAttribute("aria-selected", String(i === s.escolhido));
       var nome = document.createElement("span");
-      nome.textContent = item.criar ? "+ criar nota “" + item.caminho.replace(/^.*\//, "").replace(/\.md$/i, "") + "”"
-        : item.caminho.replace(/^.*\//, "").replace(/\.md$/i, "");
+      nome.textContent = item.criar ? "+ criar nota “" + nomeCurto(item.caminho) + "”"
+        : nomeCurto(item.caminho);
       var onde = document.createElement("span");
       onde.className = "onde";
       onde.textContent = item.caminho;
@@ -540,7 +548,7 @@
       form.className = "renomear-pasta-form";
       var campo = document.createElement("input");
       // só o nome; com "/" no meio, vale como caminho desde a raiz do vault
-      var mae = de.lastIndexOf("/") >= 0 ? de.slice(0, de.lastIndexOf("/") + 1) : "";
+      var mae = pastaDe(de) ? pastaDe(de) + "/" : "";
       campo.value = de.slice(mae.length);
       campo.setAttribute("aria-label", "nome da pasta");
       campo.spellcheck = false;
@@ -1484,7 +1492,7 @@
   function fecharRenomear() {
     renomear.hidden = true;
     titulo.hidden = false;
-    campoCaminho.value = caminho.replace(/^.*\//, "").replace(/\.md$/i, "");
+    campoCaminho.value = nomeCurto(caminho);
   }
 
   titulo.addEventListener("click", abrirRenomear);
@@ -1498,7 +1506,7 @@
     if (!novo) { return; }
     // o campo é só o nome; com uma "/" no meio, vale como caminho desde a
     // raiz do vault (mudar de pasta, no dia a dia, é arrastar na árvore)
-    var pastaAtual = caminho.lastIndexOf("/") >= 0 ? caminho.slice(0, caminho.lastIndexOf("/") + 1) : "";
+    var pastaAtual = pastaDe(caminho) ? pastaDe(caminho) + "/" : "";
     if (novo.indexOf("/") < 0) { novo = pastaAtual + novo; }
     if (!/\.md$/i.test(novo)) { novo += ".md"; }
     if (novo === caminho) { fecharRenomear(); return; }
@@ -1532,7 +1540,7 @@
     e.preventDefault();
     var alvo = link.dataset.alvo.trim();
     if (!alvo) { return; }
-    var pasta = caminho.lastIndexOf("/") >= 0 ? caminho.slice(0, caminho.lastIndexOf("/")) : "";
+    var pasta = pastaDe(caminho);
     var novo = (alvo.indexOf("/") >= 0 || !pasta ? alvo : pasta + "/" + alvo);
     if (/\.excalidraw$/i.test(novo)) {
       // [[Planta.excalidraw]] pede um desenho, não uma nota Planta.excalidraw.md
@@ -1847,7 +1855,7 @@
   var DESENHO = /\.excalidraw$/i;
   var nomes = {};
   notas.concat(desenhosDoVault).forEach(function (n) {
-    var nome = n.replace(/^.*\//, "").replace(/\.md$/i, "");
+    var nome = nomeCurto(n);
     nomes[nome.toLowerCase()] = (nomes[nome.toLowerCase()] || 0) + 1;
   });
   var caixa = document.createElement("ul");
@@ -1862,7 +1870,7 @@
   var campoSugestao = editor;
 
   function comoLink(n) {
-    var nome = n.replace(/^.*\//, "").replace(/\.md$/i, "");
+    var nome = nomeCurto(n);
     // nome repetido em outra pasta: o caminho desfaz a dúvida (desenho
     // mantém o .excalidraw, que é o que diz que o link é de desenho)
     return nomes[nome.toLowerCase()] > 1 ? n.replace(/\.md$/i, "") : nome;
@@ -1923,7 +1931,7 @@
       var nb = b.replace(/^.*\//, "").toLowerCase().indexOf(busca) === 0 ? 0 : 1;
       return na - nb || a.localeCompare(b);
     }).slice(0, 8).map(function (n) {
-      return { nome: n.replace(/^.*\//, "").replace(/\.md$/i, "").replace(DESENHO, ""),
+      return { nome: nomeCurto(n).replace(DESENHO, ""),
         onde: DESENHO.test(n) ? "desenho · " + n : n,
         escolher: function () { inserir(n); } };
     });
