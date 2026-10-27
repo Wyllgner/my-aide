@@ -165,7 +165,7 @@ def test_o_estilo_e_servido_uma_vez(cliente):
     resposta = cliente.get("/app.css")
     assert resposta.status_code == 200
     assert resposta.headers["content-type"].startswith("text/css")
-    assert "--accent:#C4432B" in resposta.text
+    assert "--accent: #c4432b" in resposta.text
     assert '<link rel="stylesheet" href="/app.css">' in cliente.get("/").text
 
 

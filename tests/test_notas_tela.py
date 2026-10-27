@@ -139,7 +139,7 @@ def test_hidden_vence_o_display_das_classes():
     """O campo de criar aparecia vazio, aberto, porque .criar tem display:flex."""
     CSS = estaticos.folha()
 
-    assert "[hidden] { display: none !important; }" in CSS
+    assert "[hidden] {\n  display: none !important;\n}" in CSS
 
 
 def test_o_topo_da_nota_e_so_da_nota():
@@ -840,7 +840,7 @@ def test_a_impressao_leva_so_o_nome_e_a_previa():
     impressao = CSS[CSS.index("@media print"):]
     for escondido in (".lateral", ".notas-lateral", ".editor-acoes", ".campo", ".ao-redor"):
         assert escondido in impressao.split("display: none !important")[0]
-    assert ".area .previa { display: block !important" in impressao
+    assert ".area .previa {\n    display: block !important" in impressao
 
 
 def test_desenho_ilegivel_conta_como_privado_no_grafo(config, tmp_path):
