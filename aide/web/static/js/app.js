@@ -1761,24 +1761,27 @@
   // ---------- chegar no link citado ----------
   // a lista de links quebrados abre a nota com ?linha=&alvo=: a prévia rola
   // até o link e pisca, e o campo seleciona o link no texto
-  function alturaAte(posicao) {
-    // o mesmo espelho do autocompletar: a linha pode quebrar em várias
+  // onde o caractere `posicao` do campo cai, num espelho escondido com o
+  // mesmo estilo dele: a linha pode quebrar em varias, e so o navegador sabe
+  // onde. Serve para rolar ate o cursor e para por a lista de sugestoes nele
+  function medirCursor(campo, posicao) {
     var espelho = document.createElement("div");
-    var estilo = getComputedStyle(editor);
+    var estilo = getComputedStyle(campo);
     ["fontFamily", "fontSize", "lineHeight", "padding", "border", "letterSpacing",
      "tabSize", "boxSizing", "width"].forEach(function (p) { espelho.style[p] = estilo[p]; });
     espelho.style.position = "absolute";
     espelho.style.visibility = "hidden";
     espelho.style.whiteSpace = "pre-wrap";
     espelho.style.wordWrap = "break-word";
-    espelho.textContent = editor.value.slice(0, posicao);
+    espelho.textContent = campo.value.slice(0, posicao);
     var marca = document.createElement("span");
     marca.textContent = "\u200b";
     espelho.appendChild(marca);
     document.body.appendChild(espelho);
-    var topo = marca.offsetTop;
+    var onde = { topo: marca.offsetTop, esquerda: marca.offsetLeft,
+      altura: parseFloat(estilo.lineHeight) };
     document.body.removeChild(espelho);
-    return topo;
+    return onde;
   }
 
   (function irAoLink() {
@@ -1820,7 +1823,7 @@
     var ate = achado >= 0 ? achado + alvo.length : texto.length;
     editor.focus({ preventScroll: true });
     editor.setSelectionRange(inicio + de, inicio + ate);
-    editor.scrollTop = Math.max(0, alturaAte(inicio + de) - editor.clientHeight / 2);
+    editor.scrollTop = Math.max(0, medirCursor(editor, inicio + de).topo - editor.clientHeight / 2);
     if (realce) { realce.scrollTop = editor.scrollTop; }
     if (!marca || area.dataset.modo === "editar") {
       editor.scrollIntoView({ block: "nearest" });
@@ -1898,25 +1901,12 @@
 
   function fecharSugestoes() { caixa.hidden = true; achados = []; }
 
+  // a lista abre embaixo do cursor, uma linha abaixo dele
   function posicionar() {
-    // um espelho do campo, com o mesmo estilo, mede onde está o cursor
-    var espelho = document.createElement("div");
-    var estilo = getComputedStyle(campoSugestao);
-    ["fontFamily", "fontSize", "lineHeight", "padding", "border", "letterSpacing",
-     "tabSize", "boxSizing", "width"].forEach(function (p) { espelho.style[p] = estilo[p]; });
-    espelho.style.position = "absolute";
-    espelho.style.visibility = "hidden";
-    espelho.style.whiteSpace = "pre-wrap";
-    espelho.style.wordWrap = "break-word";
-    espelho.textContent = campoSugestao.value.slice(0, campoSugestao.selectionStart);
-    var marca = document.createElement("span");
-    marca.textContent = "\u200b";
-    espelho.appendChild(marca);
-    document.body.appendChild(espelho);
+    var onde = medirCursor(campoSugestao, campoSugestao.selectionStart);
     var caixaCampo = campoSugestao.getBoundingClientRect();
-    var topo = caixaCampo.top + marca.offsetTop - campoSugestao.scrollTop + parseFloat(estilo.lineHeight);
-    var esquerda = caixaCampo.left + marca.offsetLeft;
-    document.body.removeChild(espelho);
+    var topo = caixaCampo.top + onde.topo - campoSugestao.scrollTop + onde.altura;
+    var esquerda = caixaCampo.left + onde.esquerda;
     caixa.style.top = Math.min(topo, window.innerHeight - 40) + window.scrollY + "px";
     caixa.style.left = Math.min(esquerda, window.innerWidth - 300) + window.scrollX + "px";
   }
