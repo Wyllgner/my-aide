@@ -85,6 +85,28 @@ function avisar(texto, erro) {
   recado = { texto: texto || "", erro: Boolean(erro) };
 }
 
+// o que a linha diz do arquivo quando nada esta acontecendo com ele
+function medida(it) {
+  return (it.paginas ? paginas(it.paginas) + " · " : "") + tamanho(it.arquivo.size);
+}
+
+// o selo da extensao e o nome, iguais na fila de cima e na lista do lote
+function selo(it) {
+  const tipo = document.createElement("span");
+  tipo.className = "tipo";
+  tipo.dataset.tipo = it.tipo;
+  tipo.textContent = extensao(it.arquivo.name).toUpperCase();
+  return tipo;
+}
+
+function rotulo(it) {
+  const nome = document.createElement("span");
+  nome.className = "nome";
+  nome.textContent = it.arquivo.name;
+  nome.title = it.arquivo.name;
+  return nome;
+}
+
 function mesmo(a, b) {
   return a.name === b.name && a.size === b.size && a.lastModified === b.lastModified;
 }
@@ -798,21 +820,13 @@ function desenharLote() {
   listaLote.replaceChildren(...docs.map((it) => {
     const div = document.createElement("div");
     div.className = "linha";
-    const tipo = document.createElement("span");
-    tipo.className = "tipo";
-    tipo.dataset.tipo = it.tipo;
-    tipo.textContent = extensao(it.arquivo.name).toUpperCase();
-    const nome = document.createElement("span");
-    nome.className = "nome";
-    nome.textContent = it.arquivo.name;
-    nome.title = it.arquivo.name;
     const estado = document.createElement("span");
     estado.className = "quando";
     const s = convertendo ? "convertendo" : situacao.get(it);
     estado.dataset.estado = s || "esperando";
     estado.textContent = { convertendo: lote.andando, pronto: "pronto", erro: lote.falha }[s]
-      || (it.paginas ? paginas(it.paginas) + " · " : "") + tamanho(it.arquivo.size);
-    div.append(tipo, nome, estado);
+      || medida(it);
+    div.append(selo(it), rotulo(it), estado);
     return div;
   }));
   baixarLote.disabled = convertendo;
@@ -855,18 +869,9 @@ function linha(it, i) {
   caixa.checked = it.marcado;
   caixa.setAttribute("aria-label", "Marcar " + it.arquivo.name);
   caixa.addEventListener("change", () => { it.marcado = caixa.checked; avisar(""); desenhar(); });
-  const tipo = document.createElement("span");
-  tipo.className = "tipo";
-  tipo.dataset.tipo = it.tipo;
-  tipo.textContent = extensao(it.arquivo.name).toUpperCase();
-  const nome = document.createElement("span");
-  nome.className = "nome";
-  nome.textContent = it.arquivo.name;
-  nome.title = it.arquivo.name;
   const quanto = document.createElement("span");
   quanto.className = "quando mono";
-  quanto.textContent = it.erro ? it.erro
-    : (it.paginas ? paginas(it.paginas) + " · " : "") + tamanho(it.arquivo.size);
+  quanto.textContent = it.erro ? it.erro : medida(it);
   if (it.erro) div.dataset.erro = "1";
   const tirar = document.createElement("button");
   tirar.type = "button";
@@ -880,7 +885,7 @@ function linha(it, i) {
     avisar("");
     desenhar();
   });
-  div.append(caixa, tipo, nome, quanto, tirar);
+  div.append(caixa, selo(it), rotulo(it), quanto, tirar);
   return div;
 }
 
