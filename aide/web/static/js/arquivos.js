@@ -678,6 +678,13 @@ function moverJuntar(de, para, botao) {
   desenharJuntar({ indice: para, botao });
 }
 
+// de que lado da linha o ponteiro esta: a barra cai desse lado, e no soltar
+// e esse lado que diz se a linha entra antes ou depois da vizinha
+function depoisDaMetade(l, e) {
+  const caixa = l.getBoundingClientRect();
+  return e.clientY > caixa.top + caixa.height / 2;
+}
+
 let arrastadaJuntar = null;
 
 listaJuntar.addEventListener("dragstart", (e) => {
@@ -694,8 +701,7 @@ listaJuntar.addEventListener("dragover", (e) => {
   const l = e.target.closest(".linha");
   for (const x of listaJuntar.querySelectorAll("[data-cair]")) if (x !== l) delete x.dataset.cair;
   if (!l) return;
-  const caixa = l.getBoundingClientRect();
-  l.dataset.cair = e.clientY > caixa.top + caixa.height / 2 ? "depois" : "antes";
+  l.dataset.cair = depoisDaMetade(l, e) ? "depois" : "antes";
 });
 listaJuntar.addEventListener("drop", (e) => {
   if (arrastadaJuntar === null) return;
@@ -705,8 +711,7 @@ listaJuntar.addEventListener("drop", (e) => {
   const de = arrastadaJuntar;
   arrastadaJuntar = null;
   if (!l) return desenharJuntar();
-  const caixa = l.getBoundingClientRect();
-  let para = Number(l.dataset.indice) + (e.clientY > caixa.top + caixa.height / 2 ? 1 : 0);
+  let para = Number(l.dataset.indice) + (depoisDaMetade(l, e) ? 1 : 0);
   if (para > de) para--;
   if (para === de) return desenharJuntar();
   moverJuntar(de, para);
@@ -919,7 +924,7 @@ function desenhar() {
     || (misturado ? "Os marcados misturam tipos: marque só PDFs, só documentos ou só imagens."
       : quebrados ? "Desmarque o que não abriu: não dá para fazer nada com ele." : "");
   aviso.textContent = texto;
-  if (recado.erro) aviso.dataset.erro = "1"; else delete aviso.dataset.erro;
+  aviso.toggleAttribute("data-erro", recado.erro);
   for (const botao of botoes) {
     const acao = botao.dataset.acao;
     botao.disabled = !serve(acao, marcados);
