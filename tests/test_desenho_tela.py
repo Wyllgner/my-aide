@@ -213,7 +213,7 @@ def test_previa_so_da_versao_salva_e_com_a_marca_da_pagina():
     gerar = JS[JS.index("async function gerarPrevia"):JS.index("function textoDaBiblioteca")]
     assert "apagado || pendente()) return;" in gerar
     assert "if (!pendente()) {" in gerar
-    assert '"&assinatura=" + encodeURIComponent(daVersao)' in gerar
+    assert 'rota("/api/desenhos/previa", { caminho: caminho, assinatura: daVersao })' in gerar
     assert '"X-Aide": "1"' in gerar and 'method: "PUT"' in gerar
     assert "maxWidthOrHeight: 1600" in gerar
     # pede depois de salvar e ao abrir, só quando o servidor diz que falta
@@ -301,7 +301,19 @@ def test_link_do_elemento_passa_pelo_my_aide():
     assert abrir.index("evento.preventDefault();") < abrir.index("window.open(")
     assert 'window.open(link, "_blank", "noopener,noreferrer")' in abrir
     assert "const SITE = /^(https?|mailto):/i;" in JS
-    assert '"/api/desenhos/link?caminho="' in JS
+    assert 'rota("/api/desenhos/link", { caminho: caminho, alvo: link })' in JS
+
+
+def test_espaco_no_caminho_sobrevive_a_query(cliente):
+    """O rota() monta a query com URLSearchParams, que manda espaco como "+":
+    sem o servidor ler igual, desenho com espaco no nome nao abriria."""
+    da_pagina = {"origin": LOCAL, "x-aide": "1", "sec-fetch-site": "same-origin"}
+    criado = cliente.post("/api/desenhos/arquivo", json={"caminho": "Projetos/Pe de cafe.excalidraw"},
+                          headers=da_pagina)
+    assert criado.status_code == 201, criado.text
+
+    url = "/api/desenhos/arquivo?caminho=Projetos%2FPe+de+cafe.excalidraw"
+    assert cliente.get(url).status_code == 200
 
 
 def test_sair_pelo_link_so_com_tudo_salvo():

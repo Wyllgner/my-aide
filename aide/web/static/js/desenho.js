@@ -48,6 +48,12 @@ function avisar(texto, erro) {
   estado.classList.toggle("erro", !!erro);
 }
 
+// "Failed to fetch" e o my-aide fora do ar: o que o fetch diz nao serve para
+// quem esta olhando a tela
+function avisarFalha(e) {
+  avisar(e.message === "Failed to fetch" ? "sem conexão com o my-aide" : e.message, true);
+}
+
 // Muda quando um elemento muda, entra ou sai (versão só cresce; apagado
 // continua na lista com a versão nova) ou quando entra imagem. Rolar a tela e
 // selecionar não mudam: não é motivo para gravar.
@@ -64,6 +70,18 @@ function atual() {
 function pendente() {
   return api !== null && !apagado && !movido && conflito === null
     && (atual() !== salvo || privadaPedida !== null);
+}
+
+// as rotas respondem JSON, menos quando quem recusa e a fronteira (413) ou o
+// servidor caiu no meio: ai o corpo nao e JSON e o detalhe vem vazio
+function jsonOuVazio(resposta) {
+  return resposta.json().catch(() => ({}));
+}
+
+// a query montada pelo navegador: um encodeURIComponent esquecido quebra o
+// caminho com espaco ou acento, e aqui todo caminho tem um dos dois
+function rota(base, params) {
+  return base + "?" + new URLSearchParams(params);
 }
 
 function pedir(metodo, url, corpo) {
@@ -94,7 +112,7 @@ async function salvar() {
   avisar("salvando…");
   try {
     const resposta = await pedir("PUT", "/api/desenhos/arquivo", corpo);
-    const dados = await resposta.json().catch(() => ({}));
+    const dados = await jsonOuVazio(resposta);
     if (resposta.ok) {
       versao = dados.versao;
       salvo = enviada;
@@ -186,17 +204,17 @@ botaoApagar.addEventListener("click", async () => {
   apagado = true;
   clearTimeout(timer);
   try {
-    const resposta = await fetch("/api/desenhos/arquivo?caminho=" + encodeURIComponent(caminho),
+    const resposta = await fetch(rota("/api/desenhos/arquivo", { caminho: caminho }),
                                  { method: "DELETE", headers: { "X-Aide": "1" } });
     if (!resposta.ok) {
-      const dados = await resposta.json().catch(() => ({}));
+      const dados = await jsonOuVazio(resposta);
       throw new Error(dados.detail || "não consegui apagar");
     }
     // volta para onde o "Notas" da barra levaria
     location.href = document.querySelector(".desenho-barra a.botao").getAttribute("href");
   } catch (e) {
     apagado = false;
-    avisar(e.message === "Failed to fetch" ? "sem conexão com o my-aide" : e.message, true);
+    avisarFalha(e);
   }
 });
 
@@ -236,14 +254,15 @@ formRenomear.addEventListener("submit", async (evento) => {
     await esperarSalvar();
     movido = true;
     const resposta = await pedir("POST", "/api/desenhos/mover", { de: caminho, para: novo });
-    const dados = await resposta.json().catch(() => ({}));
+    const dados = await jsonOuVazio(resposta);
     if (!resposta.ok) throw new Error(dados.detail || "não consegui renomear");
     const de = new URLSearchParams(location.search).get("de");
-    location.replace("/desenho?caminho=" + encodeURIComponent(dados.caminho)
-                     + (de ? "&de=" + encodeURIComponent(de) : ""));
+    const params = { caminho: dados.caminho };
+    if (de) params.de = de;
+    location.replace(rota("/desenho", params));
   } catch (e) {
     movido = false;
-    avisar(e.message === "Failed to fetch" ? "sem conexão com o my-aide" : e.message, true);
+    avisarFalha(e);
   }
 });
 
@@ -287,12 +306,11 @@ function abrirLink(elemento, evento) {
 async function irPeloVault(link) {
   let dados;
   try {
-    const resposta = await fetch("/api/desenhos/link?caminho=" + encodeURIComponent(caminho)
-                                 + "&alvo=" + encodeURIComponent(link));
-    dados = await resposta.json().catch(() => ({}));
+    const resposta = await fetch(rota("/api/desenhos/link", { caminho: caminho, alvo: link }));
+    dados = await jsonOuVazio(resposta);
     if (!resposta.ok) throw new Error(dados.detail || "não consegui abrir o link");
   } catch (e) {
-    avisar(e.message === "Failed to fetch" ? "sem conexão com o my-aide" : e.message, true);
+    avisarFalha(e);
     return;
   }
   if (!dados.existe) {
@@ -342,17 +360,17 @@ botaoCriar.addEventListener("click", async () => {
                                                              : "/api/notas/arquivo", { caminho: novo });
     // 409: alguém criou no meio; abre o que já existe
     if (!resposta.ok && resposta.status !== 409) {
-      const dados = await resposta.json().catch(() => ({}));
+      const dados = await jsonOuVazio(resposta);
       throw new Error(dados.detail || "não consegui criar");
     }
   } catch (e) {
     botaoCriar.disabled = false;
-    avisar(e.message === "Failed to fetch" ? "sem conexão com o my-aide" : e.message, true);
+    avisarFalha(e);
     return;
   }
   esconderFaltando();
-  sair(hrefDe(tipo, tipo === "desenho" ? "/desenho?caminho=" + encodeURIComponent(novo)
-                                       : "/notas?arquivo=" + encodeURIComponent(novo)));
+  sair(hrefDe(tipo, tipo === "desenho" ? rota("/desenho", { caminho: novo })
+                                       : rota("/notas", { arquivo: novo })));
 });
 
 // sai da tela só com tudo salvo; com conflito, ou se o salvamento falhou,
@@ -373,8 +391,10 @@ async function sair(href) {
 // campo na hora de editar: vale quando ele entra na página, sem depender de
 // evento de foco (que o navegador nem dispara com a janela em segundo plano).
 function corretor(onde) {
-  const campos = onde.matches && onde.matches("textarea, input")
-    ? [onde] : onde.querySelectorAll ? onde.querySelectorAll("textarea, input") : [];
+  // o MutationObserver entrega no de texto tambem, e nele nao se procura campo
+  if (!(onde instanceof Element)) return;
+  const campos = onde.matches("textarea, input")
+    ? [onde] : onde.querySelectorAll("textarea, input");
   for (const campo of campos) campo.spellcheck = !caixaPrivada.checked;
 }
 
@@ -432,8 +452,7 @@ async function gerarPrevia() {
     });
     // a tela mudou durante a exportação: esta imagem já não é a versão salva
     if (!pendente()) {
-      await fetch("/api/desenhos/previa?caminho=" + encodeURIComponent(caminho)
-                  + "&assinatura=" + encodeURIComponent(daVersao),
+      await fetch(rota("/api/desenhos/previa", { caminho: caminho, assinatura: daVersao }),
                   { method: "PUT", headers: { "Content-Type": "image/png", "X-Aide": "1" },
                     body: png });
     }
@@ -469,7 +488,7 @@ async function salvarBiblioteca(texto) {
   try {
     const resposta = await pedir("PUT", "/api/desenhos/biblioteca",
                                  { texto: texto, versao: bibliotecaVersao });
-    const dados = await resposta.json().catch(() => ({}));
+    const dados = await jsonOuVazio(resposta);
     if (resposta.ok) {
       bibliotecaVersao = dados.versao;
       bibliotecaSalva = texto;
@@ -522,12 +541,12 @@ window.addEventListener("beforeunload", (evento) => {
 async function abrir() {
   let resposta;
   try {
-    resposta = await fetch("/api/desenhos/arquivo?caminho=" + encodeURIComponent(caminho));
+    resposta = await fetch(rota("/api/desenhos/arquivo", { caminho: caminho }));
   } catch (e) {
     avisar("sem conexão com o my-aide", true);
     return;
   }
-  const dados = await resposta.json().catch(() => ({}));
+  const dados = await jsonOuVazio(resposta);
   if (!resposta.ok) {
     avisar(dados.detail || "não consegui abrir o desenho", true);
     return;
