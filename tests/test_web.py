@@ -169,6 +169,14 @@ def test_o_estilo_e_servido_uma_vez(cliente):
     assert '<link rel="stylesheet" href="/app.css">' in cliente.get("/").text
 
 
+def test_toda_parte_do_css_entra_na_folha():
+    """Parte que ninguem le nao quebra tela nenhuma: o sintoma e estilo faltando."""
+    from aide.web import estaticos
+
+    no_disco = {a.name for a in (estaticos.PASTA / "css").glob("*.css")}
+    assert no_disco == set(estaticos.PARTES_CSS)
+
+
 def test_o_titulo_da_aba_diz_onde_voce_esta(cliente):
     assert "<title>Calendário · my-aide</title>" in cliente.get("/calendario").text
 

@@ -183,7 +183,7 @@ def test_desenho_grande_demais_avisa_o_limite():
 
 
 def test_procurar_bibliotecas_escondido():
-    CSS = estaticos.ler("css/app.css")
+    CSS = estaticos.folha()
 
     assert ".library-menu-browse-button {\n  display: none; }" in CSS
 

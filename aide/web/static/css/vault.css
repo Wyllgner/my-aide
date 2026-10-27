@@ -1,0 +1,203 @@
+/* renomear */
+.titulo-nota { margin: 0; font-size: 20px; font-weight: 600; cursor: text;
+               border-radius: 6px; padding: 0 4px; margin-left: -4px; }
+.titulo-nota:hover { background: var(--line-soft); }
+.renomear { display: flex; flex-direction: column; gap: 3px; }
+.renomear input { font: inherit; font-size: 15px; font-weight: 600; padding: 4px 8px;
+                  width: min(520px, 100%); border: 1px solid var(--faint);
+                  border-radius: 8px; }
+.renomear .dica { font-size: 11px; color: var(--faint); }
+
+/* renomear pasta: em tela de toque o lapis fica a vista, fraco - nao ha
+   "passar o mouse" para faze-lo aparecer */
+.arvore .nome-pasta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nova-na-pasta, .novo-desenho-na-pasta, .renomear-pasta, .apagar-pasta { font: inherit; font-size: 11.5px; border: 0; background: none;
+                                 min-width: 24px; height: 24px; padding: 0 5px;
+                                 display: inline-flex; align-items: center;
+                                 justify-content: center; gap: 4px; color: var(--muted);
+                                 cursor: pointer; opacity: .45; border-radius: 6px;
+                                 flex-shrink: 0; }
+/* com mouse, somem ate voce passar por cima da pasta: dez pastas com dois
+   icones cada viram ruido. O apagar esperando o segundo clique fica a vista */
+@media (hover: hover) {
+  .nova-na-pasta, .novo-desenho-na-pasta, .renomear-pasta, .apagar-pasta {
+    opacity: 0; transition: opacity .12s; }
+}
+.arvore summary:hover .nova-na-pasta, .nova-na-pasta:focus-visible,
+.arvore summary:hover .novo-desenho-na-pasta, .novo-desenho-na-pasta:focus-visible,
+.arvore summary:hover .renomear-pasta, .renomear-pasta:focus-visible,
+.arvore summary:hover .apagar-pasta, .apagar-pasta:focus-visible,
+.apagar-pasta[data-armado] { opacity: 1; }
+.nova-na-pasta:focus-visible, .novo-desenho-na-pasta:focus-visible,
+.renomear-pasta:focus-visible, .apagar-pasta:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 1px; }
+.nova-na-pasta:hover, .novo-desenho-na-pasta:hover, .renomear-pasta:hover { color: var(--ink); background: var(--surface); }
+.apagar-pasta:hover { color: var(--accent); background: var(--surface); }
+/* armado: o segundo clique manda a pasta para a lixeira */
+.apagar-pasta[data-armado] { opacity: 1; color: #fff; background: var(--accent); font-weight: 600; }
+.apagar-pasta .rotulo:empty { display: none; }
+.renomear-pasta-form { display: flex; flex-direction: column; gap: 3px; padding: 4px 6px; }
+.renomear-pasta-form input { font: inherit; font-size: 13px; padding: 5px 8px; width: 100%;
+                             border: 1px solid var(--faint); border-radius: 8px; }
+
+/* visao geral do vault */
+.atalho-visao { display: flex; align-items: center; gap: 8px; font-size: 13px;
+                padding: 7px 8px; margin: 0 0 2px;
+                border-radius: var(--r-inner); color: var(--muted); }
+.atalho-visao:hover { background: var(--line-soft); color: var(--ink); }
+.atalho-visao svg, .aviso-quebrados svg { flex-shrink: 0; }
+/* aberto: fica no lugar, marcado como a nota aberta na arvore */
+.atalho-visao[aria-current="page"] { background: var(--soft); color: var(--accent); font-weight: 600; }
+.aviso-quebrados[aria-current="page"] { background: var(--accent); color: #fff; }
+.visao { display: flex; flex-direction: column; gap: 14px; }
+.visao-numeros { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.visao-dupla { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+.nota-grafico { margin: 8px 0 0; font-size: 11.5px; color: var(--faint); }
+.orfas { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; }
+@media (max-width: 1100px) {
+  .visao-numeros { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .visao-dupla { grid-template-columns: 1fr; }
+}
+
+/* grafo */
+.atalhos { display: flex; flex-direction: column; gap: 1px; margin-bottom: 2px; }
+button.atalho-visao { width: 100%; border: 0; background: none; font: inherit; font-size: 13px;
+  text-align: left; cursor: pointer; }
+.atalho-visao kbd { margin-left: auto; font-family: var(--mono);
+  font-size: 10.5px; color: var(--faint); }
+
+/* abrir nota rapido (Ctrl+O): a caixa no meio da tela, por cima de tudo */
+.seletor-fundo { position: fixed; inset: 0; z-index: 30; display: flex; justify-content: center;
+  align-items: flex-start; padding: 14vh 16px 0; background: rgba(21, 23, 28, .18); }
+.seletor { width: min(560px, 100%); background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-inner); box-shadow: 0 16px 48px rgba(21, 23, 28, .18); overflow: hidden; }
+.seletor input { width: 100%; box-sizing: border-box; border: 0; border-bottom: 1px solid var(--line);
+  padding: 14px 16px; font: inherit; font-size: 15px; color: var(--ink); background: transparent;
+  outline: none; }
+.seletor-lista { list-style: none; margin: 0; padding: 6px; max-height: 50vh; overflow-y: auto; }
+.seletor-lista li { display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+  padding: 7px 10px; border-radius: 7px; cursor: pointer; font-size: 14px; }
+.seletor-lista li[aria-selected="true"] { background: var(--soft); color: var(--accent); }
+.seletor-lista li.vazio { cursor: default; color: var(--faint); }
+.seletor-lista .onde { font-size: 11.5px; color: var(--faint); min-width: 0; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.seletor .dica { margin: 0; padding: 8px 16px; font-size: 11.5px; color: var(--faint);
+  border-top: 1px solid var(--line); }
+.grafo-topo { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.grafo-topo .onde { font-size: 11.5px; color: var(--faint); }
+.grafo { width: 100%; height: 66vh; background: var(--paper); border-radius: var(--r-inner);
+         border: 1px solid var(--line-soft); cursor: grab; touch-action: none;
+         user-select: none; }
+.grafo:active { cursor: grabbing; }
+.grafo line { stroke: #D9DCE2; stroke-width: 1; transition: opacity .12s; }
+.grafo text { font-size: 11px; fill: var(--muted); text-anchor: middle; paint-order: stroke;
+              stroke: var(--paper); stroke-width: 3px; pointer-events: none;
+              font-family: 'Public Sans', system-ui, sans-serif; }
+.grafo a.no circle, .grafo a.no rect { stroke: var(--paper); stroke-width: 1.5; transition: opacity .12s; }
+.grafo a.no:hover circle, .grafo a.no:hover rect { stroke: var(--ink); }
+.grafo a.atual circle, .grafo a.atual rect { stroke: var(--ink); stroke-width: 2.5; }
+.grafo.focado a.no:not(.perto), .grafo.focado line:not(.perto) { opacity: .15; }
+.grafo.focado line.perto { stroke: var(--accent); stroke-width: 1.5; }
+.grafo text.so-perto { display: none; }
+/* desenho: cartao com a miniatura; o mouse (ou o foco) amplia para reconhecer */
+.grafo a.no.desenho rect.moldura { fill: #fff; stroke: var(--accent); stroke-width: 1.5;
+  vector-effect: non-scaling-stroke; }
+.grafo a.no.desenho.solto rect.moldura { stroke: var(--faint); }
+.grafo a.no.desenho:hover rect.moldura, .grafo a.no.desenho.atual rect.moldura {
+  stroke: var(--ink); }
+.grafo a.desenho .icone { fill: none; stroke: var(--muted); stroke-width: 1.5;
+  vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; }
+.grafo a.desenho .cartao { transform-box: fill-box; transform-origin: center;
+  transition: transform .15s ease; }
+/* 2.6 e grafo_svg.AMPLIACAO; o nome desce o que a borda desceu (--desce) */
+.grafo a.desenho:hover .cartao, .grafo a.desenho:focus .cartao {
+  transform: scale(2.6); filter: drop-shadow(0 4px 10px rgba(21,23,28,.18)); }
+.grafo a.desenho text { transition: transform .15s ease; }
+.grafo a.desenho:hover text, .grafo a.desenho:focus text {
+  transform: translate(var(--anda), var(--desce));
+  display: inline; font-weight: 600; fill: var(--ink); }
+/* ligacao com desenho: citar uma imagem nao e ligar duas ideias */
+.grafo line.com-desenho { stroke-dasharray: 4 3; }
+.ao-redor { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px;
+            align-items: start; }
+.ao-redor > :only-child { grid-column: 1 / -1; }
+.local { border-top: 1px solid var(--line-soft); padding-top: 14px; margin-top: 6px; }
+.grafo.local { height: 300px; margin-top: 10px; touch-action: pan-y pinch-zoom; }
+.grafo a.no:focus { outline: none; }
+.dica-grafo { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: 6px; }
+.grafo a.no:focus circle, .grafo a.no:focus rect { stroke: var(--accent); stroke-width: 3; }
+@media (max-width: 1100px) { .ao-redor { grid-template-columns: 1fr; } }
+.grafo.focado a.perto text.so-perto { display: inline; }
+
+/* links quebrados */
+.aviso-quebrados { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500;
+                   padding: 7px 8px; margin: 0 0 4px;
+                   border-radius: var(--r-inner); background: var(--soft); color: var(--accent); }
+.quebrados-topo { padding: 8px 8px 4px; border-top: 1px solid var(--line-soft); margin-top: 2px; }
+.quebrados-topo .eyebrow { margin: 0 0 2px; }
+.quebrados-resumo { margin: 0; font-size: 13px; font-weight: 600; color: var(--ink); }
+.quebrados-explica { margin: 3px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--faint); }
+/* cada nota que falta e um cartao: nome e criar em cima, quem cita embaixo */
+.quebrado-item { display: flex; flex-direction: column; gap: 6px; padding: 10px;
+                 border: 1px solid var(--line-soft); border-radius: var(--r-inner);
+                 background: var(--surface); font-size: 13px; }
+.quebrado-item + .quebrado-item { margin-top: 6px; }
+.quebrado-alvo { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.quebrado-nome { min-width: 0; }
+.quebrado-nome strong { display: block; overflow-wrap: anywhere; }
+.quebrado-nome .onde { font-size: 11px; color: var(--faint); }
+.criar-quebrado { display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0;
+                  padding: 4px 10px; color: var(--accent); border-color: var(--soft);
+                  background: var(--soft); font-weight: 600; }
+.criar-quebrado:hover { color: #fff; background: var(--accent); border-color: var(--accent); }
+/* "ligar a X": a nota parecida que ja existe, para um nome digitado errado */
+.quebrado-sugestao { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.quebrado-sugestao .onde { font-size: 11px; color: var(--faint); }
+.ligar-quebrado { display: inline-flex; align-items: center; gap: 5px; font: inherit;
+  font-size: 12px; padding: 3px 9px; border: 1px solid var(--line); border-radius: var(--r-pill);
+  background: var(--surface); color: var(--muted); cursor: pointer; }
+.ligar-quebrado:hover { color: var(--ink); border-color: var(--faint); }
+.ligar-quebrado strong { color: var(--ink); }
+.quebrado-citacoes { list-style: none; margin: 0; padding: 6px 0 0; display: flex;
+                     flex-direction: column; gap: 6px; border-top: 1px dashed var(--line); }
+.quebrado-citacoes a { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px;
+                       font-weight: 500; }
+.quebrado-citacoes a svg { color: var(--faint); flex-shrink: 0; }
+.quebrado-citacoes a:hover span { text-decoration: underline; }
+.quebrado-citacoes .vezes { font-size: 11px; color: var(--faint); }
+.quebrado-citacoes .trecho { display: block; margin-top: 1px; font-size: 11.5px; line-height: 1.45;
+                             color: var(--muted); overflow-wrap: anywhere; }
+.quebrado-citacoes .trecho mark { color: var(--accent); background: none; font-weight: 600;
+                                  border-bottom: 1px dashed var(--accent); }
+
+/* o link aonde a lista de quebrados levou: pisca e some devagar */
+@keyframes destaque { from { background: #FBE3DC; box-shadow: 0 0 0 4px #FBE3DC; }
+                      to { background: transparent; box-shadow: 0 0 0 4px transparent; } }
+.previa .destaque { animation: destaque 2.4s ease-out; border-radius: 4px; }
+
+/* backlinks */
+.backlinks { border-top: 1px solid var(--line-soft); padding-top: 14px; margin-top: 6px; }
+.backlinks > ul { list-style: none; margin: 10px 0 0; padding: 0; display: grid;
+                  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.backlinks > ul > li { padding: 10px 12px; border: 1px solid var(--line-soft);
+                       border-radius: var(--r-inner); font-size: 13.5px; min-width: 0; }
+.backlinks a { font-weight: 600; }
+.backlinks a.desenho { display: inline-flex; align-items: center; gap: 5px; }
+.backlinks .onde { display: block; font-size: 11px; color: var(--faint); margin-top: 2px; }
+.backlinks .trechos { margin: 6px 0 0; padding: 0; list-style: none; font-size: 12.5px;
+                      color: var(--muted); line-height: 1.5; }
+.backlinks .trechos li { overflow-wrap: anywhere; }
+.backlinks .trechos li + li { margin-top: 4px; }
+.vazio-curto { margin: 6px 0 0; font-size: 13px; color: var(--faint); }
+
+/* autocompletar [[ e os comandos do / (a lista longa rola) */
+.sugestoes { position: absolute; z-index: 10; margin: 0; padding: 4px; list-style: none;
+             min-width: 240px; max-width: 360px; max-height: 320px; overflow-y: auto;
+             background: var(--surface);
+             border: 1px solid var(--line); border-radius: var(--r-inner);
+             box-shadow: 0 6px 20px rgba(21,23,28,.10); font-size: 13px; }
+.sugestoes li { padding: 6px 9px; border-radius: 7px; cursor: pointer;
+                display: flex; flex-direction: column; }
+.sugestoes li[aria-selected="true"] { background: var(--soft); color: var(--accent); }
+.sugestoes .onde { font-size: 11px; color: var(--faint); }
+

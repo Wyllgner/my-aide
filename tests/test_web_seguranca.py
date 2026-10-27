@@ -195,7 +195,7 @@ def test_a_pagina_nao_chama_nada_de_fora(cliente):
 
 
 def test_fontes_servidas_pelo_proprio_site(cliente):
-    CSS = estaticos.ler("css/app.css")
+    CSS = estaticos.folha()
 
     nomes = __import__("re").findall(r"url\(/fontes/([^)]+)\)", CSS)
     assert len(nomes) == 8

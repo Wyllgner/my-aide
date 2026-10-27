@@ -153,7 +153,7 @@ def criar_app(config=None, conn_factory=None):
             return Response(status_code=304, headers=cabecalhos)
         return Response(conteudo, media_type=tipos_vendor[arquivo.suffix], headers=cabecalhos)
 
-    css = estaticos.ler("css/app.css")
+    css = estaticos.folha()
 
     @app.get("/app.css")
     def folha_de_estilo() -> Response:

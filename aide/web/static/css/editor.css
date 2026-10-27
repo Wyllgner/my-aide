@@ -1,0 +1,138 @@
+/* cores no editor: o campo fica transparente por cima de uma copia colorida
+   do mesmo texto (#realce). Os dois precisam quebrar linha no mesmo lugar:
+   mesma fonte, mesmo espacamento e o mesmo espaco reservado para a barra */
+.campo { position: relative; min-width: 0; display: flex; }
+.realce { position: absolute; inset: 0; margin: 0; overflow: hidden; pointer-events: none;
+          padding: 14px 16px; border: 1px solid transparent; border-radius: var(--r-inner);
+          background: var(--paper); white-space: pre-wrap; overflow-wrap: break-word;
+          font-family: var(--mono); font-size: 13.5px;
+          line-height: 1.7; color: var(--ink); tab-size: 2; scrollbar-gutter: stable; }
+#editor.colorido { color: transparent; caret-color: var(--ink); background: transparent;
+                   position: relative; scrollbar-gutter: stable; }
+#editor.colorido::selection { background: rgba(196, 67, 43, .18); }
+#editor.colorido:focus { background: transparent; }
+.campo:focus-within .realce { background: var(--surface); }
+.realce .r-titulo { color: var(--accent); font-weight: 500; }
+.realce .r-marca { color: var(--faint); }
+.realce .r-forte { font-weight: 600; }
+.realce .r-italico { font-style: italic; }
+.realce .r-codigo { color: var(--verde); }
+.realce .r-link { color: var(--accent); }
+.realce .r-url { color: var(--muted); }
+.realce .r-citacao { color: var(--muted); }
+.realce .r-front { color: var(--faint); }
+.realce .r-tag { color: var(--azul); }
+.area[data-modo="ler"] .previa, .area[data-modo="vivo"] .previa {
+  border-color: transparent; background: transparent; padding: 4px 2px; }
+
+/* a previa: leitura confortavel, mesma familia da pagina */
+.previa { min-width: 0; overflow: auto; max-height: 70vh; padding: 14px 18px;
+          border: 1px solid var(--line-soft); border-radius: var(--r-inner);
+          font-size: 14.5px; line-height: 1.7; color: var(--ink); overflow-wrap: anywhere; }
+.area[data-modo="ler"] .previa { max-height: none; max-width: 760px; }
+/* o "# Titulo" igual ao nome do arquivo: o nome ja esta em cima da nota */
+.area[data-modo="ler"] .previa h1.repete-nome { display: none; }
+/* ao vivo: clicar num bloco troca ele pelo markdown dele, no mesmo lugar e
+   na mesma letra; o espaco vazio embaixo tambem aceita clique (escreve no fim) */
+.area[data-modo="vivo"] .previa { max-height: none; max-width: 760px; min-height: 58vh;
+                                  cursor: text; padding: 4px 10px; }
+/* o padding acima e onde cabem a sobra de 8px do bloco aberto e a sombra
+   do bloco sob o mouse: sem ele, abrir um bloco criava rolagem para o lado */
+.bloco-caixa { position: relative; width: calc(100% + 16px); margin: -4px -8px .9em; }
+.bloco-vivo { display: block; width: 100%; margin: 0; padding: 4px 8px;
+              border: 0; border-radius: var(--r-inner); background: var(--line-soft);
+              font: inherit; line-height: inherit; color: var(--ink); resize: none;
+              overflow: hidden; tab-size: 2; }
+.bloco-vivo:focus { outline: none; box-shadow: inset 2px 0 0 var(--accent); }
+/* as cores do bloco: a copia na mesma letra do campo. A letra aqui nao e
+   monoespacada, entao negrito e italico ficam so na cor - mais largos, eles
+   quebrariam a linha num lugar diferente do campo e o cursor desalinharia */
+/* a copia e um <pre> dentro da previa: ".previa .bloco-caixa" vence o
+   ".previa pre" (margem, rolagem e padding de bloco de codigo) */
+.previa .bloco-caixa .realce { margin: 0; padding: 4px 8px; border: 0; overflow: hidden;
+                               background: var(--line-soft); font: inherit;
+                               line-height: inherit; scrollbar-gutter: auto; }
+.bloco-caixa .realce .r-forte, .bloco-caixa .realce .r-titulo { font-weight: inherit; }
+.bloco-caixa .realce .r-italico { font-style: inherit; }
+.bloco-vivo.colorido { position: relative; color: transparent; caret-color: var(--ink);
+                       background: transparent; }
+.bloco-vivo.colorido::selection { background: rgba(196, 67, 43, .18); }
+.bloco-pendente { white-space: pre-wrap; color: var(--muted); margin: 0 0 .9em; }
+/* o bloco sob o mouse ganha um fundo leve: mostra o que o clique vai abrir.
+   Sombra, e nao padding, para nada sair do lugar */
+.area[data-modo="vivo"] .previa [data-bloco]:hover { background: var(--line-soft);
+  box-shadow: 0 0 0 6px var(--line-soft); border-radius: 2px; }
+.area[data-modo="vivo"] .previa pre:has(> code[data-bloco]:hover) { box-shadow: 0 0 0 3px var(--line); }
+/* a dica embaixo da nota; enquanto um bloco esta aberto, os atalhos dele */
+.area[data-modo="vivo"] .previa::after { display: block; margin-top: 18px; font-size: 12px;
+  color: var(--faint); content: "clique num bloco para editar · clique aqui embaixo para escrever no fim"; }
+.area[data-modo="vivo"] .previa:empty::after { margin-top: 0; font-size: 14.5px;
+  content: "Nota vazia. Clique aqui para começar a escrever."; }
+.area[data-modo="vivo"] .previa:has(.bloco-vivo)::after {
+  content: "/ comandos · Esc sai · Shift+Enter bloco novo embaixo · ↑ ↓ nas pontas muda de bloco · Ctrl+B negrito · Ctrl+I itálico · Ctrl+K link · [[ liga a outra nota"; }
+.previa > :first-child { margin-top: 0; }
+.previa h1, .previa h2, .previa h3 { font-weight: 600; line-height: 1.3; margin: 1.3em 0 .5em; }
+.previa h1 { font-size: 22px; } .previa h2 { font-size: 18px; } .previa h3 { font-size: 15.5px; }
+.previa p, .previa ul, .previa ol, .previa pre, .previa table, .previa blockquote { margin: 0 0 .9em; }
+.previa ul, .previa ol { padding-left: 1.4em; }
+.previa li.tarefa { list-style: none; margin-left: -1.3em; }
+/* a feita sai riscada e apagada; as subtarefas embaixo dela nao */
+.previa li.feita > .tarefa-texto, .previa li.feita > p > .tarefa-texto {
+  color: var(--faint); text-decoration: line-through; text-decoration-color: var(--faint); }
+.previa li.tarefa input { margin: 0 6px 0 0; vertical-align: -1px; cursor: pointer;
+                          accent-color: var(--accent); }
+.previa code { font-family: var(--mono); font-size: 12.5px;
+               background: var(--line-soft); padding: 1px 5px; border-radius: 5px; }
+.previa pre { background: var(--line-soft); padding: 12px 14px; border-radius: var(--r-inner);
+              overflow: auto; }
+.previa pre code { background: none; padding: 0; }
+.previa blockquote { border-left: 3px solid var(--line); padding-left: 12px; color: var(--muted); }
+/* callouts (> [!tipo]): caixa tingida pela cor do tipo, titulo com icone.
+   Tipo desconhecido fica com a cor da nota */
+.previa .callout { --cor: var(--azul); border: 0; border-radius: var(--r-inner); padding: 10px 14px;
+  background: color-mix(in srgb, var(--cor) 9%, transparent); color: var(--ink); }
+.previa .callout[data-callout="abstract"] { --cor: #1F8A8A; }
+.previa .callout[data-callout="tip"] { --cor: #1F8A8A; }
+.previa .callout[data-callout="success"] { --cor: var(--verde); }
+.previa .callout[data-callout="question"] { --cor: #B7791F; }
+.previa .callout[data-callout="warning"] { --cor: #B7791F; }
+.previa .callout[data-callout="failure"] { --cor: var(--accent); }
+.previa .callout[data-callout="danger"] { --cor: var(--accent); }
+.previa .callout[data-callout="bug"] { --cor: var(--accent); }
+.previa .callout[data-callout="example"] { --cor: #7A4FB5; }
+.previa .callout[data-callout="quote"] { --cor: #6B7280; }
+.previa .callout-titulo { display: flex; align-items: center; gap: 8px; font-weight: 600;
+  color: var(--cor); }
+.previa .callout-titulo svg { flex: none; }
+.previa .callout > .callout-titulo + * { margin-top: 6px; }
+.previa .callout > :last-child { margin-bottom: 0; }
+.previa details.callout > summary { cursor: pointer; list-style: none; }
+.previa details.callout > summary::-webkit-details-marker { display: none; }
+.previa details.callout > summary::after { content: "›"; margin-left: auto; font-size: 18px;
+  line-height: 1; transition: transform .15s; }
+.previa details.callout[open] > summary::after { transform: rotate(90deg); }
+.previa table { border-collapse: collapse; font-size: 13px; }
+.previa th, .previa td { border: 1px solid var(--line); padding: 5px 10px; text-align: left; }
+.previa hr { border: 0; border-top: 1px solid var(--line); margin: 1.4em 0; }
+.previa .wikilink { border-bottom: 1px solid var(--soft); }
+/* #tag: etiqueta azul, a mesma cor da tag no editor; leva as notas com ela */
+.previa a.tag { display: inline-block; padding: 0 7px; border-radius: var(--r-pill);
+  font-size: .88em; line-height: 1.6; text-decoration: none; color: var(--azul);
+  background: color-mix(in srgb, var(--azul) 10%, transparent); }
+.previa a.tag:hover { background: color-mix(in srgb, var(--azul) 18%, transparent); }
+.previa .wikilink.quebrado { color: var(--faint); border-bottom: 1px dashed var(--faint);
+                             cursor: pointer; }
+.previa .wikilink.quebrado:hover { color: var(--accent); border-color: var(--accent); }
+.previa .imagem-externa::before { content: "▧ "; color: var(--faint); }
+.previa .anexo { color: var(--muted); }
+.previa .anexo-imagem { max-width: 100%; height: auto; border-radius: var(--r-inner);
+                        display: block; margin: 6px 0; }
+.previa .anexo-midia { max-width: 100%; display: block; margin: 6px 0; }
+.previa .anexo::before { content: "⎘ "; color: var(--faint); }
+.propriedades { display: grid; grid-template-columns: max-content 1fr; gap: 3px 14px;
+                margin: 0 0 16px; padding: 10px 12px; border-radius: var(--r-inner);
+                background: var(--paper); border: 1px solid var(--line-soft);
+                font-size: 12.5px; }
+.propriedades dt { color: var(--faint); font-family: var(--mono); }
+.propriedades dd { margin: 0; color: var(--muted); overflow-wrap: anywhere; }
+
