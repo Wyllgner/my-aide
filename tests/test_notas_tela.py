@@ -137,7 +137,7 @@ def test_busca_lista_o_caminho_de_cada_achado(cliente, registry, config):
 
 def test_hidden_vence_o_display_das_classes():
     """O campo de criar aparecia vazio, aberto, porque .criar tem display:flex."""
-    CSS = estaticos.ler("css/app.css")
+    CSS = estaticos.folha()
 
     assert "[hidden] { display: none !important; }" in CSS
 
@@ -145,7 +145,7 @@ def test_hidden_vence_o_display_das_classes():
 def test_o_topo_da_nota_e_so_da_nota():
     """A tela Arquivos usava a mesma classe e, vindo depois na folha, deixava o
     titulo da nota com 16px, centralizado e com margem embaixo."""
-    CSS = estaticos.ler("css/app.css")
+    CSS = estaticos.folha()
 
     assert CSS.count(".editor-topo {") == 1
     assert ".editor-topo h2" not in CSS
@@ -835,7 +835,7 @@ def test_a_nota_tem_exportar_em_md_e_pdf(cliente):
 def test_a_impressao_leva_so_o_nome_e_a_previa():
     """O PDF sai da impressão do navegador: lateral, botões e campo ficam de
     fora, e a prévia aparece mesmo no modo editar, onde ela fica escondida."""
-    CSS = estaticos.ler("css/app.css")
+    CSS = estaticos.folha()
 
     impressao = CSS[CSS.index("@media print"):]
     for escondido in (".lateral", ".notas-lateral", ".editor-acoes", ".campo", ".ao-redor"):
