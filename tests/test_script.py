@@ -29,10 +29,13 @@ def _front(texto: str):
     return json.loads(saida.stdout)
 
 
-def test_o_script_e_javascript_valido():
-    """Erro de sintaxe derruba as notas inteiras sem nenhum teste Python notar."""
-    subprocess.run([node, "--check", str(estaticos.PASTA / "js" / "app.js")], check=True,
-                   capture_output=True)
+def test_o_script_e_um_modulo_valido(tmp_path):
+    """Erro de sintaxe derruba as notas inteiras sem nenhum teste Python notar.
+    A página carrega com type="module": conferido como módulo, e não como
+    script, que aceita coisas que o módulo recusa (o return no topo, por exemplo)."""
+    arquivo = tmp_path / "app.mjs"
+    arquivo.write_text(estaticos.ler("js/app.js"))
+    subprocess.run([node, "--check", str(arquivo)], check=True, capture_output=True)
 
 
 @pytest.mark.parametrize("texto", [
