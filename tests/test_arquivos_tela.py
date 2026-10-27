@@ -168,8 +168,10 @@ def test_organizar_e_juntar_usam_a_mesma_rota(cliente):
 
     js = cliente.get("/arquivos.js").text
     assert len(re.findall(r"fetch\(", js)) == 1
-    assert "await montar(" in js                      # organizar
-    assert 'enviar("/api/arquivos/montar"' in js      # juntar e imagens → PDF
+    # a rota aparece uma vez: os dois caminhos passam pelo mesmo montar()
+    assert js.count('enviar("/api/arquivos/montar"') == 1
+    assert "await montar(arquivos, lista)" in js                          # organizar
+    assert "montar(ordem.map((it) => it.arquivo), lista, modo.extra)" in js  # juntar e imagens
 
 
 def test_imagens_viram_pdf_cada_uma_na_sua_orientacao(cliente):

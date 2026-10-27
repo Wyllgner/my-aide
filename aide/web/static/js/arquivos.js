@@ -529,7 +529,6 @@ document.addEventListener("keydown", (e) => {
   desfazer.click();
 });
 
-// baixar: o corpo é a linha do plano e as fontes coladas na ordem
 function nomeDoResultado(nome, sufixo) {
   return semExtensao(nome) + "-" + sufixo + ".pdf";
 }
@@ -545,9 +544,8 @@ function entregar(blob, nome) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-// manda as fontes e a lista de páginas; devolve o PDF ou lança com o motivo
-// o corpo é a linha do plano e os arquivos colados; devolve o resultado ou
-// lança com o motivo que o servidor deu
+// o corpo é a linha do plano e os arquivos colados em seguida; devolve o
+// resultado ou lança com o motivo que o servidor deu
 async function enviar(rota, arquivos, extra) {
   const plano = { arquivos: arquivos.map((a) => a.size), ...extra };
   const resposta = await fetch(rota, {
@@ -562,8 +560,9 @@ async function enviar(rota, arquivos, extra) {
   return resposta.blob();
 }
 
-function montar(arquivos, lista) {
-  return enviar("/api/arquivos/montar", arquivos, { paginas: lista });
+// organizar, juntar e imagens → PDF são a mesma rota: o que muda é a lista
+function montar(arquivos, lista, extra) {
+  return enviar("/api/arquivos/montar", arquivos, { paginas: lista, ...extra });
 }
 
 baixar.addEventListener("click", async () => {
@@ -731,8 +730,7 @@ baixarJuntado.addEventListener("click", async () => {
   avisar(modo.verbo + " " + ordem.length + (modo.tipo === "pdf" ? " PDFs…" : " imagens…"));
   desenhar();
   try {
-    const blob = await enviar("/api/arquivos/montar", ordem.map((it) => it.arquivo),
-      { paginas: lista, ...modo.extra });
+    const blob = await montar(ordem.map((it) => it.arquivo), lista, modo.extra);
     entregar(blob, nome);
     avisar("Pronto: " + paginas(lista.length) + " em " + nome + ".");
   } catch (erro) {
