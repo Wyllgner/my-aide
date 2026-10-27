@@ -64,14 +64,14 @@
     var semResultado = arvore.querySelector(".filtro-vazio");
     var abertasAntes = null;
     var filtrarArvore = function () {
-      var busca = normal(filtro.value.trim());
+      var busca = semAcento(filtro.value.trim());
       var pastas = arvore.querySelectorAll("details");
       if (busca && abertasAntes === null) {
         abertasAntes = Array.prototype.filter.call(pastas, function (d) { return d.open; });
       }
       var algum = false;
       arvore.querySelectorAll(".arquivo").forEach(function (a) {
-        var bate = !busca || normal(a.getAttribute("title") || a.textContent).indexOf(busca) >= 0;
+        var bate = !busca || semAcento(a.getAttribute("title") || a.textContent).indexOf(busca) >= 0;
         a.hidden = !bate;
         algum = algum || bate;
       });
@@ -328,7 +328,8 @@
     try { localStorage.setItem(RECENTES, JSON.stringify(lista)); } catch (e) { /* sem armazenamento */ }
   })();
 
-  function normal(t) {
+  // sem acento e em minuscula: toda busca por nome passa por aqui
+  function semAcento(t) {
     return t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
   }
 
@@ -336,7 +337,7 @@
   // a contém, depois caminho; por último as letras do nome na ordem ("tlhd"
   // → Telhado). Só no nome: no caminho inteiro, quase tudo casaria
   function pontuar(nota, busca) {
-    var tudo = normal(nota);
+    var tudo = semAcento(nota);
     var nome = tudo.replace(/^.*\//, "").replace(/\.md$/, "");
     if (nome.indexOf(busca) === 0) { return 0; }
     if (nome.indexOf(busca) >= 0) { return 1; }
@@ -349,7 +350,7 @@
   function filtrarSeletor() {
     var s = seletor;
     var digitado = s.campo.value.trim();
-    var busca = normal(digitado);
+    var busca = semAcento(digitado);
     var ordemRecente = recentes();
     var achadas;
     if (!busca) {
@@ -367,7 +368,7 @@
     }
     s.itens = achadas.slice(0, 40).map(function (c) { return { caminho: c }; });
     var exata = achadas.some(function (c) {
-      return normal(c.replace(/^.*\//, "").replace(/\.md$/i, "")) === busca || normal(c) === busca;
+      return semAcento(c.replace(/^.*\//, "").replace(/\.md$/i, "")) === busca || semAcento(c) === busca;
     });
     if (digitado && !exata) {
       var pasta = form ? form.dataset.pasta : "";
@@ -2006,10 +2007,6 @@
   });
   COMANDOS.push({ nome: "Callout recolhível", onde: "> [!faq]-", texto: "> [!faq]- §",
     bloco: true, chaves: "caixa dobra fold details question" });
-
-  function semAcento(t) {
-    return t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-  }
 
   function comandosPara(busca) {
     var b = semAcento(busca);
