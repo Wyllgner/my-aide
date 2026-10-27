@@ -67,6 +67,11 @@ function tipoDe(nome) {
   return null;
 }
 
+// o nome sem a extensao: a base de todo nome de resultado
+function semExtensao(nome) {
+  return nome.replace(/\.[^.]+$/, "");
+}
+
 function tamanho(bytes) {
   if (bytes < 1024) return bytes + " B";
   if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + " KB";
@@ -504,7 +509,7 @@ document.addEventListener("keydown", (e) => {
 
 // baixar: o corpo é a linha do plano e as fontes coladas na ordem
 function nomeDoResultado(nome, sufixo) {
-  return nome.replace(/\.pdf$/i, "") + "-" + sufixo + ".pdf";
+  return semExtensao(nome) + "-" + sufixo + ".pdf";
 }
 
 function entregar(blob, nome) {
@@ -578,7 +583,7 @@ const LISTAS = {
   "imagens-pdf": {
     tipo: "imagem", minimo: 1, titulo: "Imagens → PDF", botao: "Baixar PDF",
     verbo: "Montando o PDF com", falha: "Não deu para montar",
-    nome: (ordem) => ordem[0].arquivo.name.replace(/\.[^.]+$/, "") + ".pdf",
+    nome: (ordem) => semExtensao(ordem[0].arquivo.name) + ".pdf",
     paginas: (ordem) => ordem.map((_, f) => [f, 0]),
     extra: { imagens: "proprias" },
   },
@@ -727,7 +732,7 @@ const LOTES = {
       : "Converter e baixar .zip com " + docs.length + " PDFs",
     aviso: (docs) => docs.length === 1 ? "Convertendo pelo LibreOffice…"
       : "Convertendo " + docs.length + " documentos pelo LibreOffice, um de cada vez…",
-    nome: (docs) => docs.length === 1 ? docs[0].arquivo.name.replace(/\.[^.]+$/, "") + ".pdf"
+    nome: (docs) => docs.length === 1 ? semExtensao(docs[0].arquivo.name) + ".pdf"
       : "convertidos.zip",
   },
   "pdf-imagens": {
@@ -741,8 +746,8 @@ const LOTES = {
     },
     aviso: () => "Desenhando as páginas…",
     nome: (docs) => docs.reduce((soma, it) => soma + it.paginas, 0) === 1
-      ? docs[0].arquivo.name.replace(/\.pdf$/i, "") + ".png"
-      : (docs.length === 1 ? docs[0].arquivo.name.replace(/\.pdf$/i, "") + "-imagens.zip" : "imagens.zip"),
+      ? semExtensao(docs[0].arquivo.name) + ".png"
+      : (docs.length === 1 ? semExtensao(docs[0].arquivo.name) + "-imagens.zip" : "imagens.zip"),
   },
   "pdf-word": {
     tipo: "pdf", titulo: "PDF → Word", rota: "/api/arquivos/word",
@@ -751,7 +756,7 @@ const LOTES = {
     andando: "convertendo…", falha: "não converteu",
     botao: (docs) => docs.length === 1 ? "Baixar .docx" : "Baixar .zip com " + docs.length + " .docx",
     aviso: () => "Convertendo para Word pelo LibreOffice…",
-    nome: (docs) => docs.length === 1 ? docs[0].arquivo.name.replace(/\.pdf$/i, "") + ".docx"
+    nome: (docs) => docs.length === 1 ? semExtensao(docs[0].arquivo.name) + ".docx"
       : "convertidos.zip",
     extra: () => ({ modo: modoWord }),
   },
