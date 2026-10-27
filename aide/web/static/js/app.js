@@ -16,8 +16,38 @@
     });
   }
 
+  // o nome que aparece na tela: sem a pasta e sem o .md
+  function nomeCurto(caminho) {
+    return caminho.replace(/^.*\//, "").replace(/\.md$/i, "");
+  }
+
+  // a pasta do caminho, sem a barra do fim ("" na raiz do vault)
+  function pastaDe(caminho) {
+    var corte = caminho.lastIndexOf("/");
+    return corte < 0 ? "" : caminho.slice(0, corte);
+  }
+
+  // a tela do desenho, com a nota de onde ele foi aberto: o "Notas" de la
+  // volta para ela
+  function hrefDoDesenho(caminho, de) {
+    return "/desenho?caminho=" + encodeURIComponent(caminho)
+      + (de ? "&de=" + encodeURIComponent(de) : "");
+  }
+
   function abrir(caminho) {
     location.href = "/notas?arquivo=" + encodeURIComponent(caminho).replace(/%2F/g, "/");
+  }
+
+  // o editor (mais abaixo, so na tela de uma nota) publica o salvar em
+  // window.aideSalvar: quem move, renomeia ou sai manda salvar antes
+  function salvarAberta() {
+    return window.aideSalvar ? window.aideSalvar() : Promise.resolve();
+  }
+
+  // o caminho da nota aberta, ou "" quando a tela e so a lista
+  function notaAberta() {
+    var el = document.getElementById("editor");
+    return el ? el.dataset.caminho : "";
   }
 
   function erroDe(resposta) {
@@ -64,14 +94,14 @@
     var semResultado = arvore.querySelector(".filtro-vazio");
     var abertasAntes = null;
     var filtrarArvore = function () {
-      var busca = normal(filtro.value.trim());
+      var busca = semAcento(filtro.value.trim());
       var pastas = arvore.querySelectorAll("details");
       if (busca && abertasAntes === null) {
         abertasAntes = Array.prototype.filter.call(pastas, function (d) { return d.open; });
       }
       var algum = false;
       arvore.querySelectorAll(".arquivo").forEach(function (a) {
-        var bate = !busca || normal(a.getAttribute("title") || a.textContent).indexOf(busca) >= 0;
+        var bate = !busca || semAcento(a.getAttribute("title") || a.textContent).indexOf(busca) >= 0;
         a.hidden = !bate;
         algum = algum || bate;
       });
@@ -142,9 +172,6 @@
     var tipoDe = function (e) {
       var tipos = Array.prototype.slice.call((e.dataTransfer && e.dataTransfer.types) || []);
       return tipos.indexOf(TIPO_PASTA) >= 0 ? "pasta" : tipos.indexOf(TIPO_NOTA) >= 0 ? "nota" : null;
-    };
-    var pastaDe = function (caminho) {
-      return caminho.lastIndexOf("/") >= 0 ? caminho.slice(0, caminho.lastIndexOf("/")) : "";
     };
     // a pasta onde cai: a <details> mais próxima, ou a raiz ("")
     var destinoDe = function (e) {
@@ -220,10 +247,9 @@
       var pasta = destino === arvoreArrasto ? "" : destino.dataset.pasta;
       var para = (pasta ? pasta + "/" : "") + de.replace(/^.*\//, "");
       if (!de || para === de) { return; }
-      var editorAberto = document.getElementById("editor");
-      var aberta = editorAberto ? editorAberto.dataset.caminho : "";
+      var aberta = notaAberta();
       // a nota aberta pode ser a que muda, ou ter links nela reescritos: salva antes
-      var guardar = window.aideSalvar ? window.aideSalvar() : Promise.resolve();
+      var guardar = salvarAberta();
       // pasta e desenho têm a sua rota; nota tem a dela, que também reescreve os links
       var rota = tipo === "pasta" ? "/api/notas/mover-pasta"
         : /\.excalidraw$/i.test(de) ? "/api/desenhos/mover" : "/api/notas/mover";
@@ -293,10 +319,8 @@
           if (criando === "nota") {
             abrir(caminho);
           } else if (criando === "desenho") {
-            // o "Notas" da tela do desenho volta para a nota que estava aberta
-            var aberta = new URLSearchParams(location.search).get("arquivo");
-            location.href = "/desenho?caminho=" + encodeURIComponent(caminho)
-              + (aberta ? "&de=" + encodeURIComponent(aberta) : "");
+            location.href = hrefDoDesenho(caminho,
+              new URLSearchParams(location.search).get("arquivo"));
           } else {
             location.reload();
           }
@@ -328,7 +352,8 @@
     try { localStorage.setItem(RECENTES, JSON.stringify(lista)); } catch (e) { /* sem armazenamento */ }
   })();
 
-  function normal(t) {
+  // sem acento e em minuscula: toda busca por nome passa por aqui
+  function semAcento(t) {
     return t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
   }
 
@@ -336,8 +361,8 @@
   // a contém, depois caminho; por último as letras do nome na ordem ("tlhd"
   // → Telhado). Só no nome: no caminho inteiro, quase tudo casaria
   function pontuar(nota, busca) {
-    var tudo = normal(nota);
-    var nome = tudo.replace(/^.*\//, "").replace(/\.md$/, "");
+    var tudo = semAcento(nota);
+    var nome = nomeCurto(tudo);
     if (nome.indexOf(busca) === 0) { return 0; }
     if (nome.indexOf(busca) >= 0) { return 1; }
     if (tudo.indexOf(busca) >= 0) { return 2; }
@@ -349,7 +374,7 @@
   function filtrarSeletor() {
     var s = seletor;
     var digitado = s.campo.value.trim();
-    var busca = normal(digitado);
+    var busca = semAcento(digitado);
     var ordemRecente = recentes();
     var achadas;
     if (!busca) {
@@ -367,7 +392,7 @@
     }
     s.itens = achadas.slice(0, 40).map(function (c) { return { caminho: c }; });
     var exata = achadas.some(function (c) {
-      return normal(c.replace(/^.*\//, "").replace(/\.md$/i, "")) === busca || normal(c) === busca;
+      return semAcento(nomeCurto(c)) === busca || semAcento(c) === busca;
     });
     if (digitado && !exata) {
       var pasta = form ? form.dataset.pasta : "";
@@ -387,8 +412,8 @@
       li.setAttribute("role", "option");
       li.setAttribute("aria-selected", String(i === s.escolhido));
       var nome = document.createElement("span");
-      nome.textContent = item.criar ? "+ criar nota “" + item.caminho.replace(/^.*\//, "").replace(/\.md$/i, "") + "”"
-        : item.caminho.replace(/^.*\//, "").replace(/\.md$/i, "");
+      nome.textContent = item.criar ? "+ criar nota “" + nomeCurto(item.caminho) + "”"
+        : nomeCurto(item.caminho);
       var onde = document.createElement("span");
       onde.className = "onde";
       onde.textContent = item.caminho;
@@ -408,7 +433,7 @@
 
   // quem sai da nota salva antes; se não deu para salvar, fica e avisa
   function irDoSeletor(item) {
-    var guardar = window.aideSalvar ? window.aideSalvar() : Promise.resolve();
+    var guardar = salvarAberta();
     guardar.then(function () {
       if (!item.criar) { abrir(item.caminho); return; }
       return pedir("POST", "/api/notas/arquivo", { caminho: item.caminho }).then(function (r) {
@@ -490,8 +515,7 @@
             { caminho: caminho }).then(function (r) {
         if (r.ok || r.status === 409) {
           if (desenho) {
-            location.href = "/desenho?caminho=" + encodeURIComponent(caminho)
-              + "&de=" + encodeURIComponent(botao.dataset.de || "");
+            location.href = hrefDoDesenho(caminho, botao.dataset.de);
           } else {
             abrir(caminho);
           }
@@ -509,7 +533,7 @@
   document.querySelectorAll(".ligar-quebrado").forEach(function (botao) {
     botao.addEventListener("click", function () {
       botao.disabled = true;
-      var guardar = window.aideSalvar ? window.aideSalvar() : Promise.resolve();
+      var guardar = salvarAberta();
       guardar.then(function () {
         return pedir("POST", "/api/notas/ligar", { alvo: botao.dataset.alvo, para: botao.dataset.para });
       }).then(function (r) {
@@ -539,7 +563,7 @@
       form.className = "renomear-pasta-form";
       var campo = document.createElement("input");
       // só o nome; com "/" no meio, vale como caminho desde a raiz do vault
-      var mae = de.lastIndexOf("/") >= 0 ? de.slice(0, de.lastIndexOf("/") + 1) : "";
+      var mae = pastaDe(de) ? pastaDe(de) + "/" : "";
       campo.value = de.slice(mae.length);
       campo.setAttribute("aria-label", "nome da pasta");
       campo.spellcheck = false;
@@ -559,9 +583,8 @@
         var para = campo.value.trim().replace(/^\/+|\/+$/g, "");
         if (para && para.indexOf("/") < 0) { para = mae + para; }
         if (!para || para === de) { fechar(); return; }
-        var editorAberto = document.getElementById("editor");
-        var antes = editorAberto ? editorAberto.dataset.caminho : null;
-        var guardar = window.aideSalvar ? window.aideSalvar() : Promise.resolve();
+        var antes = notaAberta();
+        var guardar = salvarAberta();
         guardar.then(function () {
           return pedir("POST", "/api/notas/mover-pasta", { de: de, para: para });
         }).then(function (r) {
@@ -670,9 +693,8 @@
         return;
       }
       var pasta = botao.dataset.pasta;
-      var editorAberto = document.getElementById("editor");
-      var aberta = editorAberto ? editorAberto.dataset.caminho : "";
-      var guardar = window.aideSalvar ? window.aideSalvar() : Promise.resolve();
+      var aberta = notaAberta();
+      var guardar = salvarAberta();
       guardar.then(function () {
         return pedir("DELETE", "/api/notas/pasta?caminho=" + encodeURIComponent(pasta));
       }).then(function (r) {
@@ -702,6 +724,14 @@
     estado.textContent = texto;
     estado.dataset.estado = tipo;
   }
+
+  // o motivo que o servidor deu, na barra de estado da nota
+  function mostrarErro(r) {
+    return erroDe(r).then(function (m) { mostrar(m, "erro"); });
+  }
+
+  // a promessa que estourou no caminho (sem conexao, ou o erro ja traduzido)
+  function mostrarFalha(e) { mostrar(e.message, "erro"); }
 
   // ao vivo (mais abaixo): o bloco aberto, a prévia que chegou enquanto ele
   // estava aberto, e de que texto a prévia na tela veio. `mudancas` são os
@@ -748,7 +778,7 @@
             mostrar("conflito", "erro");
           });
         }
-        return erroDe(r).then(function (m) { mostrar(m, "erro"); });
+        return mostrarErro(r);
       })
       .catch(function () { mostrar("sem conexão; não salvo", "erro"); })
       .then(function () {
@@ -829,7 +859,7 @@
       document.title = nomeDaNota.replace(/\.md$/i, "");
       window.addEventListener("afterprint", function () { document.title = titulo; }, { once: true });
       window.print();
-    }).catch(function (e) { mostrar(e.message, "erro"); });
+    }).catch(mostrarFalha);
   });
 
   document.addEventListener("click", function (e) {
@@ -1483,7 +1513,7 @@
   function fecharRenomear() {
     renomear.hidden = true;
     titulo.hidden = false;
-    campoCaminho.value = caminho.replace(/^.*\//, "").replace(/\.md$/i, "");
+    campoCaminho.value = nomeCurto(caminho);
   }
 
   titulo.addEventListener("click", abrirRenomear);
@@ -1497,7 +1527,7 @@
     if (!novo) { return; }
     // o campo é só o nome; com uma "/" no meio, vale como caminho desde a
     // raiz do vault (mudar de pasta, no dia a dia, é arrastar na árvore)
-    var pastaAtual = caminho.lastIndexOf("/") >= 0 ? caminho.slice(0, caminho.lastIndexOf("/") + 1) : "";
+    var pastaAtual = pastaDe(caminho) ? pastaDe(caminho) + "/" : "";
     if (novo.indexOf("/") < 0) { novo = pastaAtual + novo; }
     if (!/\.md$/i.test(novo)) { novo += ".md"; }
     if (novo === caminho) { fecharRenomear(); return; }
@@ -1531,7 +1561,7 @@
     e.preventDefault();
     var alvo = link.dataset.alvo.trim();
     if (!alvo) { return; }
-    var pasta = caminho.lastIndexOf("/") >= 0 ? caminho.slice(0, caminho.lastIndexOf("/")) : "";
+    var pasta = pastaDe(caminho);
     var novo = (alvo.indexOf("/") >= 0 || !pasta ? alvo : pasta + "/" + alvo);
     if (/\.excalidraw$/i.test(novo)) {
       // [[Planta.excalidraw]] pede um desenho, não uma nota Planta.excalidraw.md
@@ -1539,20 +1569,19 @@
         return pedir("POST", "/api/desenhos/arquivo", { caminho: novo });
       }).then(function (r) {
         if (r.ok || r.status === 409) {
-          location.href = "/desenho?caminho=" + encodeURIComponent(novo)
-            + "&de=" + encodeURIComponent(caminho);
+          location.href = hrefDoDesenho(novo, caminho);
         } else {
-          erroDe(r).then(function (m) { mostrar(m, "erro"); });
+          mostrarErro(r);
         }
-      }).catch(function (e) { mostrar(e.message, "erro"); });
+      }).catch(mostrarFalha);
       return;
     }
     if (!/\.md$/i.test(novo)) { novo += ".md"; }
     garantirSalvo().then(function () {
       return pedir("POST", "/api/notas/arquivo", { caminho: novo });
     }).then(function (r) {
-      if (r.ok || r.status === 409) { abrir(novo); } else { erroDe(r).then(function (m) { mostrar(m, "erro"); }); }
-    }).catch(function (e) { mostrar(e.message, "erro"); });
+      if (r.ok || r.status === 409) { abrir(novo); } else { mostrarErro(r); }
+    }).catch(mostrarFalha);
   }
   // ---------- tarefa marcada na prévia ----------
   // a caixa diz a linha; o script troca [ ] por [x] no texto e salva. Se o
@@ -1658,7 +1687,7 @@
       inserirNoCursor(links.join("\n"));
     }).catch(function (e) {
       if (links.length) { inserirNoCursor(links.join("\n")); }
-      mostrar(e.message, "erro");
+      mostrarFalha(e);
     });
   }
 
@@ -1732,24 +1761,27 @@
   // ---------- chegar no link citado ----------
   // a lista de links quebrados abre a nota com ?linha=&alvo=: a prévia rola
   // até o link e pisca, e o campo seleciona o link no texto
-  function alturaAte(posicao) {
-    // o mesmo espelho do autocompletar: a linha pode quebrar em várias
+  // onde o caractere `posicao` do campo cai, num espelho escondido com o
+  // mesmo estilo dele: a linha pode quebrar em varias, e so o navegador sabe
+  // onde. Serve para rolar ate o cursor e para por a lista de sugestoes nele
+  function medirCursor(campo, posicao) {
     var espelho = document.createElement("div");
-    var estilo = getComputedStyle(editor);
+    var estilo = getComputedStyle(campo);
     ["fontFamily", "fontSize", "lineHeight", "padding", "border", "letterSpacing",
      "tabSize", "boxSizing", "width"].forEach(function (p) { espelho.style[p] = estilo[p]; });
     espelho.style.position = "absolute";
     espelho.style.visibility = "hidden";
     espelho.style.whiteSpace = "pre-wrap";
     espelho.style.wordWrap = "break-word";
-    espelho.textContent = editor.value.slice(0, posicao);
+    espelho.textContent = campo.value.slice(0, posicao);
     var marca = document.createElement("span");
     marca.textContent = "\u200b";
     espelho.appendChild(marca);
     document.body.appendChild(espelho);
-    var topo = marca.offsetTop;
+    var onde = { topo: marca.offsetTop, esquerda: marca.offsetLeft,
+      altura: parseFloat(estilo.lineHeight) };
     document.body.removeChild(espelho);
-    return topo;
+    return onde;
   }
 
   (function irAoLink() {
@@ -1791,7 +1823,7 @@
     var ate = achado >= 0 ? achado + alvo.length : texto.length;
     editor.focus({ preventScroll: true });
     editor.setSelectionRange(inicio + de, inicio + ate);
-    editor.scrollTop = Math.max(0, alturaAte(inicio + de) - editor.clientHeight / 2);
+    editor.scrollTop = Math.max(0, medirCursor(editor, inicio + de).topo - editor.clientHeight / 2);
     if (realce) { realce.scrollTop = editor.scrollTop; }
     if (!marca || area.dataset.modo === "editar") {
       editor.scrollIntoView({ block: "nearest" });
@@ -1846,7 +1878,7 @@
   var DESENHO = /\.excalidraw$/i;
   var nomes = {};
   notas.concat(desenhosDoVault).forEach(function (n) {
-    var nome = n.replace(/^.*\//, "").replace(/\.md$/i, "");
+    var nome = nomeCurto(n);
     nomes[nome.toLowerCase()] = (nomes[nome.toLowerCase()] || 0) + 1;
   });
   var caixa = document.createElement("ul");
@@ -1861,7 +1893,7 @@
   var campoSugestao = editor;
 
   function comoLink(n) {
-    var nome = n.replace(/^.*\//, "").replace(/\.md$/i, "");
+    var nome = nomeCurto(n);
     // nome repetido em outra pasta: o caminho desfaz a dúvida (desenho
     // mantém o .excalidraw, que é o que diz que o link é de desenho)
     return nomes[nome.toLowerCase()] > 1 ? n.replace(/\.md$/i, "") : nome;
@@ -1869,25 +1901,12 @@
 
   function fecharSugestoes() { caixa.hidden = true; achados = []; }
 
+  // a lista abre embaixo do cursor, uma linha abaixo dele
   function posicionar() {
-    // um espelho do campo, com o mesmo estilo, mede onde está o cursor
-    var espelho = document.createElement("div");
-    var estilo = getComputedStyle(campoSugestao);
-    ["fontFamily", "fontSize", "lineHeight", "padding", "border", "letterSpacing",
-     "tabSize", "boxSizing", "width"].forEach(function (p) { espelho.style[p] = estilo[p]; });
-    espelho.style.position = "absolute";
-    espelho.style.visibility = "hidden";
-    espelho.style.whiteSpace = "pre-wrap";
-    espelho.style.wordWrap = "break-word";
-    espelho.textContent = campoSugestao.value.slice(0, campoSugestao.selectionStart);
-    var marca = document.createElement("span");
-    marca.textContent = "\u200b";
-    espelho.appendChild(marca);
-    document.body.appendChild(espelho);
+    var onde = medirCursor(campoSugestao, campoSugestao.selectionStart);
     var caixaCampo = campoSugestao.getBoundingClientRect();
-    var topo = caixaCampo.top + marca.offsetTop - campoSugestao.scrollTop + parseFloat(estilo.lineHeight);
-    var esquerda = caixaCampo.left + marca.offsetLeft;
-    document.body.removeChild(espelho);
+    var topo = caixaCampo.top + onde.topo - campoSugestao.scrollTop + onde.altura;
+    var esquerda = caixaCampo.left + onde.esquerda;
     caixa.style.top = Math.min(topo, window.innerHeight - 40) + window.scrollY + "px";
     caixa.style.left = Math.min(esquerda, window.innerWidth - 300) + window.scrollX + "px";
   }
@@ -1922,7 +1941,7 @@
       var nb = b.replace(/^.*\//, "").toLowerCase().indexOf(busca) === 0 ? 0 : 1;
       return na - nb || a.localeCompare(b);
     }).slice(0, 8).map(function (n) {
-      return { nome: n.replace(/^.*\//, "").replace(/\.md$/i, "").replace(DESENHO, ""),
+      return { nome: nomeCurto(n).replace(DESENHO, ""),
         onde: DESENHO.test(n) ? "desenho · " + n : n,
         escolher: function () { inserir(n); } };
     });
@@ -2006,10 +2025,6 @@
   });
   COMANDOS.push({ nome: "Callout recolhível", onde: "> [!faq]-", texto: "> [!faq]- §",
     bloco: true, chaves: "caixa dobra fold details question" });
-
-  function semAcento(t) {
-    return t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-  }
 
   function comandosPara(busca) {
     var b = semAcento(busca);
@@ -2248,7 +2263,7 @@
         salvo = editor.value;
         location.href = "/notas";
       } else {
-        erroDe(r).then(function (m) { mostrar(m, "erro"); });
+        mostrarErro(r);
       }
     });
   });
