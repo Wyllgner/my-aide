@@ -67,6 +67,11 @@ function tipoDe(nome) {
   return null;
 }
 
+// o nome sem a extensao: a base de todo nome de resultado
+function semExtensao(nome) {
+  return nome.replace(/\.[^.]+$/, "");
+}
+
 function tamanho(bytes) {
   if (bytes < 1024) return bytes + " B";
   if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + " KB";
@@ -78,6 +83,28 @@ let recado = { texto: "", erro: false };
 
 function avisar(texto, erro) {
   recado = { texto: texto || "", erro: Boolean(erro) };
+}
+
+// o que a linha diz do arquivo quando nada esta acontecendo com ele
+function medida(it) {
+  return (it.paginas ? paginas(it.paginas) + " · " : "") + tamanho(it.arquivo.size);
+}
+
+// o selo da extensao e o nome, iguais na fila de cima e na lista do lote
+function selo(it) {
+  const tipo = document.createElement("span");
+  tipo.className = "tipo";
+  tipo.dataset.tipo = it.tipo;
+  tipo.textContent = extensao(it.arquivo.name).toUpperCase();
+  return tipo;
+}
+
+function rotulo(it) {
+  const nome = document.createElement("span");
+  nome.className = "nome";
+  nome.textContent = it.arquivo.name;
+  nome.title = it.arquivo.name;
+  return nome;
 }
 
 function mesmo(a, b) {
@@ -502,9 +529,8 @@ document.addEventListener("keydown", (e) => {
   desfazer.click();
 });
 
-// baixar: o corpo é a linha do plano e as fontes coladas na ordem
 function nomeDoResultado(nome, sufixo) {
-  return nome.replace(/\.pdf$/i, "") + "-" + sufixo + ".pdf";
+  return semExtensao(nome) + "-" + sufixo + ".pdf";
 }
 
 function entregar(blob, nome) {
@@ -518,9 +544,8 @@ function entregar(blob, nome) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-// manda as fontes e a lista de páginas; devolve o PDF ou lança com o motivo
-// o corpo é a linha do plano e os arquivos colados; devolve o resultado ou
-// lança com o motivo que o servidor deu
+// o corpo é a linha do plano e os arquivos colados em seguida; devolve o
+// resultado ou lança com o motivo que o servidor deu
 async function enviar(rota, arquivos, extra) {
   const plano = { arquivos: arquivos.map((a) => a.size), ...extra };
   const resposta = await fetch(rota, {
@@ -535,8 +560,9 @@ async function enviar(rota, arquivos, extra) {
   return resposta.blob();
 }
 
-function montar(arquivos, lista) {
-  return enviar("/api/arquivos/montar", arquivos, { paginas: lista });
+// organizar, juntar e imagens → PDF são a mesma rota: o que muda é a lista
+function montar(arquivos, lista, extra) {
+  return enviar("/api/arquivos/montar", arquivos, { paginas: lista, ...extra });
 }
 
 baixar.addEventListener("click", async () => {
@@ -578,7 +604,7 @@ const LISTAS = {
   "imagens-pdf": {
     tipo: "imagem", minimo: 1, titulo: "Imagens → PDF", botao: "Baixar PDF",
     verbo: "Montando o PDF com", falha: "Não deu para montar",
-    nome: (ordem) => ordem[0].arquivo.name.replace(/\.[^.]+$/, "") + ".pdf",
+    nome: (ordem) => semExtensao(ordem[0].arquivo.name) + ".pdf",
     paginas: (ordem) => ordem.map((_, f) => [f, 0]),
     extra: { imagens: "proprias" },
   },
@@ -588,6 +614,10 @@ function paginasDe(it) {
   return it.tipo === "pdf" ? it.paginas : 1;
 }
 
+function somaPaginas(lista) {
+  return lista.reduce((soma, it) => soma + paginasDe(it), 0);
+}
+
 let ordemJuntar = [];
 let juntando = false;
 
@@ -595,8 +625,7 @@ function sincronizarJuntar(marcados) {
   // quem continua marcado mantém o lugar; quem chegou entra no fim
   const modo = LISTAS[escolhida];
   if (!modo) return;
-  const validos = marcados.filter((it) => it.tipo === modo.tipo && !it.erro
-    && (it.tipo !== "pdf" || it.paginas));
+  const validos = marcados.filter((it) => serveAoTipo(it, modo.tipo));
   ordemJuntar = ordemJuntar.filter((it) => validos.includes(it))
     .concat(validos.filter((it) => !ordemJuntar.includes(it)));
 }
@@ -609,7 +638,7 @@ function linhaJuntar(it, i) {
   const tipo = div.querySelector(".tipo");
   tipo.dataset.tipo = it.tipo;
   tipo.textContent = extensao(it.arquivo.name).toUpperCase();
-  const antes = ordemJuntar.slice(0, i).reduce((soma, x) => soma + paginasDe(x), 0);
+  const antes = somaPaginas(ordemJuntar.slice(0, i));
   div.querySelector(".quando").textContent = paginasDe(it) === 1 ? "pág " + (antes + 1)
     : "págs " + (antes + 1) + "–" + (antes + paginasDe(it));
   const subir = div.querySelector('[data-mover="-1"]');
@@ -629,7 +658,7 @@ function desenharJuntar(foco) {
   secaoJuntar.hidden = !visivel;
   if (!visivel) return;
   listaJuntar.replaceChildren(...ordemJuntar.map(linhaJuntar));
-  const total = ordemJuntar.reduce((soma, it) => soma + paginasDe(it), 0);
+  const total = somaPaginas(ordemJuntar);
   document.getElementById("arq-juntar-titulo").textContent = modo.titulo;
   document.getElementById("arq-juntar-resumo").textContent = (modo.tipo === "pdf"
     ? ordemJuntar.length + " PDFs · " : "") + paginas(total) + " no total";
@@ -649,6 +678,13 @@ function moverJuntar(de, para, botao) {
   desenharJuntar({ indice: para, botao });
 }
 
+// de que lado da linha o ponteiro esta: a barra cai desse lado, e no soltar
+// e esse lado que diz se a linha entra antes ou depois da vizinha
+function depoisDaMetade(l, e) {
+  const caixa = l.getBoundingClientRect();
+  return e.clientY > caixa.top + caixa.height / 2;
+}
+
 let arrastadaJuntar = null;
 
 listaJuntar.addEventListener("dragstart", (e) => {
@@ -665,8 +701,7 @@ listaJuntar.addEventListener("dragover", (e) => {
   const l = e.target.closest(".linha");
   for (const x of listaJuntar.querySelectorAll("[data-cair]")) if (x !== l) delete x.dataset.cair;
   if (!l) return;
-  const caixa = l.getBoundingClientRect();
-  l.dataset.cair = e.clientY > caixa.top + caixa.height / 2 ? "depois" : "antes";
+  l.dataset.cair = depoisDaMetade(l, e) ? "depois" : "antes";
 });
 listaJuntar.addEventListener("drop", (e) => {
   if (arrastadaJuntar === null) return;
@@ -676,8 +711,7 @@ listaJuntar.addEventListener("drop", (e) => {
   const de = arrastadaJuntar;
   arrastadaJuntar = null;
   if (!l) return desenharJuntar();
-  const caixa = l.getBoundingClientRect();
-  let para = Number(l.dataset.indice) + (e.clientY > caixa.top + caixa.height / 2 ? 1 : 0);
+  let para = Number(l.dataset.indice) + (depoisDaMetade(l, e) ? 1 : 0);
   if (para > de) para--;
   if (para === de) return desenharJuntar();
   moverJuntar(de, para);
@@ -701,8 +735,7 @@ baixarJuntado.addEventListener("click", async () => {
   avisar(modo.verbo + " " + ordem.length + (modo.tipo === "pdf" ? " PDFs…" : " imagens…"));
   desenhar();
   try {
-    const blob = await enviar("/api/arquivos/montar", ordem.map((it) => it.arquivo),
-      { paginas: lista, ...modo.extra });
+    const blob = await montar(ordem.map((it) => it.arquivo), lista, modo.extra);
     entregar(blob, nome);
     avisar("Pronto: " + paginas(lista.length) + " em " + nome + ".");
   } catch (erro) {
@@ -727,7 +760,7 @@ const LOTES = {
       : "Converter e baixar .zip com " + docs.length + " PDFs",
     aviso: (docs) => docs.length === 1 ? "Convertendo pelo LibreOffice…"
       : "Convertendo " + docs.length + " documentos pelo LibreOffice, um de cada vez…",
-    nome: (docs) => docs.length === 1 ? docs[0].arquivo.name.replace(/\.[^.]+$/, "") + ".pdf"
+    nome: (docs) => docs.length === 1 ? semExtensao(docs[0].arquivo.name) + ".pdf"
       : "convertidos.zip",
   },
   "pdf-imagens": {
@@ -735,14 +768,11 @@ const LOTES = {
     nota: "uma PNG por página, a 150 dpi",
     rodape: "várias páginas voltam num .zip, numeradas",
     andando: "desenhando…", falha: "não desenhou",
-    botao: (docs) => {
-      const total = docs.reduce((soma, it) => soma + it.paginas, 0);
-      return total === 1 ? "Baixar PNG" : "Baixar .zip com " + total + " imagens";
-    },
+    botao: (docs) => somaPaginas(docs) === 1 ? "Baixar PNG"
+      : "Baixar .zip com " + somaPaginas(docs) + " imagens",
     aviso: () => "Desenhando as páginas…",
-    nome: (docs) => docs.reduce((soma, it) => soma + it.paginas, 0) === 1
-      ? docs[0].arquivo.name.replace(/\.pdf$/i, "") + ".png"
-      : (docs.length === 1 ? docs[0].arquivo.name.replace(/\.pdf$/i, "") + "-imagens.zip" : "imagens.zip"),
+    nome: (docs) => somaPaginas(docs) === 1 ? semExtensao(docs[0].arquivo.name) + ".png"
+      : (docs.length === 1 ? semExtensao(docs[0].arquivo.name) + "-imagens.zip" : "imagens.zip"),
   },
   "pdf-word": {
     tipo: "pdf", titulo: "PDF → Word", rota: "/api/arquivos/word",
@@ -751,7 +781,7 @@ const LOTES = {
     andando: "convertendo…", falha: "não converteu",
     botao: (docs) => docs.length === 1 ? "Baixar .docx" : "Baixar .zip com " + docs.length + " .docx",
     aviso: () => "Convertendo para Word pelo LibreOffice…",
-    nome: (docs) => docs.length === 1 ? docs[0].arquivo.name.replace(/\.pdf$/i, "") + ".docx"
+    nome: (docs) => docs.length === 1 ? semExtensao(docs[0].arquivo.name) + ".docx"
       : "convertidos.zip",
     extra: () => ({ modo: modoWord }),
   },
@@ -772,8 +802,7 @@ let convertendo = false;
 const situacao = new Map();  // item -> "pronto" | "erro" enquanto a lista não muda
 
 function doLote(lote) {
-  return itens.filter((it) => it.marcado && it.tipo === lote.tipo && !it.erro
-    && (it.tipo !== "pdf" || it.paginas));
+  return itens.filter((it) => it.marcado && serveAoTipo(it, lote.tipo));
 }
 
 function desenharLote() {
@@ -793,21 +822,13 @@ function desenharLote() {
   listaLote.replaceChildren(...docs.map((it) => {
     const div = document.createElement("div");
     div.className = "linha";
-    const tipo = document.createElement("span");
-    tipo.className = "tipo";
-    tipo.dataset.tipo = it.tipo;
-    tipo.textContent = extensao(it.arquivo.name).toUpperCase();
-    const nome = document.createElement("span");
-    nome.className = "nome";
-    nome.textContent = it.arquivo.name;
-    nome.title = it.arquivo.name;
     const estado = document.createElement("span");
     estado.className = "quando";
     const s = convertendo ? "convertendo" : situacao.get(it);
     estado.dataset.estado = s || "esperando";
     estado.textContent = { convertendo: lote.andando, pronto: "pronto", erro: lote.falha }[s]
-      || (it.paginas ? paginas(it.paginas) + " · " : "") + tamanho(it.arquivo.size);
-    div.append(tipo, nome, estado);
+      || medida(it);
+    div.append(selo(it), rotulo(it), estado);
     return div;
   }));
   baixarLote.disabled = convertendo;
@@ -850,18 +871,9 @@ function linha(it, i) {
   caixa.checked = it.marcado;
   caixa.setAttribute("aria-label", "Marcar " + it.arquivo.name);
   caixa.addEventListener("change", () => { it.marcado = caixa.checked; avisar(""); desenhar(); });
-  const tipo = document.createElement("span");
-  tipo.className = "tipo";
-  tipo.dataset.tipo = it.tipo;
-  tipo.textContent = extensao(it.arquivo.name).toUpperCase();
-  const nome = document.createElement("span");
-  nome.className = "nome";
-  nome.textContent = it.arquivo.name;
-  nome.title = it.arquivo.name;
   const quanto = document.createElement("span");
   quanto.className = "quando mono";
-  quanto.textContent = it.erro ? it.erro
-    : (it.paginas ? paginas(it.paginas) + " · " : "") + tamanho(it.arquivo.size);
+  quanto.textContent = it.erro ? it.erro : medida(it);
   if (it.erro) div.dataset.erro = "1";
   const tirar = document.createElement("button");
   tirar.type = "button";
@@ -875,8 +887,13 @@ function linha(it, i) {
     avisar("");
     desenhar();
   });
-  div.append(caixa, tipo, nome, quanto, tirar);
+  div.append(caixa, selo(it), rotulo(it), quanto, tirar);
   return div;
+}
+
+// pronto para a acao: do tipo pedido, aberto, e PDF com as paginas contadas
+function serveAoTipo(it, tipo) {
+  return it.tipo === tipo && !it.erro && (it.tipo !== "pdf" || Boolean(it.paginas));
 }
 
 function serve(acao, marcados) {
@@ -907,7 +924,7 @@ function desenhar() {
     || (misturado ? "Os marcados misturam tipos: marque só PDFs, só documentos ou só imagens."
       : quebrados ? "Desmarque o que não abriu: não dá para fazer nada com ele." : "");
   aviso.textContent = texto;
-  if (recado.erro) aviso.dataset.erro = "1"; else delete aviso.dataset.erro;
+  aviso.toggleAttribute("data-erro", recado.erro);
   for (const botao of botoes) {
     const acao = botao.dataset.acao;
     botao.disabled = !serve(acao, marcados);
