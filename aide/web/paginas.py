@@ -89,7 +89,7 @@ def pagina(corpo: str, ativo: str = "painel", titulo: str | None = None,
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{escape(nome)} · my-aide</title>
 <link rel="stylesheet" href="/app.css">
-<script src="/app.js" defer></script>
+<script type="module" src="/app.js"></script>
 </head>
 <body>
 <div class="app">
