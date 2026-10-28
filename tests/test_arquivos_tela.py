@@ -106,7 +106,7 @@ def test_nenhum_id_da_tela_e_procurado_pelo_app_js(cliente):
 
     html = cliente.get("/arquivos").text
     ids = set(re.findall(r'id="([^"]+)"', html))
-    procurados = set(re.findall(r'getElementById\("([^"]+)"\)', cliente.get("/app.js").text))
+    procurados = set(re.findall(r'getElementById\("([^"]+)"\)', estaticos.notas()))
     assert ids and procurados
     assert not ids & procurados
 

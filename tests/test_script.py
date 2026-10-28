@@ -1,6 +1,9 @@
-"""O /app.js no que dá para conferir sem navegador: as regras de texto.
+"""O script das notas no que dá para conferir sem navegador: as regras de texto.
 
-Roda o trecho do próprio script no Node; sem Node, pula.
+Roda o trecho do próprio script no Node; sem Node, pula. `JS` é o script
+inteiro (a entrada e as partes), e os trechos que rodam saem do arquivo da
+parte: o `editor.js`, onde eles moram, ou o `realce.js`, que é um módulo
+inteiro de função pura.
 """
 
 import json
@@ -13,7 +16,9 @@ import pytest
 from aide.storage import vault
 from aide.web import estaticos
 
-JS = estaticos.ler("js/app.js")
+JS = estaticos.notas()
+EDITOR = estaticos.ler("js/notas/editor.js")
+REALCE = estaticos.PASTA / "js" / "notas" / "realce.js"
 
 node = shutil.which("node")
 pytestmark = pytest.mark.skipif(node is None, reason="sem node")
@@ -21,7 +26,7 @@ pytestmark = pytest.mark.skipif(node is None, reason="sem node")
 
 def _front(texto: str):
     """O que a FRONT do script acha em `texto`: (miolo, resto) ou None."""
-    regex = re.search(r"var FRONT = (/.*/);", JS).group(1)
+    regex = re.search(r"var FRONT = (/.*/);", EDITOR).group(1)
     codigo = (f"const FRONT = {regex}; const t = {json.dumps(texto)};"
               "const m = t.match(FRONT);"
               "console.log(JSON.stringify(m ? [m[1] || '', t.slice(m[0].length)] : null));")
@@ -68,7 +73,7 @@ def test_o_script_ve_o_frontmatter_igual_ao_servidor(texto):
     ("3) [X] outra", "3) [ ] outra"),
 ])
 def test_a_regra_de_tarefa_do_script_troca_so_a_caixa(linha, marcada):
-    regex = re.search(r"var TAREFA = (/.*/);", JS).group(1)
+    regex = re.search(r"var TAREFA = (/.*/);", EDITOR).group(1)
     codigo = (f"const T = {regex}; const l = {json.dumps(linha)}; const m = T.exec(l);"
               "console.log(l.replace(T, '$1' + (m[2] === ' ' ? 'x' : ' ') + '$3'));")
     saida = subprocess.run([node, "-e", codigo], capture_output=True, text=True, check=True)
@@ -78,11 +83,12 @@ def test_a_regra_de_tarefa_do_script_troca_so_a_caixa(linha, marcada):
 # ---------- cores no editor ----------
 
 def _realcar(texto: str) -> str:
-    """Roda o colorizador do próprio script no Node."""
-    inicio = JS.index("  function esc(t)")
-    fim = JS.index("  var pedidoRealce")
-    codigo = (JS[inicio:fim] + f"\nconsole.log(JSON.stringify(realcar({json.dumps(texto)})));")
-    saida = subprocess.run([node, "-e", codigo], capture_output=True, text=True, check=True)
+    """Roda o colorizador no Node, importando o módulo dele: o realce.js é
+    função pura, então entra inteiro, sem recorte por marcador de texto."""
+    codigo = (f"import {{ realcar }} from {json.dumps(REALCE.as_uri())};\n"
+              f"console.log(JSON.stringify(realcar({json.dumps(texto)})));")
+    saida = subprocess.run([node, "--input-type=module", "-e", codigo],
+                           capture_output=True, text=True, check=True)
     return json.loads(saida.stdout)
 
 
@@ -127,14 +133,14 @@ def test_dentro_de_codigo_nada_colore():
 
 def _historico(roteiro: str) -> dict:
     """Roda o histórico do ao vivo no Node, com o resto da página de mentira."""
-    inicio = JS.index("  var desfazer = [];")
-    fim = JS.index("  function mostrarLinha()")
+    inicio = EDITOR.index("  var desfazer = [];")
+    fim = EDITOR.index("  function mostrarLinha()")
     codigo = (
         "var editor = {value: 'a'}; var conflito = {hidden: true}; var salvo = 'a';"
         "var avisos = []; var salvos = 0; var privada = {};"
         "function mostrar(t) { avisos.push(t); } function marcadaNoTexto() { return false; }"
         "function corretor() {} function agendarRealce() {} function salvar() { salvos++; }"
-        + JS[inicio:fim] + roteiro
+        + EDITOR[inicio:fim] + roteiro
         + "\nconsole.log(JSON.stringify({texto: editor.value, avisos: avisos, salvos: salvos,"
           " desfazer: desfazer.length, refazer: refazer.length}));")
     saida = subprocess.run([node, "-e", codigo], capture_output=True, text=True, check=True)
@@ -200,21 +206,21 @@ def test_atalhos_de_desfazer(tecla, esperado):
 
 def test_desfazer_no_bloco_so_quando_ele_esta_como_abriu():
     """Com o bloco já mexido, o Ctrl+Z é o do navegador, dentro dele."""
-    teclado = JS[JS.index('      var passo = passoPedido(ev);'):]
+    teclado = EDITOR[EDITOR.index('      var passo = passoPedido(ev);'):]
     teclado = teclado[:teclado.index("      }\n") + 8]
     assert "campo.value === b.fonte" in teclado
     assert teclado.index("fecharBloco();") < teclado.index("andarNoHistorico(passo);")
-    pagina = JS[JS.index('  document.addEventListener("keydown", function (e) {\n'
-                         '    if (area.dataset.modo !== "vivo" || bloco)'):]
+    pagina = EDITOR[EDITOR.index('  document.addEventListener("keydown", function (e) {\n'
+                                 '    if (area.dataset.modo !== "vivo" || bloco)'):]
     assert 'closest("input, textarea, select, [contenteditable]")' in pagina[:400]
 
 
 # ---------- lado a lado ----------
 
 def _interpolar(pares, x):
-    inicio = JS.index("  function interpolar(")
-    fim = JS.index("  // o topo de cada linha do campo")
-    codigo = JS[inicio:fim] + f"\nconsole.log(JSON.stringify(interpolar({json.dumps(pares)}, {x})));"
+    inicio = EDITOR.index("  function interpolar(")
+    fim = EDITOR.index("  // o topo de cada linha do campo")
+    codigo = EDITOR[inicio:fim] + f"\nconsole.log(JSON.stringify(interpolar({json.dumps(pares)}, {x})));"
     saida = subprocess.run([node, "-e", codigo], capture_output=True, text=True, check=True)
     return json.loads(saida.stdout)
 
