@@ -4,708 +4,712 @@
 //
 // Faz so o que o servidor nao consegue: salvar enquanto voce digita, avisar
 // do conflito com quem escreveu por fora, e os botoes de criar e apagar.
-"use strict";
-(function () {
-  // a marca que seguranca.py exige em toda escrita
-  function pedir(metodo, url, corpo) {
-    return fetch(url, {
-      method: metodo,
-      headers: { "Content-Type": "application/json", "X-Aide": "1" },
-      body: corpo === undefined ? undefined : JSON.stringify(corpo),
-      credentials: "same-origin",
-    });
-  }
+// Modulo ES: o escopo e do arquivo, sem a IIFE que fazia esse papel.
 
-  // o nome que aparece na tela: sem a pasta e sem o .md
-  function nomeCurto(caminho) {
-    return caminho.replace(/^.*\//, "").replace(/\.md$/i, "");
-  }
+// a marca que seguranca.py exige em toda escrita
+function pedir(metodo, url, corpo) {
+  return fetch(url, {
+    method: metodo,
+    headers: { "Content-Type": "application/json", "X-Aide": "1" },
+    body: corpo === undefined ? undefined : JSON.stringify(corpo),
+    credentials: "same-origin",
+  });
+}
 
-  // a pasta do caminho, sem a barra do fim ("" na raiz do vault)
-  function pastaDe(caminho) {
-    var corte = caminho.lastIndexOf("/");
-    return corte < 0 ? "" : caminho.slice(0, corte);
-  }
+// o nome que aparece na tela: sem a pasta e sem o .md
+function nomeCurto(caminho) {
+  return caminho.replace(/^.*\//, "").replace(/\.md$/i, "");
+}
 
-  // a tela do desenho, com a nota de onde ele foi aberto: o "Notas" de la
-  // volta para ela
-  function hrefDoDesenho(caminho, de) {
-    return "/desenho?caminho=" + encodeURIComponent(caminho)
-      + (de ? "&de=" + encodeURIComponent(de) : "");
-  }
+// a pasta do caminho, sem a barra do fim ("" na raiz do vault)
+function pastaDe(caminho) {
+  var corte = caminho.lastIndexOf("/");
+  return corte < 0 ? "" : caminho.slice(0, corte);
+}
 
-  function abrir(caminho) {
-    location.href = "/notas?arquivo=" + encodeURIComponent(caminho).replace(/%2F/g, "/");
-  }
+// a tela do desenho, com a nota de onde ele foi aberto: o "Notas" de la
+// volta para ela
+function hrefDoDesenho(caminho, de) {
+  return "/desenho?caminho=" + encodeURIComponent(caminho)
+    + (de ? "&de=" + encodeURIComponent(de) : "");
+}
 
-  // o editor (mais abaixo, so na tela de uma nota) publica o salvar em
-  // window.aideSalvar: quem move, renomeia ou sai manda salvar antes
-  function salvarAberta() {
-    return window.aideSalvar ? window.aideSalvar() : Promise.resolve();
-  }
+function abrir(caminho) {
+  location.href = "/notas?arquivo=" + encodeURIComponent(caminho).replace(/%2F/g, "/");
+}
 
-  // o caminho da nota aberta, ou "" quando a tela e so a lista
-  function notaAberta() {
-    var el = document.getElementById("editor");
-    return el ? el.dataset.caminho : "";
-  }
+// o editor (mais abaixo, so na tela de uma nota) publica o salvar em
+// window.aideSalvar: quem move, renomeia ou sai manda salvar antes
+function salvarAberta() {
+  return window.aideSalvar ? window.aideSalvar() : Promise.resolve();
+}
 
-  function erroDe(resposta) {
-    return resposta.json().then(
-      function (d) { return d.detail || d.erro || "erro " + resposta.status; },
-      function () { return "erro " + resposta.status; });
-  }
+// o caminho da nota aberta, ou "" quando a tela e so a lista
+function notaAberta() {
+  var el = document.getElementById("editor");
+  return el ? el.dataset.caminho : "";
+}
 
-  // o aviso que a página mostra depois de recarregar, num renomear ou mover
-  function guardarAviso(d) {
-    var n = (d.links_atualizados || []).length;
-    var pulou = d.links_nao_atualizados || [];
-    var partes = [];
-    if (n) { partes.push(n === 1 ? "1 nota teve o link atualizado" : n + " notas tiveram o link atualizado"); }
-    var nd = (d.desenhos_atualizados || []).length;
-    if (nd) { partes.push(nd === 1 ? "1 desenho teve o link atualizado" : nd + " desenhos tiveram o link atualizado"); }
-    if (pulou.length) {
-      partes.push("não consegui atualizar o link em " + pulou.join(", ") + " (arquivo ilegível ou sem permissão)");
+function erroDe(resposta) {
+  return resposta.json().then(
+    function (d) { return d.detail || d.erro || "erro " + resposta.status; },
+    function () { return "erro " + resposta.status; });
+}
+
+// o aviso que a página mostra depois de recarregar, num renomear ou mover
+function guardarAviso(d) {
+  var n = (d.links_atualizados || []).length;
+  var pulou = d.links_nao_atualizados || [];
+  var partes = [];
+  if (n) { partes.push(n === 1 ? "1 nota teve o link atualizado" : n + " notas tiveram o link atualizado"); }
+  var nd = (d.desenhos_atualizados || []).length;
+  if (nd) { partes.push(nd === 1 ? "1 desenho teve o link atualizado" : nd + " desenhos tiveram o link atualizado"); }
+  if (pulou.length) {
+    partes.push("não consegui atualizar o link em " + pulou.join(", ") + " (arquivo ilegível ou sem permissão)");
+  }
+  try {
+    sessionStorage.setItem("aide.notas.aviso", partes.join(" · "));
+  } catch (e) { /* sem armazenamento: só não mostra o aviso */ }
+}
+
+// ---------- árvore: a nota aberta à vista ----------
+// num vault grande, a nota aberta pode estar lá embaixo na lateral
+(function mostrarAberta() {
+  var lateral = document.querySelector(".notas-lateral");
+  var aberta = lateral && lateral.querySelector('.arvore .arquivo[aria-current="page"]');
+  if (!aberta) { return; }
+  var topo = aberta.offsetTop;
+  if (topo < lateral.scrollTop || topo > lateral.scrollTop + lateral.clientHeight - 40) {
+    lateral.scrollTop = topo - lateral.clientHeight / 2;
+  }
+})();
+
+// ---------- árvore: filtrar por nome ----------
+// esconde o que não bate (nome ou caminho, sem acento) e abre as pastas onde
+// há resultado; limpo, as pastas voltam como estavam. Enter abre a primeira
+// nota que sobrou, Esc limpa
+var filtro = document.querySelector(".filtro-arvore");
+if (filtro) {
+  var arvore = filtro.closest(".arvore");
+  var semResultado = arvore.querySelector(".filtro-vazio");
+  var abertasAntes = null;
+  var filtrarArvore = function () {
+    var busca = semAcento(filtro.value.trim());
+    var pastas = arvore.querySelectorAll("details");
+    if (busca && abertasAntes === null) {
+      abertasAntes = Array.prototype.filter.call(pastas, function (d) { return d.open; });
     }
-    try {
-      sessionStorage.setItem("aide.notas.aviso", partes.join(" · "));
-    } catch (e) { /* sem armazenamento: só não mostra o aviso */ }
-  }
-
-  // ---------- árvore: a nota aberta à vista ----------
-  // num vault grande, a nota aberta pode estar lá embaixo na lateral
-  (function mostrarAberta() {
-    var lateral = document.querySelector(".notas-lateral");
-    var aberta = lateral && lateral.querySelector('.arvore .arquivo[aria-current="page"]');
-    if (!aberta) { return; }
-    var topo = aberta.offsetTop;
-    if (topo < lateral.scrollTop || topo > lateral.scrollTop + lateral.clientHeight - 40) {
-      lateral.scrollTop = topo - lateral.clientHeight / 2;
+    var algum = false;
+    arvore.querySelectorAll(".arquivo").forEach(function (a) {
+      var bate = !busca || semAcento(a.getAttribute("title") || a.textContent).indexOf(busca) >= 0;
+      a.hidden = !bate;
+      algum = algum || bate;
+    });
+    // de dentro para fora: a pasta aparece se tem nota que bate lá dentro
+    Array.prototype.slice.call(pastas).reverse().forEach(function (d) {
+      if (!busca) { d.hidden = false; return; }
+      var tem = d.querySelector(".arquivo:not([hidden])") !== null;
+      d.hidden = !tem;
+      d.open = tem;
+    });
+    if (!busca && abertasAntes !== null) {
+      pastas.forEach(function (d) { d.open = abertasAntes.indexOf(d) >= 0; });
+      abertasAntes = null;
     }
-  })();
+    semResultado.hidden = !busca || algum;
+  };
+  filtro.addEventListener("input", filtrarArvore);
+  filtro.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") {
+      filtro.value = "";
+      filtrarArvore();
+    } else if (e.key === "Enter") {
+      var primeira = arvore.querySelector(".arquivo:not([hidden])");
+      if (primeira && filtro.value.trim()) { e.preventDefault(); primeira.click(); }
+    }
+  });
+}
 
-  // ---------- árvore: filtrar por nome ----------
-  // esconde o que não bate (nome ou caminho, sem acento) e abre as pastas onde
-  // há resultado; limpo, as pastas voltam como estavam. Enter abre a primeira
-  // nota que sobrou, Esc limpa
-  var filtro = document.querySelector(".filtro-arvore");
-  if (filtro) {
-    var arvore = filtro.closest(".arvore");
-    var semResultado = arvore.querySelector(".filtro-vazio");
-    var abertasAntes = null;
-    var filtrarArvore = function () {
-      var busca = semAcento(filtro.value.trim());
-      var pastas = arvore.querySelectorAll("details");
-      if (busca && abertasAntes === null) {
-        abertasAntes = Array.prototype.filter.call(pastas, function (d) { return d.open; });
-      }
-      var algum = false;
-      arvore.querySelectorAll(".arquivo").forEach(function (a) {
-        var bate = !busca || semAcento(a.getAttribute("title") || a.textContent).indexOf(busca) >= 0;
-        a.hidden = !bate;
-        algum = algum || bate;
-      });
-      // de dentro para fora: a pasta aparece se tem nota que bate lá dentro
-      Array.prototype.slice.call(pastas).reverse().forEach(function (d) {
-        if (!busca) { d.hidden = false; return; }
-        var tem = d.querySelector(".arquivo:not([hidden])") !== null;
-        d.hidden = !tem;
-        d.open = tem;
-      });
-      if (!busca && abertasAntes !== null) {
-        pastas.forEach(function (d) { d.open = abertasAntes.indexOf(d) >= 0; });
-        abertasAntes = null;
-      }
-      semResultado.hidden = !busca || algum;
-    };
-    filtro.addEventListener("input", filtrarArvore);
-    filtro.addEventListener("keydown", function (e) {
-      if (e.key === "Escape") {
-        filtro.value = "";
-        filtrarArvore();
-      } else if (e.key === "Enter") {
-        var primeira = arvore.querySelector(".arquivo:not([hidden])");
-        if (primeira && filtro.value.trim()) { e.preventDefault(); primeira.click(); }
-      }
-    });
-  }
+// ---------- árvore: as pastas abertas ficam abertas ----------
+// trocar de nota recarrega a página, e as pastas que você abriu fechavam.
+// Ficam lembradas neste navegador (comodidade: sem isso, só fecham)
+var PASTAS = "aide.notas.pastas";
+var arvorePastas = document.querySelector(".arvore");
+if (arvorePastas && arvorePastas.querySelector(".arvore-topo")) {
+  var lembradas = [];
+  try { lembradas = JSON.parse(localStorage.getItem(PASTAS) || "[]"); } catch (e) { lembradas = []; }
+  arvorePastas.querySelectorAll("details[data-pasta]").forEach(function (d) {
+    if (lembradas.indexOf(d.dataset.pasta) >= 0) { d.open = true; }
+  });
+  var guardarPastas = function () {
+    // o filtro abre e fecha pastas sozinho: isso não é escolha sua
+    if (filtro && filtro.value.trim()) { return; }
+    var abertas = Array.prototype.filter.call(arvorePastas.querySelectorAll("details[data-pasta]"),
+      function (d) { return d.open; }).map(function (d) { return d.dataset.pasta; });
+    try { localStorage.setItem(PASTAS, JSON.stringify(abertas)); } catch (e) { /* sem armazenamento */ }
+  };
+  // toggle não sobe pela árvore: escuta na fase de captura
+  arvorePastas.addEventListener("toggle", guardarPastas, true);
+  document.getElementById("recolher-pastas").addEventListener("click", function () {
+    if (filtro && filtro.value.trim()) { filtro.value = ""; filtrarArvore(); }
+    arvorePastas.querySelectorAll("details[data-pasta]").forEach(function (d) { d.open = false; });
+    guardarPastas();
+  });
+}
 
-  // ---------- árvore: as pastas abertas ficam abertas ----------
-  // trocar de nota recarrega a página, e as pastas que você abriu fechavam.
-  // Ficam lembradas neste navegador (comodidade: sem isso, só fecham)
-  var PASTAS = "aide.notas.pastas";
-  var arvorePastas = document.querySelector(".arvore");
-  if (arvorePastas && arvorePastas.querySelector(".arvore-topo")) {
-    var lembradas = [];
-    try { lembradas = JSON.parse(localStorage.getItem(PASTAS) || "[]"); } catch (e) { lembradas = []; }
-    arvorePastas.querySelectorAll("details[data-pasta]").forEach(function (d) {
-      if (lembradas.indexOf(d.dataset.pasta) >= 0) { d.open = true; }
+// ---------- árvore: arrastar nota ou pasta para outra pasta ----------
+// solta em qualquer ponto de uma pasta — no nome dela, numa nota de dentro,
+// no vazio dela — e o item vai para lá; fora de qualquer pasta, vai para a
+// raiz do vault. Os links das outras notas acompanham, como no renomear.
+// Parada em cima de uma pasta fechada, ela abre
+var TIPO_NOTA = "application/x-aide-nota";
+var TIPO_PASTA = "application/x-aide-pasta";
+var arvoreArrasto = document.querySelector(".arvore");
+if (arvoreArrasto && arvoreArrasto.querySelector(".arvore-topo")) {
+  var abrirAoParar = null;
+  // o que está sendo arrastado: o dataTransfer só se lê no drop
+  var arrastado = null;
+  var tipoDe = function (e) {
+    var tipos = Array.prototype.slice.call((e.dataTransfer && e.dataTransfer.types) || []);
+    return tipos.indexOf(TIPO_PASTA) >= 0 ? "pasta" : tipos.indexOf(TIPO_NOTA) >= 0 ? "nota" : null;
+  };
+  // a pasta onde cai: a <details> mais próxima, ou a raiz ("")
+  var destinoDe = function (e) {
+    if (!e.target.closest || !arvoreArrasto.contains(e.target)) { return null; }
+    if (e.target.closest(".filtro-arvore")) { return null; }
+    var pasta = e.target.closest("details[data-pasta]");
+    return pasta && arvoreArrasto.contains(pasta) ? pasta : arvoreArrasto;
+  };
+  var marcaDe = function (destino) {
+    return destino === arvoreArrasto ? arvoreArrasto.querySelector(".arvore-topo")
+                                     : destino.querySelector(":scope > summary");
+  };
+  // a pasta não entra nela mesma nem em uma de dentro; e soltar onde já
+  // está não muda nada
+  var aceita = function (destino) {
+    if (!arrastado) { return false; }
+    var pasta = destino === arvoreArrasto ? "" : destino.dataset.pasta;
+    if (pasta === pastaDe(arrastado.caminho)) { return false; }
+    if (arrastado.tipo === "pasta" &&
+        (pasta === arrastado.caminho || pasta.indexOf(arrastado.caminho + "/") === 0)) { return false; }
+    return true;
+  };
+  var limparAlvos = function () {
+    arvoreArrasto.querySelectorAll(".alvo-soltar").forEach(function (el) { el.classList.remove("alvo-soltar"); });
+  };
+  var comecar = function (el, tipo, caminho) {
+    el.addEventListener("dragstart", function (e) {
+      e.stopPropagation();
+      arrastado = { tipo: tipo, caminho: caminho };
+      e.dataTransfer.setData(tipo === "pasta" ? TIPO_PASTA : TIPO_NOTA, caminho);
+      e.dataTransfer.effectAllowed = "move";
+      el.classList.add("arrastando");
     });
-    var guardarPastas = function () {
-      // o filtro abre e fecha pastas sozinho: isso não é escolha sua
-      if (filtro && filtro.value.trim()) { return; }
-      var abertas = Array.prototype.filter.call(arvorePastas.querySelectorAll("details[data-pasta]"),
-        function (d) { return d.open; }).map(function (d) { return d.dataset.pasta; });
-      try { localStorage.setItem(PASTAS, JSON.stringify(abertas)); } catch (e) { /* sem armazenamento */ }
-    };
-    // toggle não sobe pela árvore: escuta na fase de captura
-    arvorePastas.addEventListener("toggle", guardarPastas, true);
-    document.getElementById("recolher-pastas").addEventListener("click", function () {
-      if (filtro && filtro.value.trim()) { filtro.value = ""; filtrarArvore(); }
-      arvorePastas.querySelectorAll("details[data-pasta]").forEach(function (d) { d.open = false; });
-      guardarPastas();
-    });
-  }
-
-  // ---------- árvore: arrastar nota ou pasta para outra pasta ----------
-  // solta em qualquer ponto de uma pasta — no nome dela, numa nota de dentro,
-  // no vazio dela — e o item vai para lá; fora de qualquer pasta, vai para a
-  // raiz do vault. Os links das outras notas acompanham, como no renomear.
-  // Parada em cima de uma pasta fechada, ela abre
-  var TIPO_NOTA = "application/x-aide-nota";
-  var TIPO_PASTA = "application/x-aide-pasta";
-  var arvoreArrasto = document.querySelector(".arvore");
-  if (arvoreArrasto && arvoreArrasto.querySelector(".arvore-topo")) {
-    var abrirAoParar = null;
-    // o que está sendo arrastado: o dataTransfer só se lê no drop
-    var arrastado = null;
-    var tipoDe = function (e) {
-      var tipos = Array.prototype.slice.call((e.dataTransfer && e.dataTransfer.types) || []);
-      return tipos.indexOf(TIPO_PASTA) >= 0 ? "pasta" : tipos.indexOf(TIPO_NOTA) >= 0 ? "nota" : null;
-    };
-    // a pasta onde cai: a <details> mais próxima, ou a raiz ("")
-    var destinoDe = function (e) {
-      if (!e.target.closest || !arvoreArrasto.contains(e.target)) { return null; }
-      if (e.target.closest(".filtro-arvore")) { return null; }
-      var pasta = e.target.closest("details[data-pasta]");
-      return pasta && arvoreArrasto.contains(pasta) ? pasta : arvoreArrasto;
-    };
-    var marcaDe = function (destino) {
-      return destino === arvoreArrasto ? arvoreArrasto.querySelector(".arvore-topo")
-                                       : destino.querySelector(":scope > summary");
-    };
-    // a pasta não entra nela mesma nem em uma de dentro; e soltar onde já
-    // está não muda nada
-    var aceita = function (destino) {
-      if (!arrastado) { return false; }
-      var pasta = destino === arvoreArrasto ? "" : destino.dataset.pasta;
-      if (pasta === pastaDe(arrastado.caminho)) { return false; }
-      if (arrastado.tipo === "pasta" &&
-          (pasta === arrastado.caminho || pasta.indexOf(arrastado.caminho + "/") === 0)) { return false; }
-      return true;
-    };
-    var limparAlvos = function () {
-      arvoreArrasto.querySelectorAll(".alvo-soltar").forEach(function (el) { el.classList.remove("alvo-soltar"); });
-    };
-    var comecar = function (el, tipo, caminho) {
-      el.addEventListener("dragstart", function (e) {
-        e.stopPropagation();
-        arrastado = { tipo: tipo, caminho: caminho };
-        e.dataTransfer.setData(tipo === "pasta" ? TIPO_PASTA : TIPO_NOTA, caminho);
-        e.dataTransfer.effectAllowed = "move";
-        el.classList.add("arrastando");
-      });
-      el.addEventListener("dragend", function () {
-        el.classList.remove("arrastando");
-        arrastado = null;
-        limparAlvos();
-        clearTimeout(abrirAoParar);
-      });
-    };
-    arvoreArrasto.querySelectorAll(".arquivo[title]").forEach(function (a) {
-      comecar(a, "nota", a.getAttribute("title"));
-    });
-    arvoreArrasto.querySelectorAll("details[data-pasta] > summary").forEach(function (resumo) {
-      resumo.draggable = true;
-      comecar(resumo, "pasta", resumo.parentElement.dataset.pasta);
-    });
-    arvoreArrasto.addEventListener("dragover", function (e) {
-      var destino = destinoDe(e);
-      if (!tipoDe(e) || !destino || !aceita(destino)) { limparAlvos(); return; }
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-      var marca = marcaDe(destino);
-      if (marca.classList.contains("alvo-soltar")) { return; }
-      limparAlvos();
-      marca.classList.add("alvo-soltar");
-      clearTimeout(abrirAoParar);
-      if (destino.tagName === "DETAILS" && !destino.open) {
-        abrirAoParar = setTimeout(function () { destino.open = true; }, 700);
-      }
-    });
-    arvoreArrasto.addEventListener("dragleave", function (e) {
-      if (!arvoreArrasto.contains(e.relatedTarget)) { limparAlvos(); clearTimeout(abrirAoParar); }
-    });
-    arvoreArrasto.addEventListener("drop", function (e) {
-      var destino = destinoDe(e);
-      var tipo = tipoDe(e);
-      if (!tipo || !destino || !aceita(destino)) { return; }
-      e.preventDefault();
+    el.addEventListener("dragend", function () {
+      el.classList.remove("arrastando");
+      arrastado = null;
       limparAlvos();
       clearTimeout(abrirAoParar);
-      var de = e.dataTransfer.getData(tipo === "pasta" ? TIPO_PASTA : TIPO_NOTA);
-      var pasta = destino === arvoreArrasto ? "" : destino.dataset.pasta;
-      var para = (pasta ? pasta + "/" : "") + de.replace(/^.*\//, "");
-      if (!de || para === de) { return; }
-      var aberta = notaAberta();
-      // a nota aberta pode ser a que muda, ou ter links nela reescritos: salva antes
-      var guardar = salvarAberta();
-      // pasta e desenho têm a sua rota; nota tem a dela, que também reescreve os links
-      var rota = tipo === "pasta" ? "/api/notas/mover-pasta"
-        : /\.excalidraw$/i.test(de) ? "/api/desenhos/mover" : "/api/notas/mover";
-      guardar.then(function () {
-        return pedir("POST", rota, { de: de, para: para });
-      }).then(function (r) {
-        if (!r.ok) { return erroDe(r).then(function (m) { throw new Error(m); }); }
-        return r.json().then(function (d) {
-          guardarAviso(d);
-          var depois = tipo === "pasta" ? d.notas_movidas[aberta] : aberta === de && d.caminho;
-          if (depois) { abrir(depois); } else { location.reload(); }
-        });
-      }).catch(function (e2) {
-        var aviso = arvoreArrasto.querySelector(".filtro-vazio");
-        aviso.textContent = "não deu para mover: " + e2.message;
-        aviso.hidden = false;
-      });
     });
-  }
-
-  // ---------- criar nota e pasta ----------
-  var form = document.getElementById("criar");
-  var nome = document.getElementById("criar-nome");
-  var erro = document.getElementById("criar-erro");
-  var criando = null;
-
-  // `naPasta`: o "+" de uma pasta da árvore; sem ele, a pasta da nota aberta
-  function pedirNome(tipo, naPasta) {
-    criando = tipo;
-    form.hidden = false;
-    erro.textContent = "";
-    var pasta = naPasta !== undefined ? naPasta : form.dataset.pasta;
-    nome.placeholder = { nota: "nome da nota", desenho: "nome do desenho" }[tipo] || "nome da pasta";
-    nome.setAttribute("aria-label", nome.placeholder);
-    nome.value = pasta ? pasta + "/" : "";
-    nome.focus();
-  }
-
-  if (form) {
-    document.getElementById("nova-nota").addEventListener("click", function () { pedirNome("nota"); });
-    document.getElementById("nova-pasta").addEventListener("click", function () { pedirNome("pasta"); });
-    document.getElementById("novo-desenho").addEventListener("click", function () { pedirNome("desenho"); });
-    [[".nova-na-pasta", "nota"], [".novo-desenho-na-pasta", "desenho"]].forEach(function (par) {
-      document.querySelectorAll(par[0]).forEach(function (botao) {
-        botao.addEventListener("click", function (e) {
-          // o clique é do botão, não da pasta: ela não abre nem fecha
-          e.preventDefault();
-          e.stopPropagation();
-          pedirNome(par[1], botao.dataset.pasta);
-          form.scrollIntoView({ block: "nearest" });
-        });
-      });
-    });
-    nome.addEventListener("keydown", function (e) {
-      if (e.key === "Escape") { form.hidden = true; erro.textContent = ""; }
-    });
-    form.addEventListener("submit", function (e) {
-      e.preventDefault();
-      var caminho = nome.value.trim().replace(/\/+$/, "");
-      if (!caminho) { return; }
-      if (criando === "nota" && !/\.md$/i.test(caminho)) { caminho += ".md"; }
-      if (criando === "desenho" && !/\.excalidraw$/i.test(caminho)) { caminho += ".excalidraw"; }
-      var url = { nota: "/api/notas/arquivo", desenho: "/api/desenhos/arquivo" }[criando]
-        || "/api/notas/pasta";
-      pedir("POST", url, { caminho: caminho }).then(function (r) {
-        if (r.ok) {
-          if (criando === "nota") {
-            abrir(caminho);
-          } else if (criando === "desenho") {
-            location.href = hrefDoDesenho(caminho,
-              new URLSearchParams(location.search).get("arquivo"));
-          } else {
-            location.reload();
-          }
-        } else {
-          erroDe(r).then(function (m) { erro.textContent = m; });
-        }
-      });
-    });
-  }
-
-  // ---------- abrir nota rápido (Ctrl+O, como no Obsidian) ----------
-  // uma caixa no meio da tela: digite parte do nome ou do caminho e Enter
-  // abre. Vazia, mostra as últimas que você abriu. Sem nota com o nome
-  // digitado, a última opção cria uma, na pasta da nota aberta
-  var raizNotas = document.querySelector(".notas[data-notas]");
-  var notasDoVault = [];
-  try { notasDoVault = JSON.parse((raizNotas && raizNotas.dataset.notas) || "[]"); } catch (e) { notasDoVault = []; }
-  var RECENTES = "aide.notas.recentes";
-  var seletor = null;
-
-  // só deste navegador: lembrar as últimas abertas é comodidade, não dado
-  function recentes() {
-    try { return JSON.parse(localStorage.getItem(RECENTES) || "[]"); } catch (e) { return []; }
-  }
-  (function lembrarAberta() {
-    var aberta = new URLSearchParams(location.search).get("arquivo");
-    if (!aberta || notasDoVault.indexOf(aberta) < 0) { return; }
-    var lista = [aberta].concat(recentes().filter(function (c) { return c !== aberta; })).slice(0, 12);
-    try { localStorage.setItem(RECENTES, JSON.stringify(lista)); } catch (e) { /* sem armazenamento */ }
-  })();
-
-  // sem acento e em minuscula: toda busca por nome passa por aqui
-  function semAcento(t) {
-    return t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-  }
-
-  // menor é melhor; -1 é fora. Nome que começa com a busca, depois nome que
-  // a contém, depois caminho; por último as letras do nome na ordem ("tlhd"
-  // → Telhado). Só no nome: no caminho inteiro, quase tudo casaria
-  function pontuar(nota, busca) {
-    var tudo = semAcento(nota);
-    var nome = nomeCurto(tudo);
-    if (nome.indexOf(busca) === 0) { return 0; }
-    if (nome.indexOf(busca) >= 0) { return 1; }
-    if (tudo.indexOf(busca) >= 0) { return 2; }
-    var i = 0;
-    for (var k = 0; k < nome.length && i < busca.length; k++) { if (nome[k] === busca[i]) { i++; } }
-    return i === busca.length ? 3 : -1;
-  }
-
-  function filtrarSeletor() {
-    var s = seletor;
-    var digitado = s.campo.value.trim();
-    var busca = semAcento(digitado);
-    var ordemRecente = recentes();
-    var achadas;
-    if (!busca) {
-      achadas = ordemRecente.filter(function (c) { return notasDoVault.indexOf(c) >= 0; });
-      achadas = achadas.concat(notasDoVault.filter(function (c) { return achadas.indexOf(c) < 0; }));
-    } else {
-      achadas = notasDoVault.map(function (c) { return [pontuar(c, busca), c]; })
-        .filter(function (p) { return p[0] >= 0; })
-        .sort(function (a, b) {
-          var ra = ordemRecente.indexOf(a[1]);
-          var rb = ordemRecente.indexOf(b[1]);
-          return a[0] - b[0] || (ra < 0 ? 99 : ra) - (rb < 0 ? 99 : rb) || a[1].localeCompare(b[1]);
-        })
-        .map(function (p) { return p[1]; });
+  };
+  arvoreArrasto.querySelectorAll(".arquivo[title]").forEach(function (a) {
+    comecar(a, "nota", a.getAttribute("title"));
+  });
+  arvoreArrasto.querySelectorAll("details[data-pasta] > summary").forEach(function (resumo) {
+    resumo.draggable = true;
+    comecar(resumo, "pasta", resumo.parentElement.dataset.pasta);
+  });
+  arvoreArrasto.addEventListener("dragover", function (e) {
+    var destino = destinoDe(e);
+    if (!tipoDe(e) || !destino || !aceita(destino)) { limparAlvos(); return; }
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    var marca = marcaDe(destino);
+    if (marca.classList.contains("alvo-soltar")) { return; }
+    limparAlvos();
+    marca.classList.add("alvo-soltar");
+    clearTimeout(abrirAoParar);
+    if (destino.tagName === "DETAILS" && !destino.open) {
+      abrirAoParar = setTimeout(function () { destino.open = true; }, 700);
     }
-    s.itens = achadas.slice(0, 40).map(function (c) { return { caminho: c }; });
-    var exata = achadas.some(function (c) {
-      return semAcento(nomeCurto(c)) === busca || semAcento(c) === busca;
-    });
-    if (digitado && !exata) {
-      var pasta = form ? form.dataset.pasta : "";
-      var novo = digitado.indexOf("/") >= 0 || !pasta ? digitado : pasta + "/" + digitado;
-      if (!/\.md$/i.test(novo)) { novo += ".md"; }
-      s.itens.push({ caminho: novo, criar: true });
-    }
-    s.escolhido = 0;
-    desenharSeletor();
-  }
-
-  function desenharSeletor() {
-    var s = seletor;
-    s.lista.textContent = "";
-    s.itens.forEach(function (item, i) {
-      var li = document.createElement("li");
-      li.setAttribute("role", "option");
-      li.setAttribute("aria-selected", String(i === s.escolhido));
-      var nome = document.createElement("span");
-      nome.textContent = item.criar ? "+ criar nota “" + nomeCurto(item.caminho) + "”"
-        : nomeCurto(item.caminho);
-      var onde = document.createElement("span");
-      onde.className = "onde";
-      onde.textContent = item.caminho;
-      li.appendChild(nome);
-      li.appendChild(onde);
-      li.addEventListener("mousedown", function (e) { e.preventDefault(); irDoSeletor(item); });
-      s.lista.appendChild(li);
-      if (i === s.escolhido && li.scrollIntoView) { li.scrollIntoView({ block: "nearest" }); }
-    });
-    if (!s.itens.length) {
-      var vazio = document.createElement("li");
-      vazio.className = "vazio";
-      vazio.textContent = "nenhuma nota";
-      s.lista.appendChild(vazio);
-    }
-  }
-
-  // quem sai da nota salva antes; se não deu para salvar, fica e avisa
-  function irDoSeletor(item) {
+  });
+  arvoreArrasto.addEventListener("dragleave", function (e) {
+    if (!arvoreArrasto.contains(e.relatedTarget)) { limparAlvos(); clearTimeout(abrirAoParar); }
+  });
+  arvoreArrasto.addEventListener("drop", function (e) {
+    var destino = destinoDe(e);
+    var tipo = tipoDe(e);
+    if (!tipo || !destino || !aceita(destino)) { return; }
+    e.preventDefault();
+    limparAlvos();
+    clearTimeout(abrirAoParar);
+    var de = e.dataTransfer.getData(tipo === "pasta" ? TIPO_PASTA : TIPO_NOTA);
+    var pasta = destino === arvoreArrasto ? "" : destino.dataset.pasta;
+    var para = (pasta ? pasta + "/" : "") + de.replace(/^.*\//, "");
+    if (!de || para === de) { return; }
+    var aberta = notaAberta();
+    // a nota aberta pode ser a que muda, ou ter links nela reescritos: salva antes
     var guardar = salvarAberta();
+    // pasta e desenho têm a sua rota; nota tem a dela, que também reescreve os links
+    var rota = tipo === "pasta" ? "/api/notas/mover-pasta"
+      : /\.excalidraw$/i.test(de) ? "/api/desenhos/mover" : "/api/notas/mover";
     guardar.then(function () {
-      if (!item.criar) { abrir(item.caminho); return; }
-      return pedir("POST", "/api/notas/arquivo", { caminho: item.caminho }).then(function (r) {
-        if (r.ok || r.status === 409) { abrir(item.caminho); return; }
-        return erroDe(r).then(function (m) { throw new Error(m); });
+      return pedir("POST", rota, { de: de, para: para });
+    }).then(function (r) {
+      if (!r.ok) { return erroDe(r).then(function (m) { throw new Error(m); }); }
+      return r.json().then(function (d) {
+        guardarAviso(d);
+        var depois = tipo === "pasta" ? d.notas_movidas[aberta] : aberta === de && d.caminho;
+        if (depois) { abrir(depois); } else { location.reload(); }
       });
-    }).catch(function (e) { seletor.dica.textContent = e.message; });
-  }
-
-  function fecharSeletor() {
-    if (!seletor) { return; }
-    seletor.fundo.remove();
-    if (seletor.antes && seletor.antes.focus) { seletor.antes.focus({ preventScroll: true }); }
-    seletor = null;
-  }
-
-  function abrirSeletor() {
-    if (seletor) { seletor.campo.focus(); return; }
-    var fundo = document.createElement("div");
-    fundo.className = "seletor-fundo";
-    var caixaS = document.createElement("div");
-    caixaS.className = "seletor";
-    caixaS.setAttribute("role", "dialog");
-    caixaS.setAttribute("aria-label", "abrir nota");
-    var campo = document.createElement("input");
-    campo.placeholder = "abrir nota… digite parte do nome";
-    campo.setAttribute("aria-label", "nome da nota");
-    campo.autocomplete = "off";
-    campo.spellcheck = false;
-    var lista = document.createElement("ul");
-    lista.className = "seletor-lista";
-    lista.setAttribute("role", "listbox");
-    var dica = document.createElement("p");
-    dica.className = "dica";
-    dica.textContent = "↑ ↓ escolhe · Enter abre · Esc fecha";
-    caixaS.appendChild(campo);
-    caixaS.appendChild(lista);
-    caixaS.appendChild(dica);
-    fundo.appendChild(caixaS);
-    document.body.appendChild(fundo);
-    seletor = { fundo: fundo, campo: campo, lista: lista, dica: dica, itens: [], escolhido: 0,
-      antes: document.activeElement };
-    campo.addEventListener("input", filtrarSeletor);
-    campo.addEventListener("keydown", function (e) {
-      var s = seletor;
-      if (e.key === "Escape") {
-        e.preventDefault();
-        fecharSeletor();
-      } else if ((e.key === "ArrowDown" || e.key === "ArrowUp") && s.itens.length) {
-        e.preventDefault();
-        s.escolhido = (s.escolhido + (e.key === "ArrowDown" ? 1 : s.itens.length - 1)) % s.itens.length;
-        desenharSeletor();
-      } else if (e.key === "Enter" && s.itens.length) {
-        e.preventDefault();
-        irDoSeletor(s.itens[s.escolhido]);
-      }
+    }).catch(function (e2) {
+      var aviso = arvoreArrasto.querySelector(".filtro-vazio");
+      aviso.textContent = "não deu para mover: " + e2.message;
+      aviso.hidden = false;
     });
-    fundo.addEventListener("mousedown", function (e) { if (e.target === fundo) { fecharSeletor(); } });
-    filtrarSeletor();
-    campo.focus();
-  }
-
-  document.addEventListener("keydown", function (e) {
-    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key || "").toLowerCase() === "o") {
-      e.preventDefault();
-      abrirSeletor();
-    }
   });
-  var botaoAbrir = document.getElementById("abrir-rapido");
-  if (botaoAbrir) { botaoAbrir.addEventListener("click", abrirSeletor); }
+}
 
-  // ---------- criar a nota que um link quebrado pede ----------
-  document.querySelectorAll(".criar-quebrado").forEach(function (botao) {
-    botao.addEventListener("click", function () {
-      var caminho = botao.dataset.caminho;
-      var desenho = botao.dataset.tipo === "desenho";
-      botao.disabled = true;
-      pedir("POST", desenho ? "/api/desenhos/arquivo" : "/api/notas/arquivo",
-            { caminho: caminho }).then(function (r) {
-        if (r.ok || r.status === 409) {
-          if (desenho) {
-            location.href = hrefDoDesenho(caminho, botao.dataset.de);
-          } else {
-            abrir(caminho);
-          }
-          return;
-        }
-        botao.disabled = false;
-        erroDe(r).then(function (m) { botao.textContent = m; });
+// ---------- criar nota e pasta ----------
+var form = document.getElementById("criar");
+var nome = document.getElementById("criar-nome");
+var erro = document.getElementById("criar-erro");
+var criando = null;
+
+// `naPasta`: o "+" de uma pasta da árvore; sem ele, a pasta da nota aberta
+function pedirNome(tipo, naPasta) {
+  criando = tipo;
+  form.hidden = false;
+  erro.textContent = "";
+  var pasta = naPasta !== undefined ? naPasta : form.dataset.pasta;
+  nome.placeholder = { nota: "nome da nota", desenho: "nome do desenho" }[tipo] || "nome da pasta";
+  nome.setAttribute("aria-label", nome.placeholder);
+  nome.value = pasta ? pasta + "/" : "";
+  nome.focus();
+}
+
+if (form) {
+  document.getElementById("nova-nota").addEventListener("click", function () { pedirNome("nota"); });
+  document.getElementById("nova-pasta").addEventListener("click", function () { pedirNome("pasta"); });
+  document.getElementById("novo-desenho").addEventListener("click", function () { pedirNome("desenho"); });
+  [[".nova-na-pasta", "nota"], [".novo-desenho-na-pasta", "desenho"]].forEach(function (par) {
+    document.querySelectorAll(par[0]).forEach(function (botao) {
+      botao.addEventListener("click", function (e) {
+        // o clique é do botão, não da pasta: ela não abre nem fecha
+        e.preventDefault();
+        e.stopPropagation();
+        pedirNome(par[1], botao.dataset.pasta);
+        form.scrollIntoView({ block: "nearest" });
       });
     });
   });
-
-  // ---------- ligar um link quebrado a uma nota que existe ----------
-  // o nome digitado errado: troca o link nas notas que citam e recarrega a
-  // lista. A nota aberta é salva antes — ela pode ser uma das que mudam
-  document.querySelectorAll(".ligar-quebrado").forEach(function (botao) {
-    botao.addEventListener("click", function () {
-      botao.disabled = true;
-      var guardar = salvarAberta();
-      guardar.then(function () {
-        return pedir("POST", "/api/notas/ligar", { alvo: botao.dataset.alvo, para: botao.dataset.para });
-      }).then(function (r) {
-        if (!r.ok) { return erroDe(r).then(function (m) { throw new Error(m); }); }
-        return r.json().then(function (d) {
-          guardarAviso(d);
+  nome.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") { form.hidden = true; erro.textContent = ""; }
+  });
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var caminho = nome.value.trim().replace(/\/+$/, "");
+    if (!caminho) { return; }
+    if (criando === "nota" && !/\.md$/i.test(caminho)) { caminho += ".md"; }
+    if (criando === "desenho" && !/\.excalidraw$/i.test(caminho)) { caminho += ".excalidraw"; }
+    var url = { nota: "/api/notas/arquivo", desenho: "/api/desenhos/arquivo" }[criando]
+      || "/api/notas/pasta";
+    pedir("POST", url, { caminho: caminho }).then(function (r) {
+      if (r.ok) {
+        if (criando === "nota") {
+          abrir(caminho);
+        } else if (criando === "desenho") {
+          location.href = hrefDoDesenho(caminho,
+            new URLSearchParams(location.search).get("arquivo"));
+        } else {
           location.reload();
-        });
-      }).catch(function (e) {
-        botao.disabled = false;
-        botao.title = e.message;
-        botao.classList.add("erro");
-      });
-    });
-  });
-
-  // ---------- renomear e mover pasta ----------
-  document.querySelectorAll(".renomear-pasta").forEach(function (botao) {
-    botao.addEventListener("click", function (e) {
-      // o botão mora no <summary>: sem isto o clique abre e fecha a pasta
-      e.preventDefault();
-      e.stopPropagation();
-      var de = botao.dataset.pasta;
-      var resumo = botao.closest("summary");
-      if (resumo.querySelector("form")) { return; }
-      var form = document.createElement("form");
-      form.className = "renomear-pasta-form";
-      var campo = document.createElement("input");
-      // só o nome; com "/" no meio, vale como caminho desde a raiz do vault
-      var mae = pastaDe(de) ? pastaDe(de) + "/" : "";
-      campo.value = de.slice(mae.length);
-      campo.setAttribute("aria-label", "nome da pasta");
-      campo.spellcheck = false;
-      var erro = document.createElement("span");
-      erro.className = "erro";
-      form.appendChild(campo);
-      form.appendChild(erro);
-      resumo.hidden = true;
-      resumo.parentNode.insertBefore(form, resumo.nextSibling);
-      campo.focus();
-      campo.select();
-      function fechar() { form.remove(); resumo.hidden = false; }
-      campo.addEventListener("keydown", function (ev) { if (ev.key === "Escape") { fechar(); } });
-      campo.addEventListener("click", function (ev) { ev.stopPropagation(); });
-      form.addEventListener("submit", function (ev) {
-        ev.preventDefault();
-        var para = campo.value.trim().replace(/^\/+|\/+$/g, "");
-        if (para && para.indexOf("/") < 0) { para = mae + para; }
-        if (!para || para === de) { fechar(); return; }
-        var antes = notaAberta();
-        var guardar = salvarAberta();
-        guardar.then(function () {
-          return pedir("POST", "/api/notas/mover-pasta", { de: de, para: para });
-        }).then(function (r) {
-          if (!r.ok) { return erroDe(r).then(function (m) { erro.textContent = m; }); }
-          return r.json().then(function (d) {
-            guardarAviso(d);
-            var depois = antes && d.notas_movidas[antes];
-            if (depois) { abrir(depois); } else { location.reload(); }
-          });
-        }).catch(function (e3) { erro.textContent = e3.message; });
-      });
-    });
-  });
-
-  // ---------- grafo: arrastar, zoom e vizinhas ----------
-  document.querySelectorAll("svg.grafo").forEach(function (svg) {
-    var vb = svg.viewBox.baseVal;
-    var original = { x: vb.x, y: vb.y, w: vb.width, h: vb.height };
-    var arrasto = null;
-    var moveu = false;
-
-    function paraSvg(evento) {
-      var caixa = svg.getBoundingClientRect();
-      return { x: vb.x + (evento.clientX - caixa.left) / caixa.width * vb.width,
-               y: vb.y + (evento.clientY - caixa.top) / caixa.height * vb.height };
-    }
-
-    // o grafo local fica no meio da página: a roda sozinha rola a página,
-    // e o zoom pede Ctrl — senão quem rola passando por cima fica preso nele
-    var local = svg.classList.contains("local");
-    svg.addEventListener("wheel", function (e) {
-      if (local && !e.ctrlKey && !e.metaKey) { return; }
-      e.preventDefault();
-      var ponto = paraSvg(e);
-      var fator = e.deltaY < 0 ? 0.85 : 1 / 0.85;
-      var largura = Math.min(Math.max(vb.width * fator, original.w / 8), original.w * 3);
-      var escala = largura / vb.width;
-      vb.x = ponto.x - (ponto.x - vb.x) * escala;
-      vb.y = ponto.y - (ponto.y - vb.y) * escala;
-      vb.width = largura;
-      vb.height = vb.height * escala;
-    }, { passive: false });
-
-    svg.addEventListener("pointerdown", function (e) {
-      arrasto = { x: e.clientX, y: e.clientY, vx: vb.x, vy: vb.y };
-      moveu = false;
-    });
-    window.addEventListener("pointermove", function (e) {
-      if (!arrasto) { return; }
-      var caixa = svg.getBoundingClientRect();
-      var dx = (e.clientX - arrasto.x) / caixa.width * vb.width;
-      var dy = (e.clientY - arrasto.y) / caixa.height * vb.height;
-      if (Math.abs(e.clientX - arrasto.x) + Math.abs(e.clientY - arrasto.y) > 4) { moveu = true; }
-      vb.x = arrasto.vx - dx;
-      vb.y = arrasto.vy - dy;
-    });
-    window.addEventListener("pointerup", function () { arrasto = null; });
-    // arrastar por cima de uma nota não pode abri-la ao soltar
-    svg.addEventListener("click", function (e) {
-      if (moveu) { e.preventDefault(); moveu = false; }
-    }, true);
-    svg.addEventListener("dblclick", function () {
-      vb.x = original.x; vb.y = original.y; vb.width = original.w; vb.height = original.h;
-    });
-
-    svg.querySelectorAll("a.no").forEach(function (no) {
-      function destacar() {
-        // no SVG quem vem por último fica por cima: o desenho ampliado não
-        // pode ficar escondido atrás das vizinhas
-        if (no.classList.contains("desenho") && no.parentNode.lastElementChild !== no) {
-          no.parentNode.appendChild(no);
         }
-        var perto = (no.dataset.vizinhos || "").split(" ");
-        perto.push(no.dataset.id);
-        svg.classList.add("focado");
-        svg.querySelectorAll("a.no").forEach(function (outro) {
-          outro.classList.toggle("perto", perto.indexOf(outro.dataset.id) >= 0);
-        });
-        svg.querySelectorAll("line").forEach(function (l) {
-          l.classList.toggle("perto", l.dataset.a === no.dataset.id || l.dataset.b === no.dataset.id);
-        });
+      } else {
+        erroDe(r).then(function (m) { erro.textContent = m; });
       }
-      function apagar() { svg.classList.remove("focado"); }
-      // mouse e teclado: quem navega com Tab vê as mesmas vizinhas
-      no.addEventListener("mouseenter", destacar);
-      no.addEventListener("focus", destacar);
-      no.addEventListener("mouseleave", apagar);
-      no.addEventListener("blur", apagar);
     });
   });
+}
 
-  // ---------- apagar pasta: dois cliques, como a nota ----------
-  document.querySelectorAll(".apagar-pasta").forEach(function (botao) {
-    var armado = null;
-    botao.addEventListener("click", function (e) {
+// ---------- abrir nota rápido (Ctrl+O, como no Obsidian) ----------
+// uma caixa no meio da tela: digite parte do nome ou do caminho e Enter
+// abre. Vazia, mostra as últimas que você abriu. Sem nota com o nome
+// digitado, a última opção cria uma, na pasta da nota aberta
+var raizNotas = document.querySelector(".notas[data-notas]");
+var notasDoVault = [];
+try { notasDoVault = JSON.parse((raizNotas && raizNotas.dataset.notas) || "[]"); } catch (e) { notasDoVault = []; }
+var RECENTES = "aide.notas.recentes";
+var seletor = null;
+
+// só deste navegador: lembrar as últimas abertas é comodidade, não dado
+function recentes() {
+  try { return JSON.parse(localStorage.getItem(RECENTES) || "[]"); } catch (e) { return []; }
+}
+(function lembrarAberta() {
+  var aberta = new URLSearchParams(location.search).get("arquivo");
+  if (!aberta || notasDoVault.indexOf(aberta) < 0) { return; }
+  var lista = [aberta].concat(recentes().filter(function (c) { return c !== aberta; })).slice(0, 12);
+  try { localStorage.setItem(RECENTES, JSON.stringify(lista)); } catch (e) { /* sem armazenamento */ }
+})();
+
+// sem acento e em minuscula: toda busca por nome passa por aqui
+function semAcento(t) {
+  return t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+
+// menor é melhor; -1 é fora. Nome que começa com a busca, depois nome que
+// a contém, depois caminho; por último as letras do nome na ordem ("tlhd"
+// → Telhado). Só no nome: no caminho inteiro, quase tudo casaria
+function pontuar(nota, busca) {
+  var tudo = semAcento(nota);
+  var nome = nomeCurto(tudo);
+  if (nome.indexOf(busca) === 0) { return 0; }
+  if (nome.indexOf(busca) >= 0) { return 1; }
+  if (tudo.indexOf(busca) >= 0) { return 2; }
+  var i = 0;
+  for (var k = 0; k < nome.length && i < busca.length; k++) { if (nome[k] === busca[i]) { i++; } }
+  return i === busca.length ? 3 : -1;
+}
+
+function filtrarSeletor() {
+  var s = seletor;
+  var digitado = s.campo.value.trim();
+  var busca = semAcento(digitado);
+  var ordemRecente = recentes();
+  var achadas;
+  if (!busca) {
+    achadas = ordemRecente.filter(function (c) { return notasDoVault.indexOf(c) >= 0; });
+    achadas = achadas.concat(notasDoVault.filter(function (c) { return achadas.indexOf(c) < 0; }));
+  } else {
+    achadas = notasDoVault.map(function (c) { return [pontuar(c, busca), c]; })
+      .filter(function (p) { return p[0] >= 0; })
+      .sort(function (a, b) {
+        var ra = ordemRecente.indexOf(a[1]);
+        var rb = ordemRecente.indexOf(b[1]);
+        return a[0] - b[0] || (ra < 0 ? 99 : ra) - (rb < 0 ? 99 : rb) || a[1].localeCompare(b[1]);
+      })
+      .map(function (p) { return p[1]; });
+  }
+  s.itens = achadas.slice(0, 40).map(function (c) { return { caminho: c }; });
+  var exata = achadas.some(function (c) {
+    return semAcento(nomeCurto(c)) === busca || semAcento(c) === busca;
+  });
+  if (digitado && !exata) {
+    var pasta = form ? form.dataset.pasta : "";
+    var novo = digitado.indexOf("/") >= 0 || !pasta ? digitado : pasta + "/" + digitado;
+    if (!/\.md$/i.test(novo)) { novo += ".md"; }
+    s.itens.push({ caminho: novo, criar: true });
+  }
+  s.escolhido = 0;
+  desenharSeletor();
+}
+
+function desenharSeletor() {
+  var s = seletor;
+  s.lista.textContent = "";
+  s.itens.forEach(function (item, i) {
+    var li = document.createElement("li");
+    li.setAttribute("role", "option");
+    li.setAttribute("aria-selected", String(i === s.escolhido));
+    var nome = document.createElement("span");
+    nome.textContent = item.criar ? "+ criar nota “" + nomeCurto(item.caminho) + "”"
+      : nomeCurto(item.caminho);
+    var onde = document.createElement("span");
+    onde.className = "onde";
+    onde.textContent = item.caminho;
+    li.appendChild(nome);
+    li.appendChild(onde);
+    li.addEventListener("mousedown", function (e) { e.preventDefault(); irDoSeletor(item); });
+    s.lista.appendChild(li);
+    if (i === s.escolhido && li.scrollIntoView) { li.scrollIntoView({ block: "nearest" }); }
+  });
+  if (!s.itens.length) {
+    var vazio = document.createElement("li");
+    vazio.className = "vazio";
+    vazio.textContent = "nenhuma nota";
+    s.lista.appendChild(vazio);
+  }
+}
+
+// quem sai da nota salva antes; se não deu para salvar, fica e avisa
+function irDoSeletor(item) {
+  var guardar = salvarAberta();
+  guardar.then(function () {
+    if (!item.criar) { abrir(item.caminho); return; }
+    return pedir("POST", "/api/notas/arquivo", { caminho: item.caminho }).then(function (r) {
+      if (r.ok || r.status === 409) { abrir(item.caminho); return; }
+      return erroDe(r).then(function (m) { throw new Error(m); });
+    });
+  }).catch(function (e) { seletor.dica.textContent = e.message; });
+}
+
+function fecharSeletor() {
+  if (!seletor) { return; }
+  seletor.fundo.remove();
+  if (seletor.antes && seletor.antes.focus) { seletor.antes.focus({ preventScroll: true }); }
+  seletor = null;
+}
+
+function abrirSeletor() {
+  if (seletor) { seletor.campo.focus(); return; }
+  var fundo = document.createElement("div");
+  fundo.className = "seletor-fundo";
+  var caixaS = document.createElement("div");
+  caixaS.className = "seletor";
+  caixaS.setAttribute("role", "dialog");
+  caixaS.setAttribute("aria-label", "abrir nota");
+  var campo = document.createElement("input");
+  campo.placeholder = "abrir nota… digite parte do nome";
+  campo.setAttribute("aria-label", "nome da nota");
+  campo.autocomplete = "off";
+  campo.spellcheck = false;
+  var lista = document.createElement("ul");
+  lista.className = "seletor-lista";
+  lista.setAttribute("role", "listbox");
+  var dica = document.createElement("p");
+  dica.className = "dica";
+  dica.textContent = "↑ ↓ escolhe · Enter abre · Esc fecha";
+  caixaS.appendChild(campo);
+  caixaS.appendChild(lista);
+  caixaS.appendChild(dica);
+  fundo.appendChild(caixaS);
+  document.body.appendChild(fundo);
+  seletor = { fundo: fundo, campo: campo, lista: lista, dica: dica, itens: [], escolhido: 0,
+    antes: document.activeElement };
+  campo.addEventListener("input", filtrarSeletor);
+  campo.addEventListener("keydown", function (e) {
+    var s = seletor;
+    if (e.key === "Escape") {
       e.preventDefault();
-      e.stopPropagation();
-      if (!armado) {
-        botao.dataset.armado = "1";
-        botao.querySelector(".rotulo").textContent = "apagar?";
-        armado = setTimeout(function () {
-          armado = null;
-          delete botao.dataset.armado;
-          botao.querySelector(".rotulo").textContent = "";
-        }, 4000);
+      fecharSeletor();
+    } else if ((e.key === "ArrowDown" || e.key === "ArrowUp") && s.itens.length) {
+      e.preventDefault();
+      s.escolhido = (s.escolhido + (e.key === "ArrowDown" ? 1 : s.itens.length - 1)) % s.itens.length;
+      desenharSeletor();
+    } else if (e.key === "Enter" && s.itens.length) {
+      e.preventDefault();
+      irDoSeletor(s.itens[s.escolhido]);
+    }
+  });
+  fundo.addEventListener("mousedown", function (e) { if (e.target === fundo) { fecharSeletor(); } });
+  filtrarSeletor();
+  campo.focus();
+}
+
+document.addEventListener("keydown", function (e) {
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key || "").toLowerCase() === "o") {
+    e.preventDefault();
+    abrirSeletor();
+  }
+});
+var botaoAbrir = document.getElementById("abrir-rapido");
+if (botaoAbrir) { botaoAbrir.addEventListener("click", abrirSeletor); }
+
+// ---------- criar a nota que um link quebrado pede ----------
+document.querySelectorAll(".criar-quebrado").forEach(function (botao) {
+  botao.addEventListener("click", function () {
+    var caminho = botao.dataset.caminho;
+    var desenho = botao.dataset.tipo === "desenho";
+    botao.disabled = true;
+    pedir("POST", desenho ? "/api/desenhos/arquivo" : "/api/notas/arquivo",
+          { caminho: caminho }).then(function (r) {
+      if (r.ok || r.status === 409) {
+        if (desenho) {
+          location.href = hrefDoDesenho(caminho, botao.dataset.de);
+        } else {
+          abrir(caminho);
+        }
         return;
       }
-      var pasta = botao.dataset.pasta;
-      var aberta = notaAberta();
-      var guardar = salvarAberta();
-      guardar.then(function () {
-        return pedir("DELETE", "/api/notas/pasta?caminho=" + encodeURIComponent(pasta));
-      }).then(function (r) {
-        if (!r.ok) { return erroDe(r).then(function (m) { botao.textContent = m; }); }
-        // a nota aberta ia junto: volta para a lista
-        location.href = aberta.indexOf(pasta + "/") === 0 ? "/notas" : location.href;
-      }).catch(function (e2) { botao.textContent = e2.message; });
+      botao.disabled = false;
+      erroDe(r).then(function (m) { botao.textContent = m; });
     });
   });
+});
 
-  // ---------- editor ----------
+// ---------- ligar um link quebrado a uma nota que existe ----------
+// o nome digitado errado: troca o link nas notas que citam e recarrega a
+// lista. A nota aberta é salva antes — ela pode ser uma das que mudam
+document.querySelectorAll(".ligar-quebrado").forEach(function (botao) {
+  botao.addEventListener("click", function () {
+    botao.disabled = true;
+    var guardar = salvarAberta();
+    guardar.then(function () {
+      return pedir("POST", "/api/notas/ligar", { alvo: botao.dataset.alvo, para: botao.dataset.para });
+    }).then(function (r) {
+      if (!r.ok) { return erroDe(r).then(function (m) { throw new Error(m); }); }
+      return r.json().then(function (d) {
+        guardarAviso(d);
+        location.reload();
+      });
+    }).catch(function (e) {
+      botao.disabled = false;
+      botao.title = e.message;
+      botao.classList.add("erro");
+    });
+  });
+});
+
+// ---------- renomear e mover pasta ----------
+document.querySelectorAll(".renomear-pasta").forEach(function (botao) {
+  botao.addEventListener("click", function (e) {
+    // o botão mora no <summary>: sem isto o clique abre e fecha a pasta
+    e.preventDefault();
+    e.stopPropagation();
+    var de = botao.dataset.pasta;
+    var resumo = botao.closest("summary");
+    if (resumo.querySelector("form")) { return; }
+    var form = document.createElement("form");
+    form.className = "renomear-pasta-form";
+    var campo = document.createElement("input");
+    // só o nome; com "/" no meio, vale como caminho desde a raiz do vault
+    var mae = pastaDe(de) ? pastaDe(de) + "/" : "";
+    campo.value = de.slice(mae.length);
+    campo.setAttribute("aria-label", "nome da pasta");
+    campo.spellcheck = false;
+    var erro = document.createElement("span");
+    erro.className = "erro";
+    form.appendChild(campo);
+    form.appendChild(erro);
+    resumo.hidden = true;
+    resumo.parentNode.insertBefore(form, resumo.nextSibling);
+    campo.focus();
+    campo.select();
+    function fechar() { form.remove(); resumo.hidden = false; }
+    campo.addEventListener("keydown", function (ev) { if (ev.key === "Escape") { fechar(); } });
+    campo.addEventListener("click", function (ev) { ev.stopPropagation(); });
+    form.addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var para = campo.value.trim().replace(/^\/+|\/+$/g, "");
+      if (para && para.indexOf("/") < 0) { para = mae + para; }
+      if (!para || para === de) { fechar(); return; }
+      var antes = notaAberta();
+      var guardar = salvarAberta();
+      guardar.then(function () {
+        return pedir("POST", "/api/notas/mover-pasta", { de: de, para: para });
+      }).then(function (r) {
+        if (!r.ok) { return erroDe(r).then(function (m) { erro.textContent = m; }); }
+        return r.json().then(function (d) {
+          guardarAviso(d);
+          var depois = antes && d.notas_movidas[antes];
+          if (depois) { abrir(depois); } else { location.reload(); }
+        });
+      }).catch(function (e3) { erro.textContent = e3.message; });
+    });
+  });
+});
+
+// ---------- grafo: arrastar, zoom e vizinhas ----------
+document.querySelectorAll("svg.grafo").forEach(function (svg) {
+  var vb = svg.viewBox.baseVal;
+  var original = { x: vb.x, y: vb.y, w: vb.width, h: vb.height };
+  var arrasto = null;
+  var moveu = false;
+
+  function paraSvg(evento) {
+    var caixa = svg.getBoundingClientRect();
+    return { x: vb.x + (evento.clientX - caixa.left) / caixa.width * vb.width,
+             y: vb.y + (evento.clientY - caixa.top) / caixa.height * vb.height };
+  }
+
+  // o grafo local fica no meio da página: a roda sozinha rola a página,
+  // e o zoom pede Ctrl — senão quem rola passando por cima fica preso nele
+  var local = svg.classList.contains("local");
+  svg.addEventListener("wheel", function (e) {
+    if (local && !e.ctrlKey && !e.metaKey) { return; }
+    e.preventDefault();
+    var ponto = paraSvg(e);
+    var fator = e.deltaY < 0 ? 0.85 : 1 / 0.85;
+    var largura = Math.min(Math.max(vb.width * fator, original.w / 8), original.w * 3);
+    var escala = largura / vb.width;
+    vb.x = ponto.x - (ponto.x - vb.x) * escala;
+    vb.y = ponto.y - (ponto.y - vb.y) * escala;
+    vb.width = largura;
+    vb.height = vb.height * escala;
+  }, { passive: false });
+
+  svg.addEventListener("pointerdown", function (e) {
+    arrasto = { x: e.clientX, y: e.clientY, vx: vb.x, vy: vb.y };
+    moveu = false;
+  });
+  window.addEventListener("pointermove", function (e) {
+    if (!arrasto) { return; }
+    var caixa = svg.getBoundingClientRect();
+    var dx = (e.clientX - arrasto.x) / caixa.width * vb.width;
+    var dy = (e.clientY - arrasto.y) / caixa.height * vb.height;
+    if (Math.abs(e.clientX - arrasto.x) + Math.abs(e.clientY - arrasto.y) > 4) { moveu = true; }
+    vb.x = arrasto.vx - dx;
+    vb.y = arrasto.vy - dy;
+  });
+  window.addEventListener("pointerup", function () { arrasto = null; });
+  // arrastar por cima de uma nota não pode abri-la ao soltar
+  svg.addEventListener("click", function (e) {
+    if (moveu) { e.preventDefault(); moveu = false; }
+  }, true);
+  svg.addEventListener("dblclick", function () {
+    vb.x = original.x; vb.y = original.y; vb.width = original.w; vb.height = original.h;
+  });
+
+  svg.querySelectorAll("a.no").forEach(function (no) {
+    function destacar() {
+      // no SVG quem vem por último fica por cima: o desenho ampliado não
+      // pode ficar escondido atrás das vizinhas
+      if (no.classList.contains("desenho") && no.parentNode.lastElementChild !== no) {
+        no.parentNode.appendChild(no);
+      }
+      var perto = (no.dataset.vizinhos || "").split(" ");
+      perto.push(no.dataset.id);
+      svg.classList.add("focado");
+      svg.querySelectorAll("a.no").forEach(function (outro) {
+        outro.classList.toggle("perto", perto.indexOf(outro.dataset.id) >= 0);
+      });
+      svg.querySelectorAll("line").forEach(function (l) {
+        l.classList.toggle("perto", l.dataset.a === no.dataset.id || l.dataset.b === no.dataset.id);
+      });
+    }
+    function apagar() { svg.classList.remove("focado"); }
+    // mouse e teclado: quem navega com Tab vê as mesmas vizinhas
+    no.addEventListener("mouseenter", destacar);
+    no.addEventListener("focus", destacar);
+    no.addEventListener("mouseleave", apagar);
+    no.addEventListener("blur", apagar);
+  });
+});
+
+// ---------- apagar pasta: dois cliques, como a nota ----------
+document.querySelectorAll(".apagar-pasta").forEach(function (botao) {
+  var armado = null;
+  botao.addEventListener("click", function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!armado) {
+      botao.dataset.armado = "1";
+      botao.querySelector(".rotulo").textContent = "apagar?";
+      armado = setTimeout(function () {
+        armado = null;
+        delete botao.dataset.armado;
+        botao.querySelector(".rotulo").textContent = "";
+      }, 4000);
+      return;
+    }
+    var pasta = botao.dataset.pasta;
+    var aberta = notaAberta();
+    var guardar = salvarAberta();
+    guardar.then(function () {
+      return pedir("DELETE", "/api/notas/pasta?caminho=" + encodeURIComponent(pasta));
+    }).then(function (r) {
+      if (!r.ok) { return erroDe(r).then(function (m) { botao.textContent = m; }); }
+      // a nota aberta ia junto: volta para a lista
+      location.href = aberta.indexOf(pasta + "/") === 0 ? "/notas" : location.href;
+    }).catch(function (e2) { botao.textContent = e2.message; });
+  });
+});
+
+// ---------- editor ----------
+// O editor so existe na tela de uma nota. Ele fica numa funcao porque o
+// "sem editor aqui, nada a ligar" e a primeira linha dele, e num modulo um
+// return no topo e erro de sintaxe.
+(function ligarEditor() {
   var editor = document.getElementById("editor");
   if (!editor) { return; }
   var caminho = editor.dataset.caminho;

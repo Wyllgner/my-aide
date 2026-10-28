@@ -115,7 +115,7 @@ def test_a_pagina_so_carrega_script_de_arquivo(cliente):
     import re
 
     html = _tela(cliente)
-    assert re.findall(r"<script[^>]*>", html) == ['<script src="/app.js" defer>']
+    assert re.findall(r"<script[^>]*>", html) == ['<script type="module" src="/app.js">']
 
 
 def test_o_script_e_servido_como_javascript(cliente):
