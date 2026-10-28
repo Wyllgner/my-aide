@@ -12,10 +12,9 @@ from __future__ import annotations
 
 from html import escape
 from pathlib import Path
-from urllib.parse import quote
 
 from aide.storage import desenhos, vault
-from aide.web import estaticos
+from aide.web import enderecos, estaticos
 from aide.web.icones import icone
 
 
@@ -24,7 +23,7 @@ def _voltar(raiz: Path, de: str | None) -> str:
     if de:
         try:
             if vault.resolver(raiz, de).is_file():
-                return "/notas?arquivo=" + quote(de, safe="/")
+                return enderecos.nota(de)
         except vault.ForaDoVault:
             pass
     return "/notas"
