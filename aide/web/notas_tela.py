@@ -19,14 +19,10 @@ from urllib.parse import quote
 
 from aide.channels import formato
 from aide.storage import anexos, desenhos, links, previas, vault
-from aide.web import consultas, grafo, markdown, visao
+from aide.web import consultas, enderecos, grafo, markdown, visao
 from aide.web.icones import icone
 from aide.web.notas_api import TAMANHO_MAXIMO
 from aide.web.paginas import cabecalho
-
-
-def _href(caminho: str) -> str:
-    return "/notas?arquivo=" + quote(caminho, safe="/")
 
 
 def _contar(itens: list[dict]) -> tuple[int, int, int]:
@@ -42,12 +38,6 @@ def _contar(itens: list[dict]) -> tuple[int, int, int]:
         else:
             notas += 1
     return notas, pastas, desenhos
-
-
-def _href_desenho(caminho: str, de: str) -> str:
-    """A tela do desenho; `de` é a nota aberta, para o "Notas" voltar a ela."""
-    url = "/desenho?caminho=" + quote(caminho, safe="/")
-    return url + "&de=" + quote(de, safe="/") if de else url
 
 
 def _ramo(itens: list[dict], aberto: str) -> str:
@@ -77,12 +67,12 @@ def _ramo(itens: list[dict], aberto: str) -> str:
                      f'<div class="filhos">{_ramo(item["filhos"], aberto) or _vazia()}</div>'
                      f'</details>')
         elif item["tipo"] == "desenho":
-            html += (f'<a class="arquivo desenho" href="{escape(_href_desenho(item["caminho"], aberto))}"'
+            html += (f'<a class="arquivo desenho" href="{escape(enderecos.desenho(item["caminho"], aberto))}"'
                      f' title="{caminho}">{icone("desenho", 14)}'
                      f'<span>{escape(item["nome"])}</span></a>')
         else:
             atual = ' aria-current="page"' if item["caminho"] == aberto else ""
-            html += (f'<a class="arquivo" href="{escape(_href(item["caminho"]))}"{atual}'
+            html += (f'<a class="arquivo" href="{escape(enderecos.nota(item["caminho"]))}"{atual}'
                      f' title="{caminho}">{icone("nota", 14)}<span>{escape(item["nome"])}</span></a>')
     return html
 
@@ -190,20 +180,19 @@ def _busca(ctx, raiz: Path, busca: str, aberto: str | None,
         atual = ' aria-current="page"' if relativo == aberto else ""
         trecho = (f'<span class="trecho">{_trecho(a["trecho"], termos)}</span>'
                   if a.get("trecho") else "")
-        itens += (f'<a class="arquivo achado" href="{escape(_href(relativo))}&amp;busca='
+        itens += (f'<a class="arquivo achado" href="{escape(enderecos.nota(relativo))}&amp;busca='
                   f'{escape(quote(busca))}"{atual}>{escape(a.get("title") or relativo)}'
                   f'<span class="onde">{escape(relativo)}</span>{trecho}</a>')
         quantos += 1
     # os desenhos depois das notas, lidos dos arquivos (não estão no banco)
     from aide.storage import busca_desenhos
 
-    de = "&amp;de=" + escape(quote(aberto, safe="/")) if aberto else ""
     for d in busca_desenhos.buscar(raiz, busca, incluir_privados=ctx.ver_privado,
                                    data_dir=Path(ctx.config.data_dir)):
         trecho = (f'<span class="trecho">{_trecho(d["trecho"], termos)}</span>'
                   if d["trecho"] else "")
-        itens += (f'<a class="arquivo achado desenho" href="/desenho?caminho='
-                  f'{escape(quote(d["caminho"], safe="/"))}{de}">'
+        itens += (f'<a class="arquivo achado desenho" '
+                  f'href="{escape(enderecos.desenho(d["caminho"], aberto))}">'
                   f'{icone("desenho", 13)}{escape(d["titulo"])}'
                   f'<span class="onde">{escape(d["caminho"])}</span>{trecho}</a>')
         quantos += 1
@@ -248,14 +237,12 @@ def _backlinks(entradas: list[grafo.Ligacao], aberto: str = "") -> str:
                           for t in dict.fromkeys(por_origem[origem]))
         if markdown.DESENHO.search(origem):
             nome = origem.rpartition("/")[2][:-len(".excalidraw")]
-            href = "/desenho?caminho=" + quote(origem, safe="/")
-            if aberto:
-                href += "&de=" + quote(aberto, safe="/")
+            href = enderecos.desenho(origem, aberto)
             link = (f'<a class="desenho" href="{escape(href)}">{icone("desenho", 13)}'
                     f'{escape(nome)}</a>')
         else:
             nome = origem.rpartition("/")[2].removesuffix(".md")
-            link = f'<a href="{escape(_href(origem))}">{escape(nome)}</a>'
+            link = f'<a href="{escape(enderecos.nota(origem))}">{escape(nome)}</a>'
         itens += (f'<li>{link}<span class="onde">{escape(origem)}</span>'
                   f'<ul class="trechos">{trechos}</ul></li>')
     qtd_desenhos = sum(1 for o in por_origem if markdown.DESENHO.search(o))
@@ -291,8 +278,8 @@ def _visao_geral(raiz: Path, agora: datetime, indice: links.Indice, conn=None) -
                               vazio="nenhuma nota é citada ainda")
     tags = graficos.barras([(f"#{t}", n) for t, n in v.tags[:12]], rotulo_px=120,
                            vazio="nenhuma tag ainda",
-                           links=[f"/notas?tag={quote(t, safe='/')}" for t, _ in v.tags[:12]])
-    orfas = "".join(f'<a href="{escape(_href(c))}">{escape(nome(c))}</a>' for c in v.orfas[:40])
+                           links=[enderecos.tag(t) for t, _ in v.tags[:12]])
+    orfas = "".join(f'<a href="{escape(enderecos.nota(c))}">{escape(nome(c))}</a>' for c in v.orfas[:40])
     if len(v.orfas) > 40:
         orfas += f'<span class="onde">e mais {len(v.orfas) - 40}</span>'
     return f"""
@@ -332,7 +319,7 @@ def _por_tag(tag: str, achadas: list[str], aberto: str | None) -> str:
     for caminho in achadas:
         atual = ' aria-current="page"' if caminho == aberto else ""
         nome = caminho.rpartition("/")[2].removesuffix(".md")
-        itens += (f'<a class="arquivo achado" href="{escape(_href(caminho))}&amp;tag='
+        itens += (f'<a class="arquivo achado" href="{escape(enderecos.nota(caminho))}&amp;tag='
                   f'{escape(quote(tag, safe="/"))}"{atual}>{escape(nome)}'
                   f'<span class="onde">{escape(caminho)}</span></a>')
     return topo + itens
@@ -444,7 +431,7 @@ def _onde_cita(origem: str, ligs: list[grafo.Ligacao]) -> str:
     """Quem cita, com o trecho em volta do link; o clique abre a nota já no
     link — `linha` e `alvo` o /app.js lê da URL para rolar e destacar."""
     primeira = min(ligs, key=lambda lig: lig.citacao.linha)
-    href = (f"{_href(origem)}&linha={primeira.citacao.linha}"
+    href = (f"{enderecos.nota(origem)}&linha={primeira.citacao.linha}"
             f"&alvo={quote(primeira.citacao.alvo, safe='')}")
     vezes = f' <span class="vezes">{len(ligs)}×</span>' if len(ligs) > 1 else ""
     nome = origem.rpartition("/")[2].removesuffix(".md")
@@ -639,7 +626,7 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
     mapa = grafo.mapa(raiz, indice, indice_desenhos)
     entradas = mapa.entradas(aberto) + mapa.desenhos_que_citam(aberto) if aberto else []
     quebrados_todos = mapa.quebrados() + mapa.desenhos_quebrados()
-    voltar = (f'<a class="limpar" href="{escape(_href(aberto)) if aberto else "/notas"}">'
+    voltar = (f'<a class="limpar" href="{escape(enderecos.nota(aberto)) if aberto else "/notas"}">'
               f'voltar às pastas</a>')
 
     if busca:
@@ -662,7 +649,7 @@ def tela(ctx, registry, agora: datetime, nota: int | None = None,
                    + (_ramo(itens, "" if geral or grafo_todo else aberto or "") or (
                        '<p class="vazio">Nenhuma nota ainda. Crie a primeira com “+ nota”.</p>')))
     volta = "&amp;arquivo=" + escape(quote(aberto, safe="/")) if aberto else ""
-    de_volta = escape(_href(aberto)) if aberto else "/notas"
+    de_volta = escape(enderecos.nota(aberto)) if aberto else "/notas"
 
     def atalho(classe: str, param: str, rotulo: str, nome_icone: str, ativo: bool) -> str:
         """O atalho continua no lugar quando aberto, só marcado; clicar de novo

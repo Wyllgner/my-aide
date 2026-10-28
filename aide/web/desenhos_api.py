@@ -14,9 +14,9 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from urllib.parse import quote
 
 from aide.storage import desenhos, previas, vault
+from aide.web import enderecos
 from aide.web.notas_api import versao
 
 
@@ -185,7 +185,7 @@ def instalar(app) -> None:
                 destino = citacao.destino(caminho, env["indice"])
         if destino is not None:
             href = (markdown.href_da_nota(destino, secao) if tipo == "nota"
-                    else "/desenho?caminho=" + quote(destino, safe="/"))
+                    else enderecos.desenho(destino))
             return {"tipo": tipo, "existe": True, "caminho": destino, "href": href}
         pedido = citacao.caminho_pedido(caminho)
         try:

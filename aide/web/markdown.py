@@ -29,6 +29,7 @@ from markdown_it.token import Token
 from aide.storage import vault
 from aide.storage.links import Indice
 from aide.storage.links import chave as chave_link
+from aide.web import enderecos
 from aide.web.icones import icone
 
 ESQUEMAS_SEGUROS = ("http", "https", "mailto")
@@ -41,19 +42,13 @@ def ancora(titulo: str) -> str:
     return "s-" + (re.sub(r"\s+", "-", texto).strip("-") or "secao")
 
 
-def href_da_tag(tag: str, origem: str | None = None) -> str:
-    """A lista de notas com a tag, sem fechar a nota que está aberta."""
-    href = "/notas?tag=" + quote(tag, safe="/")
-    return href + ("&arquivo=" + quote(origem, safe="/") if origem else "")
-
-
 def _etiqueta(tag: str, origem: str | None) -> str:
-    return f'<a class="tag" href="{escape(href_da_tag(tag, origem))}">#{escape(tag)}</a>'
+    return f'<a class="tag" href="{escape(enderecos.tag(tag, origem))}">#{escape(tag)}</a>'
 
 
 def href_da_nota(caminho: str, secao: str = "") -> str:
-    return ("/notas?arquivo=" + quote(caminho, safe="/")
-            + ("#" + quote(ancora(secao)) if secao else ""))
+    # a ancora e deste modulo: ela sai do titulo como o renderizador o escreve
+    return enderecos.nota(caminho) + ("#" + quote(ancora(secao)) if secao else "")
 
 
 def _seguro(url: str) -> bool:
@@ -135,10 +130,7 @@ def _link_de_desenho(alvo: str, apelido: str, env) -> str:
 
 
 def _href_do_desenho(caminho: str, env) -> str:
-    href = "/desenho?caminho=" + quote(caminho, safe="/")
-    if env["origem"]:
-        href += "&de=" + quote(env["origem"], safe="/")
-    return href
+    return enderecos.desenho(caminho, env["origem"])
 
 
 def _desenho_embutido(alvo: str, apelido: str, env) -> str:

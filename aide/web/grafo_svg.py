@@ -20,7 +20,7 @@ from collections.abc import Callable
 from html import escape
 from urllib.parse import quote
 
-from aide.web import layout
+from aide.web import enderecos, layout
 from aide.web.graficos import ACENTO, FRACO
 from aide.web.icones import TRACOS
 from aide.web.markdown import href_da_nota
@@ -50,10 +50,7 @@ def _href(no: str, aberto: str | None) -> str:
     """Nota abre nas notas; desenho na tela dele, voltando para a nota aberta."""
     if not _desenho(no):
         return href_da_nota(no)
-    href = "/desenho?caminho=" + quote(no, safe="/")
-    if aberto and aberto.endswith(".md"):
-        href += "&de=" + quote(aberto, safe="/")
-    return href
+    return enderecos.desenho(no, aberto if aberto and aberto.endswith(".md") else None)
 
 
 def _ancora(x: float, y: float, largura: int, altura: int) -> tuple[float, float]:
