@@ -34,13 +34,44 @@ def _front(texto: str):
     return json.loads(saida.stdout)
 
 
-def test_o_script_e_um_modulo_valido(tmp_path):
+@pytest.mark.parametrize("parte", ["app.js"] + ["notas/" + n for n in estaticos.PARTES_NOTAS])
+def test_cada_parte_e_um_modulo_valido(parte, tmp_path):
     """Erro de sintaxe derruba as notas inteiras sem nenhum teste Python notar.
     A página carrega com type="module": conferido como módulo, e não como
     script, que aceita coisas que o módulo recusa (o return no topo, por exemplo)."""
-    arquivo = tmp_path / "app.mjs"
-    arquivo.write_text(estaticos.ler("js/app.js"))
+    arquivo = tmp_path / "parte.mjs"
+    arquivo.write_text(estaticos.ler("js/" + parte))
     subprocess.run([node, "--check", str(arquivo)], check=True, capture_output=True)
+
+
+def test_toda_parte_do_script_entra_na_lista():
+    """Parte que ninguém serve é erro 404 no import, e a tela não liga."""
+    no_disco = {a.name for a in (estaticos.PASTA / "js" / "notas").glob("*.js")}
+    assert no_disco == set(estaticos.PARTES_NOTAS)
+
+
+def test_toda_parte_importada_existe_e_exporta_o_que_pedem():
+    """Um nome que a parte não exporta é erro no carregamento, não no uso."""
+    exporta = {}
+    for nome in estaticos.PARTES_NOTAS:
+        texto = estaticos.ler("js/notas/" + nome)
+        nomes = set()
+        for bloco in re.findall(r"export \{([^}]*)\}", texto):
+            nomes |= {x.strip() for x in bloco.split(",") if x.strip()}
+        nomes |= set(re.findall(r"export function (\w+)", texto))
+        exporta[nome] = nomes
+
+    pedidos = 0
+    for nome in ["app.js"] + ["notas/" + n for n in estaticos.PARTES_NOTAS]:
+        texto = estaticos.ler("js/" + nome)
+        for bloco, de in re.findall(r"import \{([^}]*)\} from \"/js/notas/([^\"]+)\"", texto):
+            assert de in exporta, (nome, de)
+            querem = {x.strip() for x in bloco.split(",") if x.strip()}
+            assert querem <= exporta[de], (nome, de, querem - exporta[de])
+            pedidos += len(querem)
+        for de in re.findall(r"import \"/js/notas/([^\"]+)\"", texto):
+            assert de in exporta, (nome, de)
+    assert pedidos > 20
 
 
 @pytest.mark.parametrize("texto", [
