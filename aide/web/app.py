@@ -104,6 +104,19 @@ def criar_app(config=None, conn_factory=None):
         return Response(js, media_type="text/javascript",
                         headers={"cache-control": "no-cache"})
 
+    # as partes que o /app.js importa: lista fechada, montada ao subir, como as
+    # fontes mais abaixo
+    partes_notas = {nome: estaticos.ler(f"js/notas/{nome}")
+                    for nome in estaticos.PARTES_NOTAS}
+
+    @app.get("/js/notas/{nome}")
+    def parte_das_notas(nome: str) -> Response:
+        parte = partes_notas.get(nome)
+        if parte is None:
+            return Response("script não encontrado", status_code=404, media_type="text/plain")
+        return Response(parte, media_type="text/javascript",
+                        headers={"cache-control": "no-cache"})
+
     js_arquivos = estaticos.ler("js/arquivos.js")
 
     @app.get("/arquivos.js")

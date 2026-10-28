@@ -119,10 +119,19 @@ def test_a_pagina_so_carrega_script_de_arquivo(cliente):
 
 
 def test_o_script_e_servido_como_javascript(cliente):
+    """A entrada importa as partes; cada parte tem a rota dela, e nada fora da
+    lista é servido (o nome na URL não vira caminho)."""
     resposta = cliente.get("/app.js")
     assert resposta.status_code == 200
     assert resposta.headers["content-type"].startswith("text/javascript")
-    assert '"X-Aide": "1"' in resposta.text
+    assert 'import "/js/notas/editor.js";' in resposta.text
+
+    for nome in estaticos.PARTES_NOTAS:
+        parte = cliente.get("/js/notas/" + nome)
+        assert parte.status_code == 200, nome
+        assert parte.headers["content-type"].startswith("text/javascript")
+    assert '"X-Aide": "1"' in cliente.get("/js/notas/comum.js").text
+    assert cliente.get("/js/notas/../app.js").status_code == 404
 
 
 def test_busca_lista_o_caminho_de_cada_achado(cliente, registry, config):
@@ -356,7 +365,7 @@ def test_desenho_que_existe_nao_e_quebrado(cliente, raiz):
 
 
 def test_criar_desenho_quebrado_vai_pela_api_de_desenhos():
-    JS = estaticos.ler("js/app.js")
+    JS = estaticos.notas()
 
     criar = JS[JS.index('document.querySelectorAll(".criar-quebrado")'):]
     criar = criar[:criar.index("// ---------- ligar")]
@@ -664,7 +673,7 @@ def test_nome_de_desenho_sai_escapado_na_arvore(cliente, raiz):
 
 def test_arrastar_desenho_usa_a_rota_de_desenho():
     """A de nota recusaria o .excalidraw (e reescreve links de nota)."""
-    JS = estaticos.ler("js/app.js")
+    JS = estaticos.notas()
 
     assert ': /\\.excalidraw$/i.test(de) ? "/api/desenhos/mover" : "/api/notas/mover";' in JS
     assert 'return pedir("POST", rota, { de: de, para: para });' in JS
@@ -673,7 +682,7 @@ def test_arrastar_desenho_usa_a_rota_de_desenho():
 def test_arrastar_pasta_usa_a_rota_de_pasta_e_nao_entra_nela_mesma():
     """A pasta move com tudo dentro; soltar nela mesma ou numa de dentro
     criaria um ciclo, e o arrasto nem é aceito."""
-    JS = estaticos.ler("js/app.js")
+    JS = estaticos.notas()
 
     assert 'var rota = tipo === "pasta" ? "/api/notas/mover-pasta"' in JS
     assert 'pasta.indexOf(arrastado.caminho + "/") === 0' in JS
@@ -688,7 +697,7 @@ def test_botao_de_novo_desenho_no_topo_e_em_cada_pasta(cliente, raiz):
 
 
 def test_script_cria_desenho_pela_rota_dele_e_abre_a_tela():
-    JS = estaticos.ler("js/app.js")
+    JS = estaticos.notas()
 
     assert 'desenho: "/api/desenhos/arquivo"' in JS
     assert 'criando === "desenho" && !/\\.excalidraw$/i.test(caminho)' in JS
@@ -700,7 +709,7 @@ def test_script_cria_desenho_pela_rota_dele_e_abre_a_tela():
 
 
 def test_link_quebrado_de_desenho_cria_desenho_e_nao_nota():
-    JS = estaticos.ler("js/app.js")
+    JS = estaticos.notas()
 
     trecho = JS[JS.index("function criarDoLink"):]
     trecho = trecho[:trecho.index("// ---------- tarefa marcada")]
@@ -729,7 +738,7 @@ def test_tela_passa_os_desenhos_para_o_autocompletar(cliente, raiz):
 
 
 def test_autocompletar_sugere_desenho_marcado_como_desenho():
-    JS = estaticos.ler("js/app.js")
+    JS = estaticos.notas()
 
     assert "return notas.concat(desenhosDoVault).filter(function (n) {" in JS
     assert 'onde: DESENHO.test(n) ? "desenho · " + n : n,' in JS
