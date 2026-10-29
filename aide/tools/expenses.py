@@ -311,6 +311,30 @@ def intervalo(periodo: str, agora: datetime) -> tuple[str, str]:
     return inicio.isoformat(timespec="minutes"), fim.isoformat(timespec="minutes")
 
 
+_MES = re.compile(r"\d{4}-(0[1-9]|1[0-2])")
+
+
+def ler_mes(texto: str | None, agora: datetime) -> str:
+    """'2026-11' confere e volta igual; vazio é o mês de `agora`."""
+    if not texto:
+        return agora.strftime("%Y-%m")
+    if not _MES.fullmatch(texto.strip()):
+        raise ValueError(f"mês {texto!r} não entendido; use AAAA-MM, como 2026-11")
+    return texto.strip()
+
+
+def momento_do_mes(mes: str, agora: datetime) -> datetime:
+    """Até quando as contas de `mes` vão: agora, no mês corrente; o último
+    minuto do mês, nos outros. O passado está fechado, e no futuro só há as
+    parcelas já marcadas."""
+    if mes == agora.strftime("%Y-%m"):
+        return agora
+    ano, numero = (int(x) for x in mes.split("-"))
+    ultimo = calendar.monthrange(ano, numero)[1]
+    return agora.replace(year=ano, month=numero, day=ultimo, hour=23, minute=59,
+                         second=0, microsecond=0)
+
+
 def _linha(r) -> dict:
     dados = dict(r)
     dados["valor"] = formatar(dados["cents"])
@@ -562,20 +586,30 @@ def summary(ctx: ToolContext, periodo: str = "mes", category: str | None = None)
     description=(
         "Os tetos de gasto por categoria que a pessoa declarou, com quanto já foi "
         "usado no mês e quanto sobra. É a tool para 'quais meus limites', 'quanto "
-        "posso gastar de uber', 'estourei algum teto'."
+        "posso gastar de uber', 'estourei algum teto'. Com `month`, os tetos e o "
+        "gasto de outro mês."
     ),
-    parameters={"type": "object", "properties": {}, "required": []},
+    parameters={
+        "type": "object",
+        "properties": {
+            "month": {"type": "string", "description": "AAAA-MM. Sem ele, o mês atual."},
+        },
+        "required": [],
+    },
 )
-def budgets(ctx: ToolContext) -> dict:
+def budgets(ctx: ToolContext, month: str | None = None) -> dict:
     # a mesma conta da página e da cobrança: as três precisam dizer o mesmo
     # número. Sem esta tool o modelo só via o gasto, e respondia "você não
     # definiu limites" com os tetos declarados no config.
     from aide.web.consultas import tetos_do_mes
 
-    linhas = tetos_do_mes(ctx.conn, ctx.config, now_in(ctx.config.timezone))
+    agora = now_in(ctx.config.timezone)
+    mes = ler_mes(month, agora)
+    linhas = tetos_do_mes(ctx.conn, ctx.config, momento_do_mes(mes, agora))
     if not linhas:
-        return {"tetos": [], "aviso": "nenhum teto declarado; defina com expenses.set_budget"}
-    return {"tetos": [
+        return {"mes": mes, "tetos": [],
+                "aviso": "nenhum teto declarado; defina com expenses.set_budget"}
+    return {"mes": mes, "tetos": [
         {"categoria": linha["categoria"], "teto": formatar(linha["teto"]),
          "gasto": formatar(linha["gasto"]), "sobra": formatar(linha["teto"] - linha["gasto"]),
          "usado": f'{linha["gasto"] / linha["teto"] * 100:.0f}%' if linha["teto"] else "—"}
@@ -587,7 +621,9 @@ def budgets(ctx: ToolContext) -> dict:
     name="expenses.set_budget",
     description=(
         "Define, muda ou tira o teto mensal de uma categoria. 'aumenta o uber pra "
-        "80', 'põe teto de 300 em mercado', 'tira o teto de dates'."
+        "80', 'põe teto de 300 em mercado', 'tira o teto de dates'. Vale a partir "
+        "de `month` até ser mudado de novo, e os meses antes dele não mudam: "
+        "'em novembro o uber pode ser 120' é month 2026-11."
     ),
     parameters={
         "type": "object",
@@ -595,16 +631,18 @@ def budgets(ctx: ToolContext) -> dict:
             "category": {"type": "string", "description": "Minúsculo, como nos gastos."},
             "amount": {"type": "string", "description": "Novo teto por mês, como a pessoa falou."},
             "remove": {"type": "boolean", "description": "true para tirar o teto."},
+            "month": {"type": "string",
+                      "description": "AAAA-MM, de quando vale. Sem ele, o mês atual."},
         },
         "required": ["category"],
     },
 )
 def set_budget(ctx: ToolContext, category: str, amount: str | None = None,
-               remove: bool = False) -> dict:
+               remove: bool = False, month: str | None = None) -> dict:
     categoria = category.strip().lower()
     if not categoria:
         raise ValueError("diga de qual categoria é o teto")
-    mes = now_in(ctx.config.timezone).strftime("%Y-%m")
+    mes = ler_mes(month, now_in(ctx.config.timezone))
     antes = tetos_em_vigor(ctx.conn, ctx.config, mes).get(categoria)
 
     if remove:
@@ -622,7 +660,7 @@ def set_budget(ctx: ToolContext, category: str, amount: str | None = None,
         "INSERT INTO expense_caps (category, month, cents) VALUES (?, ?, ?)"
         " ON CONFLICT (category, month) DO UPDATE SET cents = excluded.cents,"
         " updated_at = datetime('now')", (categoria, mes, cents))
-    return {"categoria": categoria,
+    return {"categoria": categoria, "mes": mes,
             "antes": formatar(antes) if antes is not None else "sem teto",
             "agora": formatar(cents) if cents is not None else "sem teto"}
 
