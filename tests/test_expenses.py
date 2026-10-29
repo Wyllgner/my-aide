@@ -443,6 +443,28 @@ def test_momento_do_mes():
     assert momento_do_mes("2026-02", agora) == datetime(2026, 2, 28, 23, 59)
     assert momento_do_mes("2026-12", agora) == datetime(2026, 12, 31, 23, 59)
 
+
+def test_periodo_de_um_mes(ctx, registry, monkeypatch):
+    _no_mes(monkeypatch, 2026, 11)
+    for quando, valor in (("2026-09-30T23:00-04:00", "5"), ("2026-10-01T00:10-04:00", "30"),
+                          ("2026-10-31T22:00-04:00", "12"), ("2026-11-01T08:00-04:00", "7")):
+        registry.call("expenses.add", {"amount": valor, "description": "corrida",
+                                       "when": quando}, ctx)
+    assert registry.call("expenses.summary", {"periodo": "2026-10"}, ctx).data["total"] == "R$ 42,00"
+    assert len(registry.call("expenses.list", {"periodo": "2026-10"}, ctx).data) == 2
+
+
+def test_periodo_do_mes_corrente_e_o_mes():
+    from datetime import datetime
+
+    from aide.tools.expenses import intervalo
+
+    agora = datetime(2026, 10, 28, 9, 30)
+    assert intervalo("2026-10", agora) == intervalo("mes", agora)
+    assert intervalo("2026-02", agora) == ("2026-02-01T00:00", "2026-02-28T23:59")
+    with pytest.raises(ValueError, match="AAAA-MM"):
+        intervalo("2026-13", agora)
+
 # ---------- tags ----------
 
 def _tag(ctx, registry, tag="farmácia", categoria="pessoal"):
