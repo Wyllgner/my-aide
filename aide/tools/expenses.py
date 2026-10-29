@@ -175,8 +175,21 @@ def _parcelas(installments) -> int:
 # ---------- tetos ----------
 
 
-def tetos_em_vigor(conn, config) -> dict[str, int]:
-    """Teto de cada categoria, em centavos: o config, com o que foi mudado por cima.
+def mudancas_em_vigor(conn, mes: str) -> list:
+    """O teto mudado pela conversa que vale em `mes` ('AAAA-MM'), um por categoria.
+
+    Vale a linha do próprio mês ou, sem ela, a última de antes: o teto mudado
+    em outubro continua em novembro até alguém mudar novembro.
+    """
+    return conn.execute(
+        "SELECT category, cents, month, updated_at FROM expense_caps c"
+        " WHERE month = (SELECT MAX(month) FROM expense_caps"
+        "                WHERE category = c.category AND month <= ?)", (mes,)).fetchall()
+
+
+def tetos_em_vigor(conn, config, mes: str) -> dict[str, int]:
+    """Teto de cada categoria no mês `mes` ('AAAA-MM'), em centavos: o config,
+    com o que foi mudado por cima.
 
     Todo lugar que olha teto — a cobrança, a página, o prompt, a tool — passa
     por aqui, senão o teto mudado pelo Telegram valeria numa tela e não na outra.
@@ -184,7 +197,7 @@ def tetos_em_vigor(conn, config) -> dict[str, int]:
     tetos = dict(getattr(getattr(config, "gastos", None), "tetos_centavos", None) or {})
     if conn is None:
         return tetos
-    for r in conn.execute("SELECT category, cents FROM expense_caps").fetchall():
+    for r in mudancas_em_vigor(conn, mes):
         if r[1] is None:
             tetos.pop(r[0], None)
         else:
@@ -591,7 +604,8 @@ def set_budget(ctx: ToolContext, category: str, amount: str | None = None,
     categoria = category.strip().lower()
     if not categoria:
         raise ValueError("diga de qual categoria é o teto")
-    antes = tetos_em_vigor(ctx.conn, ctx.config).get(categoria)
+    mes = now_in(ctx.config.timezone).strftime("%Y-%m")
+    antes = tetos_em_vigor(ctx.conn, ctx.config, mes).get(categoria)
 
     if remove:
         if antes is None:
@@ -605,9 +619,9 @@ def set_budget(ctx: ToolContext, category: str, amount: str | None = None,
             raise ValueError("teto zero cobraria qualquer gasto; para tirar o teto, use remove")
 
     ctx.conn.execute(
-        "INSERT INTO expense_caps (category, cents) VALUES (?, ?)"
-        " ON CONFLICT (category) DO UPDATE SET cents = excluded.cents,"
-        " updated_at = datetime('now')", (categoria, cents))
+        "INSERT INTO expense_caps (category, month, cents) VALUES (?, ?, ?)"
+        " ON CONFLICT (category, month) DO UPDATE SET cents = excluded.cents,"
+        " updated_at = datetime('now')", (categoria, mes, cents))
     return {"categoria": categoria,
             "antes": formatar(antes) if antes is not None else "sem teto",
             "agora": formatar(cents) if cents is not None else "sem teto"}

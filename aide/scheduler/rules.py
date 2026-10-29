@@ -215,7 +215,7 @@ def orcamento_categoria(conn, now: datetime, config=None, ver_privado: bool = Fa
     """
     from aide.tools.expenses import tetos_em_vigor
 
-    tetos = tetos_em_vigor(conn, config)
+    tetos = tetos_em_vigor(conn, config, now.strftime("%Y-%m"))
     if not tetos:
         return []
 
