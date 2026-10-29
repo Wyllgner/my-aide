@@ -286,31 +286,6 @@ def tag_na_descricao(conn, categoria: str | None, descricao: str) -> str | None:
 
 PERIODOS = ("hoje", "ontem", "semana", "mes", "ano", "sempre")
 
-
-def intervalo(periodo: str, agora: datetime) -> tuple[str, str]:
-    """Começo e fim do período, em ISO local. `semana` começa na segunda."""
-    inicio_do_dia = agora.replace(hour=0, minute=0, second=0, microsecond=0)
-    fim = agora.replace(hour=23, minute=59, second=59)
-
-    if periodo == "hoje":
-        inicio = inicio_do_dia
-    elif periodo == "ontem":
-        inicio = inicio_do_dia - timedelta(days=1)
-        fim = inicio.replace(hour=23, minute=59, second=59)
-    elif periodo == "semana":
-        inicio = inicio_do_dia - timedelta(days=inicio_do_dia.weekday())
-    elif periodo == "mes":
-        inicio = inicio_do_dia.replace(day=1)
-    elif periodo == "ano":
-        inicio = inicio_do_dia.replace(month=1, day=1)
-    elif periodo == "sempre":
-        inicio = inicio_do_dia.replace(year=1970, month=1, day=1)
-    else:
-        raise ValueError(f"período desconhecido: {periodo!r}. Use: {', '.join(PERIODOS)}")
-
-    return inicio.isoformat(timespec="minutes"), fim.isoformat(timespec="minutes")
-
-
 _MES = re.compile(r"\d{4}-(0[1-9]|1[0-2])")
 
 
@@ -333,6 +308,36 @@ def momento_do_mes(mes: str, agora: datetime) -> datetime:
     ultimo = calendar.monthrange(ano, numero)[1]
     return agora.replace(year=ano, month=numero, day=ultimo, hour=23, minute=59,
                          second=0, microsecond=0)
+
+
+def intervalo(periodo: str, agora: datetime) -> tuple[str, str]:
+    """Começo e fim do período, em ISO local. `semana` começa na segunda, e
+    um mês ('2026-10') vai do dia 1 ao último, ou até hoje no mês corrente."""
+    inicio_do_dia = agora.replace(hour=0, minute=0, second=0, microsecond=0)
+    fim = agora.replace(hour=23, minute=59, second=59)
+
+    if periodo == "hoje":
+        inicio = inicio_do_dia
+    elif periodo == "ontem":
+        inicio = inicio_do_dia - timedelta(days=1)
+        fim = inicio.replace(hour=23, minute=59, second=59)
+    elif periodo == "semana":
+        inicio = inicio_do_dia - timedelta(days=inicio_do_dia.weekday())
+    elif periodo == "mes":
+        inicio = inicio_do_dia.replace(day=1)
+    elif periodo == "ano":
+        inicio = inicio_do_dia.replace(month=1, day=1)
+    elif periodo == "sempre":
+        inicio = inicio_do_dia.replace(year=1970, month=1, day=1)
+    elif _MES.fullmatch(periodo):
+        fim = momento_do_mes(periodo, agora).replace(hour=23, minute=59, second=59)
+        inicio = fim.replace(day=1, hour=0, minute=0, second=0)
+    else:
+        raise ValueError(f"período desconhecido: {periodo!r}. Use: {', '.join(PERIODOS)}"
+                         " ou um mês AAAA-MM")
+
+    return inicio.isoformat(timespec="minutes"), fim.isoformat(timespec="minutes")
+
 
 
 def _linha(r) -> dict:
@@ -495,8 +500,9 @@ def add(ctx: ToolContext, amount: str, description: str, category: str | None = 
     parameters={
         "type": "object",
         "properties": {
-            "periodo": {"type": "string", "enum": list(PERIODOS),
-                        "description": "Padrão: mes."},
+            "periodo": {"type": "string",
+                        "description": "hoje, ontem, semana, mes, ano, sempre, ou um mês "
+                                       "AAAA-MM ('quanto gastei em setembro'). Padrão: mes."},
             "category": {"type": "string"},
             "limit": {"type": "integer"},
         },
@@ -526,8 +532,9 @@ def list_expenses(ctx: ToolContext, periodo: str = "mes", category: str | None =
     parameters={
         "type": "object",
         "properties": {
-            "periodo": {"type": "string", "enum": list(PERIODOS),
-                        "description": "Padrão: mes."},
+            "periodo": {"type": "string",
+                        "description": "hoje, ontem, semana, mes, ano, sempre, ou um mês "
+                                       "AAAA-MM ('quanto gastei em setembro'). Padrão: mes."},
             "category": {"type": "string"},
         },
         "required": [],
