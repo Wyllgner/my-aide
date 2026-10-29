@@ -340,6 +340,62 @@ def test_teto_mudado_vale_na_cobranca(ctx, registry):
     assert orcamento_categoria(ctx.conn, now_in(ctx.config.timezone), ctx.config) == []
 
 
+
+def _no_mes(monkeypatch, ano: int, mes: int):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from aide.tools import expenses
+
+    quando = datetime(ano, mes, 15, 12, 0, tzinfo=ZoneInfo("America/Porto_Velho"))
+    monkeypatch.setattr(expenses, "now_in", lambda _fuso: quando)
+
+
+def test_teto_mudado_num_mes_nao_muda_o_anterior(ctx, registry, monkeypatch):
+    from aide.tools.expenses import tetos_em_vigor
+
+    object.__setattr__(ctx.config.gastos, "tetos_centavos", {"uber": 5000})
+    _no_mes(monkeypatch, 2026, 10)
+    registry.call("expenses.set_budget", {"category": "uber", "amount": "80"}, ctx)
+    _no_mes(monkeypatch, 2026, 11)
+    mudou = registry.call("expenses.set_budget", {"category": "uber", "amount": "120"}, ctx).data
+    # o "antes" de novembro e o que valia em novembro: o de outubro, herdado
+    assert mudou["antes"] == "R$ 80,00"
+
+    def teto(mes):
+        return tetos_em_vigor(ctx.conn, ctx.config, mes).get("uber")
+
+    assert [teto(m) for m in ("2026-09", "2026-10", "2026-11", "2027-03")] == [
+        5000, 8000, 12000, 12000]
+
+
+def test_tirar_o_teto_num_mes_deixa_o_anterior(ctx, registry, monkeypatch):
+    from aide.tools.expenses import tetos_em_vigor
+
+    object.__setattr__(ctx.config.gastos, "tetos_centavos", {"dates": 20000})
+    _no_mes(monkeypatch, 2026, 11)
+    registry.call("expenses.set_budget", {"category": "dates", "remove": True}, ctx)
+    assert tetos_em_vigor(ctx.conn, ctx.config, "2026-10") == {"dates": 20000}
+    assert tetos_em_vigor(ctx.conn, ctx.config, "2026-11") == {}
+
+
+def test_teto_mudado_antes_do_mes_por_mes_vale_em_todo_mes(tmp_path, config):
+    """A linha de antes da migration 015 valia sempre, e continua valendo."""
+    from aide.storage.db import _migrations, connect, migrate
+    from aide.tools.expenses import tetos_em_vigor
+
+    conn = connect(tmp_path / "velho.db")
+    for versao, caminho in _migrations():
+        if versao < 15:
+            conn.executescript(caminho.read_text())
+            conn.execute(f"PRAGMA user_version = {versao}")
+    conn.execute("INSERT INTO expense_caps (category, cents) VALUES ('uber', 9000)")
+    conn.commit()
+    assert migrate(conn) == ["015_expense_caps_month.sql"]
+    object.__setattr__(config.gastos, "tetos_centavos", {"uber": 5000})
+    assert tetos_em_vigor(conn, config, "2020-01")["uber"] == 9000
+    assert tetos_em_vigor(conn, config, "2031-12")["uber"] == 9000
+
 # ---------- tags ----------
 
 def _tag(ctx, registry, tag="farmácia", categoria="pessoal"):
