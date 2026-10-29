@@ -17,7 +17,8 @@
   margin: 0;
 }
 
-.meses-campo {
+.meses-campo,
+.teto-campo {
   font: inherit;
   font-size: 13px;
   height: 32px;
@@ -26,4 +27,39 @@
   border-radius: var(--r-pill);
   background: var(--surface);
   color: var(--ink);
+}
+
+/* gastos: definir o teto do mes mostrado, embaixo dos medidores */
+.teto-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 10px;
+  margin: 14px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.teto-rotulo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.teto-campo {
+  width: 160px;
+}
+
+.teto-dica,
+.teto-erro {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.teto-erro {
+  color: var(--accent);
 }
