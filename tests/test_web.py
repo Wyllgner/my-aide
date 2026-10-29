@@ -90,11 +90,13 @@ def test_so_o_vault_escreve(app):
     """Escrita é decisão, não acidente: rota nova que escreve quebra aqui até
     alguém pensar em CSRF, auditoria e caminho para ela. Notas e desenhos
     passaram por isso (test_notas_api, test_desenhos_api). /api/arquivos/
-    recebe arquivos mas não grava nada (test_arquivos_api)."""
+    recebe arquivos mas não grava nada (test_arquivos_api). /api/gastos/ muda
+    o teto pela tool, que audita (test_teto_definido_pela_pagina...)."""
     for rota in app.routes:
         metodos = getattr(rota, "methods", set()) - {"GET", "HEAD"}
         if metodos:
-            assert rota.path.startswith(("/api/notas/", "/api/desenhos/", "/api/arquivos/")), \
+            assert rota.path.startswith(("/api/notas/", "/api/desenhos/", "/api/arquivos/",
+                                         "/api/gastos/")), \
                 f"rota de escrita exposta: {rota.path}"
 
 
@@ -738,8 +740,9 @@ def test_a_web_so_pode_calar_a_trilha_porque_as_telas_nao_escrevem(app):
     # /api/notas/anexo e /api/notas/ligar auditam também (test_anexos, test_notas_api);
     # os desenhos, em test_desenhos_api. /api/desenhos/previa é a exceção de
     # propósito: grava cache fora do vault (data/previas-desenho), não dado seu.
-    # /api/arquivos/ não grava nada: devolve o resultado e apaga o temporário
-    assert escrita == {"/api/notas/arquivo", "/api/notas/pasta", "/api/notas/mover",
+    # /api/arquivos/ não grava nada: devolve o resultado e apaga o temporário.
+    # /api/gastos/teto passa pela tool com um contexto que audita
+    assert escrita == {"/api/gastos/teto","/api/notas/arquivo", "/api/notas/pasta", "/api/notas/mover",
                        "/api/notas/mover-pasta", "/api/notas/anexo", "/api/notas/ligar",
                        "/api/desenhos/arquivo", "/api/desenhos/biblioteca",
                        "/api/desenhos/mover", "/api/desenhos/previa",
@@ -1322,3 +1325,62 @@ def test_periodo_que_nao_existe_vira_o_mes_corrente(cliente):
     html = cliente.get("/gastos?periodo=2026-13").text
     mes = now_in(cliente.app.state.config.timezone).strftime("%Y-%m")
     assert f'name="periodo" value="{mes}"' in html
+
+
+# ---------- teto do mes pela pagina ----------
+
+ESCRITA = {"origin": "http://127.0.0.1:8787", "x-aide": "1"}
+
+
+def test_teto_definido_pela_pagina_vale_do_mes_mostrado_em_diante(cliente, app):
+    from aide.tools.expenses import tetos_em_vigor
+
+    object.__setattr__(app.state.config.gastos, "tetos_centavos", {"uber": 5000})
+    resposta = cliente.put("/api/gastos/teto", headers=ESCRITA,
+                           json={"categoria": "uber", "mes": "2020-04", "valor": "120"})
+    assert resposta.status_code == 200 and resposta.json()["agora"] == "R$ 120,00"
+    conn = app.state.conn_factory()
+    assert tetos_em_vigor(conn, app.state.config, "2020-03") == {"uber": 5000}
+    assert tetos_em_vigor(conn, app.state.config, "2020-04") == {"uber": 12000}
+    auditado = conn.execute("SELECT actor, tool FROM audit").fetchall()
+    assert [tuple(r) for r in auditado] == [("web", "expenses.set_budget")]
+
+    tirou = cliente.put("/api/gastos/teto", headers=ESCRITA,
+                        json={"categoria": "uber", "mes": "2020-05", "remover": True})
+    assert tirou.status_code == 200
+    assert tetos_em_vigor(conn, app.state.config, "2020-05") == {}
+
+
+def test_teto_pela_pagina_recusa_o_que_a_tool_recusa(cliente):
+    resposta = cliente.put("/api/gastos/teto", headers=ESCRITA,
+                           json={"categoria": "uber", "mes": "2020-04", "valor": "0"})
+    assert resposta.status_code == 400 and "remove" in resposta.json()["detail"]
+
+
+def test_teto_pela_pagina_exige_a_marca_de_escrita(cliente):
+    resposta = cliente.put("/api/gastos/teto", headers={"origin": "http://127.0.0.1:8787"},
+                           json={"categoria": "uber", "mes": "2020-04", "valor": "80"})
+    assert resposta.status_code == 403
+
+
+def test_tela_de_gastos_traz_o_formulario_do_mes_e_o_script(cliente):
+    html = cliente.get("/gastos?periodo=2020-04").text
+    assert 'id="teto-form" class="teto-form" data-mes="2020-04"' in html
+    assert "vale de abril de 2020 em diante" in html
+    assert '<script type="module" src="/gastos.js"></script>' in html
+    js = cliente.get("/gastos.js")
+    assert js.headers["content-type"].startswith("text/javascript")
+    assert '"/api/gastos/teto"' in js.text and '"X-Aide": "1"' in js.text
+
+
+@pytest.mark.skipif(__import__("shutil").which("node") is None, reason="sem node")
+def test_o_script_dos_gastos_e_javascript_valido(tmp_path):
+    import shutil
+    import subprocess
+
+    from aide.web import estaticos
+
+    arquivo = tmp_path / "gastos.mjs"
+    arquivo.write_text(estaticos.ler("js/gastos.js"))
+    subprocess.run([shutil.which("node"), "--check", str(arquivo)], check=True,
+                   capture_output=True)
