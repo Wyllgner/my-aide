@@ -418,10 +418,28 @@ def _seletor(caminho: str, atual: str) -> str:
             f'border-radius:var(--r-pill)">{itens}</div>')
 
 
+def _navegar_meses(mes: str) -> str:
+    """As setas vão ao mês vizinho; o campo nativo de mês pula para qualquer um.
+    Formulário GET: o mês escolhido fica na URL, como o período."""
+    ano, numero = int(mes[:4]), int(mes[5:])
+    setas = []
+    for passo, antes, depois in ((-1, "&lsaquo; ", ""), (1, "", " &rsaquo;")):
+        vizinho_ano, vizinho = _mes_vizinho(ano, numero, passo)
+        setas.append(f'<a class="botao" href="/gastos?periodo={vizinho_ano:04d}-{vizinho:02d}"'
+                     f' title="{MESES[vizinho - 1]} de {vizinho_ano}">'
+                     f'{antes}{MESES[vizinho - 1][:3]}{depois}</a>')
+    return (f'<form method="get" action="/gastos" class="meses">{setas[0]}'
+            f'<input type="month" name="periodo" value="{mes}" required'
+            f' aria-label="mês" class="meses-campo">'
+            f'<button type="submit" class="botao">ver mês</button>{setas[1]}</form>')
+
+
 def _periodo_por_extenso(de: str, ate: str, periodo: str) -> str:
     """'1 a 16 de setembro'. '2026/09/01 a 2026/09/16' é formato de máquina."""
     if periodo == "sempre":
         return "desde o começo"
+    if periodo[:1].isdigit():
+        return f"{MESES[int(periodo[5:]) - 1]} de {periodo[:4]}"
     inicio = datetime.fromisoformat(de)
     fim = datetime.fromisoformat(ate)
     if periodo in ("hoje", "ontem"):
@@ -432,16 +450,21 @@ def _periodo_por_extenso(de: str, ate: str, periodo: str) -> str:
             f"a {fim.day} de {MESES[fim.month - 1]}")
 
 
-def _cartao_tetos(ctx, agora: datetime) -> str:
-    """Os tetos do mês, sempre no mês corrente mesmo quando a tela mostra outro
-    período: teto é mensal, e mostrá-lo ao lado de "ontem" diria uma mentira."""
-    from aide.tools.expenses import formatar
+def _cartao_tetos(ctx, agora: datetime, mes: str) -> str:
+    """Os tetos de `mes`: o mês escolhido na tela, ou o corrente quando a tela
+    mostra outro período. Teto é mensal, e mostrá-lo ao lado de "ontem" diria
+    uma mentira."""
+    from aide.tools.expenses import formatar, momento_do_mes
 
-    linhas = consultas.tetos_do_mes(ctx.conn, ctx.config, agora)
+    corrente = mes == agora.strftime("%Y-%m")
+    titulo = "Tetos do mês" if corrente else f"Tetos de {MESES[int(mes[5:]) - 1]} de {mes[:4]}"
+    # fora do mes corrente as contas vao ate o fim dele
+    ate = momento_do_mes(mes, agora)
+    linhas = consultas.tetos_do_mes(ctx.conn, ctx.config, ate)
     if not linhas:
         return (
             '<div class="card" style="padding:16px 20px;margin-top:16px">'
-            '<p class="eyebrow" style="margin-bottom:8px">Tetos do mês</p>'
+            f'<p class="eyebrow" style="margin-bottom:8px">{titulo}</p>'
             '<p style="margin:0;font-size:12.5px;color:var(--faint);line-height:1.5">'
             'Nenhum teto declarado. Diga no Telegram "põe teto de 300 em mercado", '
             'ou declare em <span class="mono">gastos.tetos</span> no '
@@ -450,12 +473,20 @@ def _cartao_tetos(ctx, agora: datetime) -> str:
 
     import calendar
 
-    dias_no_mes = calendar.monthrange(agora.year, agora.month)[1]
-    ritmo = agora.day / dias_no_mes
+    dias_no_mes = calendar.monthrange(ate.year, ate.month)[1]
+    # o traco do ritmo so diz algo no mes que esta passando
+    ritmo = ate.day / dias_no_mes if corrente else None
+    if corrente:
+        nota = (f'o traço escuro é o ritmo do mês: dia {ate.day} de {dias_no_mes}. '
+                f'Barra além dele é teto sendo gasto mais rápido que o mês passa.')
+    elif ate < agora:
+        nota = "mês fechado: o gasto inteiro contra o teto que valia nele"
+    else:
+        nota = "mês que ainda não chegou: só as parcelas já marcadas"
     # O que foi gasto fora das categorias com teto entra como linha também, logo
     # abaixo dos tetos: é justamente o que ninguém está vigiando, e numa linha de
     # rodapé o mês podia estourar inteiro sem a tela chamar atenção.
-    fora = consultas.gasto_fora_dos_tetos(ctx.conn, ctx.config, agora)
+    fora = consultas.gasto_fora_dos_tetos(ctx.conn, ctx.config, ate)
     medidores = graficos.medidores([
         {"rotulo": linha["categoria"],
          "valor": linha["gasto"],
@@ -472,9 +503,7 @@ def _cartao_tetos(ctx, agora: datetime) -> str:
          "texto": f'{formatar(valor)} · sem teto', "diferenca": None}
         for categoria, valor in fora
     ], ritmo=ritmo) + (
-        f'<p style="margin:8px 0 0;font-size:12px;color:var(--faint)">'
-        f'o traço escuro é o ritmo do mês: dia {agora.day} de {dias_no_mes}. '
-        f'Barra além dele é teto sendo gasto mais rápido que o mês passa.</p>')
+        f'<p style="margin:8px 0 0;font-size:12px;color:var(--faint)">{nota}</p>')
 
     gasto_total = sum(linha["gasto"] for linha in linhas)
     teto_total = sum(linha["teto"] for linha in linhas)
@@ -492,7 +521,7 @@ def _cartao_tetos(ctx, agora: datetime) -> str:
                   f'line-height:1.5">sem teto: {escape(formatar(total_fora))} no mês, '
                   f'fora da conta dos tetos</p>')
 
-    por_tag = consultas.tags_do_mes(ctx.conn, agora)
+    por_tag = consultas.tags_do_mes(ctx.conn, ate)
     abertos = [
         f'{escape(categoria)}: ' + ", ".join(
             f'{escape(t)} {escape(formatar(v))}' for t, v in por_tag[categoria])
@@ -516,7 +545,7 @@ def _cartao_tetos(ctx, agora: datetime) -> str:
 
     return (f'<div class="card" style="padding:16px 20px;margin-top:16px">'
             f'<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px">'
-            f'<span class="eyebrow">Tetos do mês</span>'
+            f'<span class="eyebrow">{titulo}</span>'
             f'<span style="font-size:12.5px;color:var(--muted)">{escape(resumo)}</span></div>'
             f'{medidores}{rodape}</div>')
 
@@ -682,10 +711,14 @@ def _cartao_busca(ctx, agora: datetime, periodo: str, de: str, ate: str,
 
 def gastos(ctx, registry, agora: datetime, periodo: str = "mes",
            filtros: dict | None = None) -> str:
-    from aide.tools.expenses import PERIODOS, formatar, intervalo, por_extenso
+    from aide.tools.expenses import PERIODOS, formatar, intervalo, momento_do_mes, por_extenso
 
-    if periodo not in PERIODOS:
+    # o periodo vem da URL: o que nao for periodo nem mes AAAA-MM vira o mes
+    try:
+        intervalo(periodo, agora)
+    except ValueError:
         periodo = "mes"
+    mes = agora.strftime("%Y-%m") if periodo in PERIODOS else periodo
 
     resumo = registry.call("expenses.summary", {"periodo": periodo}, ctx)
     lista = registry.call("expenses.list", {"periodo": periodo, "limit": 40}, ctx)
@@ -726,7 +759,7 @@ def gastos(ctx, registry, agora: datetime, periodo: str = "mes",
                             ("crédito", graficos.CREDITO, formatar(cred_total))]))
 
     # últimos meses: a régua do "este mês está fora do normal?"
-    mensal = consultas.gastos_por_mes(ctx.conn, agora, 6)
+    mensal = consultas.gastos_por_mes(ctx.conn, momento_do_mes(mes, agora), 6)
     meses_com_gasto = [d + c for _, d, c in mensal if d + c]
     media_mensal = sum(meses_com_gasto) / len(meses_com_gasto) if meses_com_gasto else 0
     historico = (
@@ -790,11 +823,13 @@ def gastos(ctx, registry, agora: datetime, periodo: str = "mes",
         legenda_tags += graficos.legenda([("sem tag", graficos.RESTO, "")])
 
     formas = " · ".join(f'{por_extenso(f["method"])} {f["valor"]}' for f in dados["por_forma"])
-    tetos = _cartao_tetos(ctx, agora)
+    tetos = _cartao_tetos(ctx, agora, mes)
     busca = _cartao_busca(ctx, agora, periodo, de, ate, filtros or {})
 
     return f"""
-{cabecalho("Gastos", _periodo_por_extenso(de, ate, periodo), _seletor("/gastos", periodo))}
+{cabecalho("Gastos", _periodo_por_extenso(de, ate, periodo),
+           '<div class="gastos-topo">' + _seletor("/gastos", "mes" if periodo == mes else periodo)
+           + _navegar_meses(mes) + '</div>')}
 <div style="display:grid;grid-template-columns:minmax(0,1.6fr) repeat(3,minmax(0,1fr));gap:14px">
   <div class="card" style="padding:16px 20px">
     <p class="eyebrow" style="margin-bottom:6px">Acumulado</p>

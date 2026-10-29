@@ -236,10 +236,10 @@ def gastos_por_dia_e_forma(conn, de: str, ate: str, tz) -> list[tuple[str, int, 
 
 
 def gastos_por_mes(conn, agora: datetime, meses: int = 6) -> list[tuple[str, int, int]]:
-    """(mês, débito, crédito) dos últimos `meses`, o corrente incluído.
+    """(mês, débito, crédito) dos últimos `meses`, terminando no de `agora`.
 
-    Fixo no tempo e não no período escolhido: é a régua para saber se este mês
-    está fora do normal, e ela não pode encolher quando a tela mostra "hoje".
+    Segue o mês escolhido na tela, nunca o período: é a régua para saber se o
+    mês está fora do normal, e ela não pode encolher quando a tela mostra "hoje".
     """
     abrev = ("jan", "fev", "mar", "abr", "mai", "jun",
              "jul", "ago", "set", "out", "nov", "dez")
