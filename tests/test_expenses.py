@@ -305,7 +305,8 @@ def test_sem_teto_diz_onde_declarar(ctx, registry):
 def test_muda_o_teto_pela_conversa(ctx, registry):
     object.__setattr__(ctx.config.gastos, "tetos_centavos", {"uber": 5000})
     mudou = registry.call("expenses.set_budget", {"category": "Uber", "amount": "80"}, ctx).data
-    assert mudou == {"categoria": "uber", "antes": "R$ 50,00", "agora": "R$ 80,00"}
+    assert mudou == {"categoria": "uber", "mes": now_in(ctx.config.timezone).strftime("%Y-%m"),
+                     "antes": "R$ 50,00", "agora": "R$ 80,00"}
     tetos = registry.call("expenses.budgets", {}, ctx).data["tetos"]
     assert tetos[0]["teto"] == "R$ 80,00"
 
@@ -395,6 +396,52 @@ def test_teto_mudado_antes_do_mes_por_mes_vale_em_todo_mes(tmp_path, config):
     object.__setattr__(config.gastos, "tetos_centavos", {"uber": 5000})
     assert tetos_em_vigor(conn, config, "2020-01")["uber"] == 9000
     assert tetos_em_vigor(conn, config, "2031-12")["uber"] == 9000
+
+
+def test_teto_definido_para_outro_mes(ctx, registry):
+    """'em novembro o uber pode ser 120': muda novembro sem mexer no mes de hoje."""
+    from aide.tools.expenses import tetos_em_vigor
+
+    object.__setattr__(ctx.config.gastos, "tetos_centavos", {"uber": 5000})
+    mudou = registry.call("expenses.set_budget",
+                          {"category": "uber", "amount": "120", "month": "2099-11"}, ctx).data
+    assert (mudou["mes"], mudou["antes"], mudou["agora"]) == ("2099-11", "R$ 50,00", "R$ 120,00")
+    assert tetos_em_vigor(ctx.conn, ctx.config, "2099-10") == {"uber": 5000}
+    assert tetos_em_vigor(ctx.conn, ctx.config, "2099-11") == {"uber": 12000}
+
+
+def test_mes_que_nao_e_mes_e_recusado(ctx, registry):
+    erro = registry.call("expenses.set_budget",
+                         {"category": "uber", "amount": "80", "month": "novembro"}, ctx).error
+    assert "AAAA-MM" in erro
+    assert "AAAA-MM" in registry.call("expenses.budgets", {"month": "2026-13"}, ctx).error
+
+
+def test_tetos_de_um_mes_passado_contam_o_mes_inteiro(ctx, registry, monkeypatch):
+    object.__setattr__(ctx.config.gastos, "tetos_centavos", {"uber": 5000})
+    _no_mes(monkeypatch, 2026, 10)
+    registry.call("expenses.set_budget", {"category": "uber", "amount": "80"}, ctx)
+    for quando, valor in (("2026-10-31T22:00-04:00", "30"), ("2026-11-02T10:00-04:00", "7")):
+        registry.call("expenses.add", {"amount": valor, "description": "corrida",
+                                       "category": "uber", "when": quando}, ctx)
+    _no_mes(monkeypatch, 2026, 11)
+    registry.call("expenses.set_budget", {"category": "uber", "amount": "120"}, ctx)
+
+    outubro = registry.call("expenses.budgets", {"month": "2026-10"}, ctx).data
+    assert outubro["mes"] == "2026-10"
+    assert outubro["tetos"][0] == {"categoria": "uber", "teto": "R$ 80,00",
+                                 "gasto": "R$ 30,00", "sobra": "R$ 50,00", "usado": "38%"}
+
+
+def test_momento_do_mes():
+    from datetime import datetime
+
+    from aide.tools.expenses import momento_do_mes
+
+    agora = datetime(2026, 10, 28, 9, 30)
+    assert momento_do_mes("2026-10", agora) is agora
+    assert momento_do_mes("2026-02", agora) == datetime(2026, 2, 28, 23, 59)
+    assert momento_do_mes("2026-12", agora) == datetime(2026, 12, 31, 23, 59)
 
 # ---------- tags ----------
 
