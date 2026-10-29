@@ -69,9 +69,10 @@ def criar_app(config=None, conn_factory=None):
 
     app.state.contexto = contexto
 
-    from aide.web import arquivos_api, desenho_tela, desenhos_api, notas_api
+    from aide.web import arquivos_api, desenho_tela, desenhos_api, gastos_api, notas_api
 
     notas_api.instalar(app)
+    gastos_api.instalar(app)
     desenhos_api.instalar(app)
     arquivos_api.instalar(app)
     desenho_tela.instalar(app)
@@ -122,6 +123,13 @@ def criar_app(config=None, conn_factory=None):
     @app.get("/arquivos.js")
     def script_arquivos() -> Response:
         return Response(js_arquivos, media_type="text/javascript",
+                        headers={"cache-control": "no-cache"})
+
+    js_gastos = estaticos.ler("js/gastos.js")
+
+    @app.get("/gastos.js")
+    def script_gastos() -> Response:
+        return Response(js_gastos, media_type="text/javascript",
                         headers={"cache-control": "no-cache"})
 
     from pathlib import Path
