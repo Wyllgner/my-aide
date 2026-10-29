@@ -1288,3 +1288,37 @@ def test_memoria_avisa_do_perfil_que_espera_confirmacao(cliente, app, registry):
     html = cliente.get("/memoria").text
     assert "Aguardando você" in html and "myaide perfil-confirmar" in html
     assert "&lt;script&gt;" in html and "<script>alert" not in html
+
+
+# ---------- gastos de um mes escolhido ----------
+
+def test_gastos_de_um_mes_escolhido_usam_o_teto_daquele_mes(cliente, app, registry):
+    ctx = app.state.contexto()
+    object.__setattr__(ctx.config.gastos, "tetos_centavos", {"uber": 5000})
+    for mes, valor in (("2020-03", "80"), ("2020-04", "120")):
+        registry.call("expenses.set_budget",
+                      {"category": "uber", "amount": valor, "month": mes}, ctx)
+    registry.call("expenses.add", {"amount": "30", "description": "corrida", "category": "uber",
+                                   "when": "2020-03-10T10:00-04:00"}, ctx)
+    registry.call("expenses.add", {"amount": "7", "description": "padaria",
+                                   "when": "2020-04-02T10:00-04:00"}, ctx)
+
+    marco = cliente.get("/gastos?periodo=2020-03").text
+    assert "março de 2020" in marco and "Tetos de março de 2020" in marco
+    assert "R$ 30,00 / R$ 80,00" in marco and "mês fechado" in marco
+    assert "padaria" not in marco
+    assert 'href="/gastos?periodo=2020-02"' in marco
+    assert 'href="/gastos?periodo=2020-04"' in marco
+    assert "R$ 0,00 / R$ 120,00" in cliente.get("/gastos?periodo=2020-04").text
+
+
+def test_mes_que_ainda_nao_chegou_diz_que_so_ha_parcelas(cliente, com_tetos):
+    assert "mês que ainda não chegou" in cliente.get("/gastos?periodo=2999-01").text
+
+
+def test_periodo_que_nao_existe_vira_o_mes_corrente(cliente):
+    from aide.core.context import now_in
+
+    html = cliente.get("/gastos?periodo=2026-13").text
+    mes = now_in(cliente.app.state.config.timezone).strftime("%Y-%m")
+    assert f'name="periodo" value="{mes}"' in html
