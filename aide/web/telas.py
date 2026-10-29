@@ -450,6 +450,28 @@ def _periodo_por_extenso(de: str, ate: str, periodo: str) -> str:
             f"a {fim.day} de {MESES[fim.month - 1]}")
 
 
+def _formulario_teto(mes: str, categorias: list[str]) -> str:
+    """Definir ou tirar o teto de uma categoria a partir de `mes`. Quem envia é
+    o /gastos.js; o teto vale do mês mostrado em diante, e os de antes ficam."""
+    nome_do_mes = f"{MESES[int(mes[5:]) - 1]} de {mes[:4]}"
+    opcoes = "".join(f'<option value="{escape(c)}">' for c in categorias)
+    return (f'<form id="teto-form" class="teto-form" data-mes="{mes}">'
+            f'<label class="teto-rotulo">categoria'
+            f'<input name="categoria" list="teto-categorias" required autocomplete="off"'
+            f' class="teto-campo"></label>'
+            f'<datalist id="teto-categorias">{opcoes}</datalist>'
+            f'<label class="teto-rotulo">teto por mês'
+            f'<input name="valor" inputmode="decimal" placeholder="R$" required'
+            f' class="teto-campo"></label>'
+            f'<button type="submit" class="botao botao-principal">'
+            f'{icone("editar", 16)}definir</button>'
+            f'<button type="button" class="botao" data-remover>'
+            f'{icone("lixeira", 16)}tirar teto</button>'
+            f'<p class="teto-dica">vale de {nome_do_mes} em diante, até mudar de novo; '
+            f'os meses antes dele ficam como estão</p>'
+            f'<p class="teto-erro" hidden></p></form>')
+
+
 def _cartao_tetos(ctx, agora: datetime, mes: str) -> str:
     """Os tetos de `mes`: o mês escolhido na tela, ou o corrente quando a tela
     mostra outro período. Teto é mensal, e mostrá-lo ao lado de "ontem" diria
@@ -461,15 +483,18 @@ def _cartao_tetos(ctx, agora: datetime, mes: str) -> str:
     # fora do mes corrente as contas vao ate o fim dele
     ate = momento_do_mes(mes, agora)
     linhas = consultas.tetos_do_mes(ctx.conn, ctx.config, ate)
+    categorias = sorted({linha["categoria"] for linha in linhas}
+                        | set(consultas.opcoes_de_busca(ctx.conn, ctx.ver_privado)[0]))
+    formulario = _formulario_teto(mes, categorias)
     if not linhas:
         return (
             '<div class="card" style="padding:16px 20px;margin-top:16px">'
             f'<p class="eyebrow" style="margin-bottom:8px">{titulo}</p>'
             '<p style="margin:0;font-size:12.5px;color:var(--faint);line-height:1.5">'
-            'Nenhum teto declarado. Diga no Telegram "põe teto de 300 em mercado", '
-            'ou declare em <span class="mono">gastos.tetos</span> no '
+            'Nenhum teto declarado. Defina aqui embaixo, diga no Telegram "põe teto '
+            'de 300 em mercado", ou declare em <span class="mono">gastos.tetos</span> no '
             '<span class="mono">config.local.yaml</span>, e o assessor passa a cobrar '
-            'a categoria que passar do combinado.</p></div>')
+            f'a categoria que passar do combinado.</p>{formulario}</div>')
 
     import calendar
 
@@ -547,7 +572,7 @@ def _cartao_tetos(ctx, agora: datetime, mes: str) -> str:
             f'<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px">'
             f'<span class="eyebrow">{titulo}</span>'
             f'<span style="font-size:12.5px;color:var(--muted)">{escape(resumo)}</span></div>'
-            f'{medidores}{rodape}</div>')
+            f'{medidores}{rodape}{formulario}</div>')
 
 
 def _linha_gasto(g: dict, ano: int) -> str:
@@ -866,6 +891,7 @@ def gastos(ctx, registry, agora: datetime, periodo: str = "mes",
 </div>
 
 {busca}
+<script type="module" src="/gastos.js"></script>
 """
 
 
