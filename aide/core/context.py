@@ -43,13 +43,13 @@ def system_prompt(config, conn=None) -> Message:
         # meio de um prompt em português e respondia o dia da semana em inglês
         now=f"{por_extenso(agora)} de {agora.year}, {agora.strftime('%H:%M')}",
         timezone=config.timezone,
-        categorias=_categorias(config, conn),
+        categorias=_categorias(config, conn, agora.strftime("%Y-%m")),
         tags=_tags(conn),
     )
     return Message(role="system", content=text)
 
 
-def _categorias(config, conn=None) -> str:
+def _categorias(config, conn, mes: str) -> str:
     """As categorias que a pessoa declarou teto para, quando existirem.
 
     Sem isto o modelo inventava o nome ("transporte" quando o teto é "uber") e a
@@ -58,7 +58,7 @@ def _categorias(config, conn=None) -> str:
     """
     from aide.tools.expenses import tetos_em_vigor
 
-    declaradas = tuple(tetos_em_vigor(conn, config))
+    declaradas = tuple(tetos_em_vigor(conn, config, mes))
     return ", ".join(declaradas or CATEGORIAS_PADRAO)
 
 

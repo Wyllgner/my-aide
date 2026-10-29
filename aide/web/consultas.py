@@ -321,9 +321,10 @@ def tetos_do_mes(conn, config, agora: datetime) -> list[dict]:
     categoria e total, então somar mantém o total verdadeiro sem contar o que a
     listagem esconde.
     """
-    from aide.tools.expenses import tetos_em_vigor
+    from aide.tools.expenses import mudancas_em_vigor, tetos_em_vigor
 
-    tetos = tetos_em_vigor(conn, config)
+    mes = agora.strftime("%Y-%m")
+    tetos = tetos_em_vigor(conn, config, mes)
     if not tetos:
         return []
 
@@ -337,8 +338,8 @@ def tetos_do_mes(conn, config, agora: datetime) -> list[dict]:
     }
     # o que foi mudado pela conversa, para a tela dizer de onde veio o número:
     # quem abrir o config.local.yaml vai ver outro valor e precisa saber qual vale
-    mudados = {r[0]: r[1][:10] for r in conn.execute(
-        "SELECT category, updated_at FROM expense_caps WHERE cents IS NOT NULL").fetchall()}
+    mudados = {r["category"]: r["updated_at"][:10] for r in mudancas_em_vigor(conn, mes)
+               if r["cents"] is not None}
     return [{"categoria": categoria, "gasto": gasto.get(categoria, 0), "teto": teto,
              "mudado_em": mudados.get(categoria)}
             for categoria, teto in sorted(tetos.items(), key=lambda kv: -kv[1])]
@@ -388,7 +389,7 @@ def gasto_fora_dos_tetos(conn, config, agora: datetime) -> list[tuple[str, int]]
     """
     from aide.tools.expenses import tetos_em_vigor
 
-    tetos = tetos_em_vigor(conn, config)
+    tetos = tetos_em_vigor(conn, config, agora.strftime("%Y-%m"))
     inicio = agora.replace(day=1, hour=0, minute=0).isoformat(timespec="minutes")
     fim = agora.isoformat(timespec="minutes")
     linhas = conn.execute(
