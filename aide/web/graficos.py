@@ -186,6 +186,9 @@ def medidores(linhas: list[dict], rotulo_px: int = 104,
     gasto até o último centavo pinta a linha inteira de COMPLETO. Linha com `meta` None não tem
     teto: a barra sai neutra, sem traço de 100% nem de ritmo, medida contra a
     maior das linhas sem teto — só diz o tamanho, não se é muito.
+
+    `a_cair` opcional é o que está marcado mas não caiu: um trecho mais claro
+    depois da barra, sem mudar a cor dela, que continua dizendo o já gasto.
     """
     if not linhas:
         return f'<p style="margin:0;font-size:12.5px;color:{FRACO}">{escape(vazio)}</p>'
@@ -205,6 +208,11 @@ def medidores(linhas: list[dict], rotulo_px: int = 104,
         # a barra para em 100%: o excesso vira cor e número, não uma barra que
         # estoura a coluna e desalinha as outras
         largura = min(fracao, 1.0) * 100
+        largura_a_cair = min(linha.get("a_cair", 0) / meta * 100, 100 - largura)
+        trecho_a_cair = "" if largura_a_cair <= 0 else (
+            f'<div title="a cair" style="position:absolute;left:{largura:.1f}%;top:0;bottom:0;'
+            f'width:{largura_a_cair:.1f}%;background:{ATENCAO if fracao < 1 else ALERTA};'
+            f'opacity:.35"></div>')
         # onde o gasto estaria hoje se o teto fosse gasto por igual no mês:
         # passar do traço antes do fim do mês é o aviso que chega cedo
         marca_ritmo = "" if ritmo is None else (
@@ -220,7 +228,7 @@ def medidores(linhas: list[dict], rotulo_px: int = 104,
             f'<div style="flex:1;height:16px;background:{TRILHO};border-radius:5px;'
             f'position:relative;overflow:hidden">'
             f'<div style="width:{largura:.1f}%;height:100%;background:{cor};'
-            f'border-radius:5px"></div>'
+            f'border-radius:5px"></div>{trecho_a_cair}'
             f'<span style="position:absolute;right:0;top:0;bottom:0;width:2px;'
             f'background:{TINTA};opacity:.16"></span>{marca_ritmo}</div>'
             f'<span class="mono" style="white-space:nowrap;text-align:right;font-size:12.5px;'
