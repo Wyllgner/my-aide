@@ -741,8 +741,10 @@ def test_a_web_so_pode_calar_a_trilha_porque_as_telas_nao_escrevem(app):
     # os desenhos, em test_desenhos_api. /api/desenhos/previa é a exceção de
     # propósito: grava cache fora do vault (data/previas-desenho), não dado seu.
     # /api/arquivos/ não grava nada: devolve o resultado e apaga o temporário.
-    # /api/gastos/teto passa pela tool com um contexto que audita
-    assert escrita == {"/api/gastos/teto","/api/notas/arquivo", "/api/notas/pasta", "/api/notas/mover",
+    # /api/gastos/teto e /api/gastos/recorrentes passam pela tool com um contexto
+    # que audita
+    assert escrita == {"/api/gastos/teto", "/api/gastos/recorrentes",
+                       "/api/gastos/recorrentes/{id}", "/api/notas/arquivo", "/api/notas/pasta", "/api/notas/mover",
                        "/api/notas/mover-pasta", "/api/notas/anexo", "/api/notas/ligar",
                        "/api/desenhos/arquivo", "/api/desenhos/biblioteca",
                        "/api/desenhos/mover", "/api/desenhos/previa",
@@ -1428,3 +1430,89 @@ def test_o_script_dos_gastos_e_javascript_valido(tmp_path):
     arquivo.write_text(estaticos.ler("js/gastos.js"))
     subprocess.run([shutil.which("node"), "--check", str(arquivo)], check=True,
                    capture_output=True)
+
+
+# ---------- gastos fixos ----------
+
+def _novo_fixo(cliente, **extra):
+    corpo = {"descricao": "claude", "valor": "110", "dia": "5", "categoria": "pessoal",
+             "forma": "credito", **extra}
+    return cliente.post("/api/gastos/recorrentes", headers=ESCRITA, json=corpo)
+
+
+def test_sem_fixo_a_tela_ensina_a_cadastrar(cliente):
+    html = cliente.get("/gastos").text
+    assert "Gastos fixos" in html and 'id="fixo-novo"' in html
+    assert "Nada cadastrado" in html
+
+
+def test_fixo_cadastrado_pela_pagina_aparece_e_e_auditado(cliente, app):
+    feito = _novo_fixo(cliente)
+    assert feito.status_code == 200 and feito.json()["valor"] == "R$ 110,00"
+    html = cliente.get("/gastos").text
+    assert f'data-id="{feito.json()["id"]}"' in html
+    assert "R$ 110,00 por mês" in html
+    assert "dia 5" in html and "crédito" in html
+    auditado = app.state.conn_factory().execute("SELECT actor, tool FROM audit").fetchall()
+    assert [tuple(r) for r in auditado] == [("web", "expenses.add_recurring")]
+
+
+def test_lancamento_de_fixo_ganha_a_marca_na_lista(cliente):
+    _novo_fixo(cliente, dia="1")
+    assert "todo mês" in cliente.get("/gastos?periodo=sempre").text
+
+
+def test_mudar_e_encerrar_fixo_tambem_entram_na_trilha(cliente, app):
+    feito = _novo_fixo(cliente).json()
+    rota = f'/api/gastos/recorrentes/{feito["id"]}'
+    cliente.put(rota, headers=ESCRITA, json={"valor": "120"})
+    cliente.delete(rota, headers=ESCRITA)
+    auditado = app.state.conn_factory().execute("SELECT actor, tool FROM audit").fetchall()
+    assert [tuple(r) for r in auditado] == [("web", "expenses.add_recurring"),
+                                            ("web", "expenses.update_recurring"),
+                                            ("web", "expenses.cancel_recurring")]
+
+
+def test_fixo_muda_pela_pagina(cliente):
+    feito = _novo_fixo(cliente).json()
+    mudou = cliente.put(f'/api/gastos/recorrentes/{feito["id"]}', headers=ESCRITA,
+                        json={"valor": "120", "dia": "10"})
+    assert mudou.status_code == 200
+    assert (mudou.json()["valor"], mudou.json()["dia"]) == ("R$ 120,00", 10)
+
+
+def test_fixo_encerra_pela_pagina(cliente):
+    feito = _novo_fixo(cliente).json()
+    fim = cliente.delete(f'/api/gastos/recorrentes/{feito["id"]}', headers=ESCRITA)
+    assert fim.status_code == 200 and fim.json()["canceled"] is True
+    assert "Nada cadastrado" in cliente.get("/gastos").text
+
+
+def test_fixo_recusado_volta_com_o_motivo_da_tool(cliente):
+    resposta = _novo_fixo(cliente, dia="40")
+    assert resposta.status_code == 400 and "1 a 31" in resposta.json()["detail"]
+
+
+def test_fixo_exige_a_marca_de_escrita(cliente):
+    corpo = {"descricao": "x", "valor": "1", "dia": "5"}
+    assert cliente.post("/api/gastos/recorrentes", json=corpo).status_code == 403
+    assert cliente.put("/api/gastos/recorrentes/1", json={"valor": "1"}).status_code == 403
+    assert cliente.delete("/api/gastos/recorrentes/1").status_code == 403
+
+
+def test_descricao_de_fixo_e_escapada(cliente):
+    _novo_fixo(cliente, descricao="<b>x</b>")
+    html = cliente.get("/gastos").text
+    assert "<b>x</b>" not in html and "&lt;b&gt;x&lt;/b&gt;" in html
+
+
+def test_fixo_privado_aparece_ao_dono_e_ele_consegue_mudar(cliente, app, registry):
+    """A página local é do dono, como em `contexto`: mostrar sem poder mudar seria
+    um botão que só devolve erro."""
+    ctx = app.state.contexto()
+    feito = registry.call("expenses.add_recurring", {"amount": "9", "description": "segredo",
+                                                     "day": 5, "private": True}, ctx).data
+    assert "segredo" in cliente.get("/gastos").text
+    rota = f'/api/gastos/recorrentes/{feito["id"]}'
+    assert cliente.put(rota, headers=ESCRITA, json={"valor": "10"}).status_code == 200
+    assert cliente.delete(rota, headers=ESCRITA).status_code == 200
