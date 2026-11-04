@@ -498,7 +498,8 @@ def add(ctx: ToolContext, amount: str, description: str, category: str | None = 
 
 @registry.register(
     name="expenses.list",
-    description="Lista os gastos de um período, do mais recente para o mais antigo.",
+    description=("Lista os gastos de um período, do mais recente para o mais antigo, com "
+                 "o que está marcado para depois de hoje no fim."),
     parameters={
         "type": "object",
         "properties": {
@@ -513,15 +514,18 @@ def add(ctx: ToolContext, amount: str, description: str, category: str | None = 
 )
 def list_expenses(ctx: ToolContext, periodo: str = "mes", category: str | None = None,
                   limit: int = 50) -> list[dict]:
-    de, ate = intervalo(periodo, now_in(ctx.config.timezone))
+    agora = now_in(ctx.config.timezone)
+    de, ate = intervalo(periodo, agora)
     sql = (f"SELECT {CAMPOS} FROM expenses WHERE deleted_at IS NULL"
            " AND spent_at BETWEEN ? AND ?" + _filtro_privado(ctx))
     params: list = [de, ate]
     if category:
         sql += " AND category = ?"
         params.append(category.strip().lower())
-    sql += " ORDER BY spent_at DESC LIMIT ?"
-    params.append(limit)
+    # o que já passou vem antes do que está marcado: as parcelas de amanhã na
+    # frente tomavam o lugar dos gastos de hoje em "quais meus últimos gastos"
+    sql += " ORDER BY spent_at > ?, spent_at DESC, id DESC LIMIT ?"
+    params += [agora.isoformat(timespec="minutes"), limit]
     return [_linha(r) for r in ctx.conn.execute(sql, params).fetchall()]
 
 

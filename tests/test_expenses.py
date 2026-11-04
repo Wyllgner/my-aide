@@ -486,6 +486,19 @@ def test_cobranca_de_estouro_conta_o_que_esta_marcado_como_a_pagina(ctx, registr
     assert "R$ 60,00" in achado.summary and "passou em R$ 10,00" in achado.summary
 
 
+def test_lista_traz_o_que_ja_passou_antes_do_que_esta_marcado(ctx, registry, monkeypatch):
+    """Dia 15 ao meio-dia: as de depois não podem tomar o lugar das de hoje."""
+    _no_mes(monkeypatch, 2026, 11)
+    for quando, nome in (("2026-11-20T08:00-04:00", "marcado"), ("2026-11-15T09:00-04:00", "hoje"),
+                         ("2026-11-15T09:00-04:00", "hoje depois"),
+                         ("2026-11-02T09:00-04:00", "antes")):
+        registry.call("expenses.add", {"amount": "1", "description": nome, "when": quando}, ctx)
+    nomes = [g["description"] for g in registry.call("expenses.list", {}, ctx).data]
+    assert nomes == ["hoje depois", "hoje", "antes", "marcado"]
+    limitada = registry.call("expenses.list", {"limit": 2}, ctx).data
+    assert [g["description"] for g in limitada] == ["hoje depois", "hoje"]
+
+
 def test_momento_do_mes():
     from datetime import datetime
 
