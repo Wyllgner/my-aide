@@ -186,6 +186,10 @@ def medidores(linhas: list[dict], rotulo_px: int = 104,
     gasto até o último centavo pinta a linha inteira de COMPLETO. Linha com `meta` None não tem
     teto: a barra sai neutra, sem traço de 100% nem de ritmo, medida contra a
     maior das linhas sem teto — só diz o tamanho, não se é muito.
+
+    `fixo` opcional é a parte do valor que já estava decidida, como parcelas. O
+    traço de ritmo anda junto: marca o fixo mais a parte do resto que cabe até
+    hoje, e assim barra e traço ficam na mesma escala.
     """
     if not linhas:
         return f'<p style="margin:0;font-size:12.5px;color:{FRACO}">{escape(vazio)}</p>'
@@ -210,9 +214,11 @@ def medidores(linhas: list[dict], rotulo_px: int = 104,
         largura = min(fracao, 1.0) * 100
         # onde o gasto estaria hoje se o teto fosse gasto por igual no mês:
         # passar do traço antes do fim do mês é o aviso que chega cedo
+        parte_fixa = min(linha.get("fixo", 0) / meta, 1.0)
+        posicao = None if ritmo is None else ritmo + (1 - ritmo) * parte_fixa
         marca_ritmo = "" if ritmo is None else (
-            f'<span title="ritmo do mês: {ritmo * 100:.0f}%" style="position:absolute;'
-            f'left:calc({ritmo * 100:.1f}% - 1px);top:-2px;bottom:-2px;width:2px;'
+            f'<span title="ritmo do mês: {posicao * 100:.0f}%" style="position:absolute;'
+            f'left:calc({posicao * 100:.1f}% - 1px);top:-2px;bottom:-2px;width:2px;'
             f'background:{TINTA};opacity:.55"></span>')
         html += (
             f'<div style="display:flex;align-items:center;gap:10px">'

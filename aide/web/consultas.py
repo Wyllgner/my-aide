@@ -331,17 +331,21 @@ def tetos_do_mes(conn, config, agora: datetime) -> list[dict]:
 
     inicio = agora.replace(day=1, hour=0, minute=0).isoformat(timespec="minutes")
     fim = agora.isoformat(timespec="minutes")
-    gasto = {
-        (r["categoria"] or ""): r["total"] for r in conn.execute(
-            "SELECT lower(category) categoria, SUM(cents) total FROM expenses"
-            " WHERE deleted_at IS NULL AND spent_at BETWEEN ? AND ?"
-            " GROUP BY lower(category)", (inicio, fim)).fetchall()
-    }
+    somas = conn.execute(
+        "SELECT lower(category) categoria, SUM(cents) total,"
+        " SUM(CASE WHEN installments IS NOT NULL OR recurring_id IS NOT NULL"
+        "     THEN cents ELSE 0 END) fixo FROM expenses"
+        " WHERE deleted_at IS NULL AND spent_at BETWEEN ? AND ?"
+        " GROUP BY lower(category)", (inicio, fim)).fetchall()
+    gasto = {(r["categoria"] or ""): r["total"] for r in somas}
+    # parcela e gasto recorrente: já estão decididos, e o ritmo não os cobra
+    fixo = {(r["categoria"] or ""): r["fixo"] for r in somas}
     # o que foi mudado pela conversa, para a tela dizer de onde veio o número:
     # quem abrir o config.local.yaml vai ver outro valor e precisa saber qual vale
     mudados = {r["category"]: r["updated_at"][:10] for r in mudancas_em_vigor(conn, mes)
                if r["cents"] is not None}
-    return [{"categoria": categoria, "gasto": gasto.get(categoria, 0), "teto": teto,
+    return [{"categoria": categoria, "gasto": gasto.get(categoria, 0),
+             "fixo": fixo.get(categoria, 0), "teto": teto,
              "mudado_em": mudados.get(categoria)}
             for categoria, teto in sorted(tetos.items(), key=lambda kv: -kv[1])]
 

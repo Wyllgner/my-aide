@@ -1313,6 +1313,49 @@ def test_parcela_marcada_em_categoria_sem_teto_aparece(app, registry, com_tetos)
     assert "R$ 12,00 · sem teto" in html
 
 
+@pytest.mark.parametrize("fixo,posicao", [(0, "50%"), (5000, "75%"), (10000, "100%"),
+                                          (15000, "100%")])
+def test_traco_marca_o_fixo_mais_a_parte_do_resto_ate_hoje(fixo, posicao):
+    from aide.web import graficos
+
+    html = graficos.medidores([{"rotulo": "a", "valor": 0, "meta": 10000, "fixo": fixo,
+                                "texto": "x"}], ritmo=0.5)
+    assert f"ritmo do mês: {posicao}" in html
+
+
+def test_parcela_e_fixo_movem_o_traco_e_gasto_do_dia_a_dia_nao(app, registry, com_tetos):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from aide.web import consultas
+
+    ctx = app.state.contexto()
+    registry.call("expenses.add", {"amount": "10", "description": "curso", "category": "cinema",
+                                   "installments": 2, "amount_is_installment": True,
+                                   "when": "2026-11-05T11:35-04:00"}, ctx)
+    registry.call("expenses.add", {"amount": "5", "description": "pipoca", "category": "cinema",
+                                   "when": "2026-11-03T11:35-04:00"}, ctx)
+    fim = datetime(2026, 11, 30, 23, 59, tzinfo=ZoneInfo("America/Porto_Velho"))
+    linha = next(x for x in consultas.tetos_do_mes(ctx.conn, ctx.config, fim)
+                 if x["categoria"] == "cinema")
+    assert (linha["gasto"], linha["fixo"]) == (1500, 1000)
+
+
+def test_gasto_recorrente_conta_como_fixo_no_ritmo(app, registry, com_tetos):
+    from aide.core.context import now_in
+    from aide.tools.expenses import momento_do_mes
+    from aide.web import consultas
+
+    ctx = app.state.contexto()
+    registry.call("expenses.add_recurring", {"amount": "10", "description": "clube", "day": 15,
+                                             "category": "cinema"}, ctx)
+    agora = now_in(ctx.config.timezone)
+    fim = momento_do_mes(agora.strftime("%Y-%m"), agora)
+    linha = next(x for x in consultas.tetos_do_mes(ctx.conn, ctx.config, fim)
+                 if x["categoria"] == "cinema")
+    assert (linha["gasto"], linha["fixo"]) == (1000, 1000)
+
+
 def test_ritmo_segue_o_dia_de_hoje_e_nao_o_fim_do_mes(app, registry, com_tetos):
     assert "dia 4 de 30" in _tetos_no_dia_4(app, registry, "12")
 
