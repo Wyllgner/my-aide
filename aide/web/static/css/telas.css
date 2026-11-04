@@ -64,11 +64,10 @@
   color: var(--accent);
 }
 
-/* gastos: os fixos do mes, um por linha, com valor e dia editaveis ali mesmo */
+/* gastos: a lista dos fixos, so para ver */
 .fixo-linha {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: center;
   gap: 8px 10px;
   padding: 10px 0;
   border-bottom: 1px solid var(--line-soft);
@@ -77,7 +76,6 @@
 .fixo-nome {
   flex: 1 1 200px;
   min-width: 0;
-  align-self: center;
   font-size: 13.5px;
 }
 
@@ -89,9 +87,6 @@
 }
 
 .fixo-valor {
-  width: 110px;
-}
-
-.fixo-dia {
-  width: 64px;
+  font-size: 12.5px;
+  white-space: nowrap;
 }
