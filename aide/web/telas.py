@@ -504,8 +504,9 @@ def _cartao_tetos(ctx, agora: datetime, mes: str) -> str:
     # o traco do ritmo so diz algo no mes que esta passando
     ritmo = agora.day / dias_no_mes if corrente else None
     if corrente:
-        nota = (f'o traço escuro é o ritmo do mês: dia {agora.day} de {dias_no_mes}. '
-                f'Barra além dele é teto sendo gasto mais rápido que o mês passa.')
+        nota = (f'o traço escuro é o ritmo do mês: dia {agora.day} de {dias_no_mes}, '
+                f'contando parcelas e gastos fixos como já decididos. '
+                f'Barra além dele é o dia a dia gastando mais rápido que o mês passa.')
     elif ate < agora:
         nota = "mês fechado: o gasto inteiro contra o teto que valia nele"
     else:
@@ -518,6 +519,7 @@ def _cartao_tetos(ctx, agora: datetime, mes: str) -> str:
         {"rotulo": linha["categoria"],
          "valor": linha["gasto"],
          "meta": linha["teto"],
+         "fixo": linha["fixo"],
          "texto": f'{formatar(linha["gasto"])} / {formatar(linha["teto"])}',
          # o que falta para o teto, ou quanto passou dele: a conta que a
          # barra só sugere
