@@ -182,6 +182,17 @@ def reindex_vault(deps: JobDeps) -> int:
     return len(relato.reindexadas) + len(relato.adotadas) + len(relato.vetorizadas)
 
 
+def lancar_recorrentes(deps: JobDeps) -> int:
+    """Mantém os gastos recorrentes marcados até o horizonte, mês a mês."""
+    from aide.core.context import now_in
+    from aide.tools.recorrentes import lancar_recorrentes as lancar
+
+    gerados = lancar(deps.db(), now_in(deps.config.timezone))
+    if gerados:
+        log.info("marcou %s", plural(gerados, "gasto recorrente"))
+    return gerados
+
+
 def sync_calendar(deps: JobDeps) -> int:
     """Baixa o calendário assinado. Sem URL configurada, não faz nada."""
     from aide.tools.events import sincronizar
@@ -252,6 +263,7 @@ def build_scheduler(deps: JobDeps):
         hours=cfg.regras_a_cada_horas)
     add(queue_work, "queue_work", trigger="interval", hours=cfg.regras_a_cada_horas)
     add(reindex_vault, "reindex_vault", trigger="interval", minutes=15)
+    add(lancar_recorrentes, "lancar_recorrentes", trigger="interval", hours=6)
     if getattr(deps.config, "calendar_url", None):
         add(sync_calendar, "sync_calendar", trigger="interval",
             hours=deps.config.calendar_sync_hours)
