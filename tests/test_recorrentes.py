@@ -46,8 +46,7 @@ def test_cada_lancamento_conta_no_mes_em_que_cai(ctx, registry, em_novembro):
     object.__setattr__(ctx.config.gastos, "tetos_centavos", {"pessoal": 50000})
     _claude(ctx, registry)
     novembro = registry.call("expenses.budgets", {}, ctx).data["tetos"][0]
-    assert novembro["gasto"] == "R$ 0,00" and novembro["a_cair"] == "R$ 110,00"
-    assert novembro["sobra"] == "R$ 390,00"
+    assert novembro["gasto"] == "R$ 110,00" and novembro["sobra"] == "R$ 390,00"
     dezembro = registry.call("expenses.budgets", {"month": "2026-12"}, ctx).data["tetos"][0]
     assert dezembro["gasto"] == "R$ 110,00"
 

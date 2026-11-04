@@ -433,7 +433,7 @@ def test_tetos_de_um_mes_passado_contam_o_mes_inteiro(ctx, registry, monkeypatch
                                  "gasto": "R$ 30,00", "sobra": "R$ 50,00", "usado": "38%"}
 
 
-def test_parcela_marcada_para_depois_de_hoje_desconta_da_sobra(ctx, registry, monkeypatch):
+def test_o_que_esta_marcado_no_mes_ja_conta_como_gasto(ctx, registry, monkeypatch):
     object.__setattr__(ctx.config.gastos, "tetos_centavos", {"uber": 5000})
     _no_mes(monkeypatch, 2026, 11)
     registry.call("expenses.add", {"amount": "20", "description": "corrida", "category": "uber",
@@ -443,42 +443,47 @@ def test_parcela_marcada_para_depois_de_hoje_desconta_da_sobra(ctx, registry, mo
                                    "when": "2026-11-30T08:00-04:00"}, ctx)
 
     agora = registry.call("expenses.budgets", {}, ctx).data["tetos"][0]
-    assert agora["gasto"] == "R$ 20,00"
-    assert agora["a_cair"] == "R$ 10,00"       # só a de novembro; a outra é de dezembro
-    assert agora["sobra"] == "R$ 20,00"
-    assert agora["usado"] == "40%"             # o usado segue sendo o que já caiu
+    # a de novembro entra mesmo depois de hoje; a outra é de dezembro
+    assert agora == {"categoria": "uber", "teto": "R$ 50,00", "gasto": "R$ 30,00",
+                     "sobra": "R$ 20,00", "usado": "60%"}
+    for periodo in ("mes", "2026-11"):
+        assert registry.call("expenses.summary", {"periodo": periodo},
+                             ctx).data["total"] == "R$ 30,00"
+    assert len(registry.call("expenses.list", {"periodo": "mes"}, ctx).data) == 2
 
 
-def test_resumo_do_mes_diz_o_que_falta_cair_sem_somar_no_total(ctx, registry, monkeypatch):
+@pytest.mark.parametrize("periodo", ["ano", "sempre"])
+def test_ano_e_sempre_nunca_somam_menos_que_o_mes(ctx, registry, monkeypatch, periodo):
+    _no_mes(monkeypatch, 2026, 11)
+    registry.call("expenses.add", {"amount": "10", "description": "curso", "installments": 2,
+                                   "amount_is_installment": True,
+                                   "when": "2026-11-30T08:00-04:00"}, ctx)
+    assert registry.call("expenses.summary", {"periodo": periodo},
+                         ctx).data["total"] == "R$ 10,00"
+
+
+def test_hoje_e_semana_continuam_parando_em_hoje(ctx, registry, monkeypatch):
     _no_mes(monkeypatch, 2026, 11)
     registry.call("expenses.add", {"amount": "10", "description": "curso",
-                                   "installments": 2, "amount_is_installment": True,
-                                   "when": "2026-11-20T08:00-04:00"}, ctx)
-    resumo = registry.call("expenses.summary", {"periodo": "2026-11"}, ctx).data
-    assert resumo["total"] == "R$ 0,00"
-    assert resumo["a_cair"] == "R$ 10,00"
-    assert "a_cair" not in registry.call("expenses.summary", {"periodo": "semana"}, ctx).data
+                                   "when": "2026-11-30T08:00-04:00"}, ctx)
+    for periodo in ("hoje", "semana"):
+        assert registry.call("expenses.summary", {"periodo": periodo},
+                             ctx).data["total"] == "R$ 0,00"
 
 
-def test_resumo_nao_conta_a_cair_privado_para_quem_nao_ve(ctx, registry, monkeypatch):
-    _no_mes(monkeypatch, 2026, 11)
-    registry.call("expenses.add", {"amount": "10", "description": "segredo", "private": True,
-                                   "when": "2026-11-20T08:00-04:00"}, ctx)
-    object.__setattr__(ctx, "ver_privado", False)
-    assert "a_cair" not in registry.call("expenses.summary", {"periodo": "mes"}, ctx).data
+def test_cobranca_de_estouro_conta_o_que_esta_marcado_como_a_pagina(ctx, registry, monkeypatch):
+    """A página e a cobrança precisam dizer o mesmo número."""
+    from aide.scheduler.rules import orcamento_categoria
+    from aide.tools import expenses
 
-
-def test_mes_fora_do_corrente_nao_tem_nada_a_cair(ctx, registry, monkeypatch):
     object.__setattr__(ctx.config.gastos, "tetos_centavos", {"uber": 5000})
     _no_mes(monkeypatch, 2026, 11)
-    registry.call("expenses.add", {"amount": "10", "description": "curso", "category": "uber",
-                                   "installments": 2, "amount_is_installment": True,
-                                   "when": "2026-12-05T08:00-04:00"}, ctx)
-
-    dezembro = registry.call("expenses.budgets", {"month": "2026-12"}, ctx).data["tetos"][0]
-    assert dezembro["gasto"] == "R$ 10,00"
-    assert "a_cair" not in dezembro
-    assert dezembro["sobra"] == "R$ 40,00"
+    registry.call("expenses.add", {"amount": "60", "description": "corrida", "category": "uber",
+                                   "when": "2026-11-30T08:00-04:00"}, ctx)
+    quando = expenses.now_in(ctx.config.timezone)
+    assert quando.day < 30
+    achado = orcamento_categoria(ctx.conn, quando, config=ctx.config)[0]
+    assert "R$ 60,00" in achado.summary and "passou em R$ 10,00" in achado.summary
 
 
 def test_momento_do_mes():
@@ -487,7 +492,7 @@ def test_momento_do_mes():
     from aide.tools.expenses import momento_do_mes
 
     agora = datetime(2026, 10, 28, 9, 30)
-    assert momento_do_mes("2026-10", agora) is agora
+    assert momento_do_mes("2026-10", agora) == datetime(2026, 10, 31, 23, 59)
     assert momento_do_mes("2026-02", agora) == datetime(2026, 2, 28, 23, 59)
     assert momento_do_mes("2026-12", agora) == datetime(2026, 12, 31, 23, 59)
 

@@ -299,11 +299,9 @@ def ler_mes(texto: str | None, agora: datetime) -> str:
 
 
 def momento_do_mes(mes: str, agora: datetime) -> datetime:
-    """Até quando as contas de `mes` vão: agora, no mês corrente; o último
-    minuto do mês, nos outros. O passado está fechado, e no futuro só há as
-    parcelas já marcadas."""
-    if mes == agora.strftime("%Y-%m"):
-        return agora
+    """Até quando as contas de `mes` vão: o último minuto dele, mesmo no mês
+    corrente. O que está marcado para este mês, como parcela e gasto fixo, já
+    conta como gasto do mês desde o dia 1."""
     ano, numero = (int(x) for x in mes.split("-"))
     ultimo = calendar.monthrange(ano, numero)[1]
     return agora.replace(year=ano, month=numero, day=ultimo, hour=23, minute=59,
@@ -311,10 +309,12 @@ def momento_do_mes(mes: str, agora: datetime) -> datetime:
 
 
 def intervalo(periodo: str, agora: datetime) -> tuple[str, str]:
-    """Começo e fim do período, em ISO local. `semana` começa na segunda, e
-    um mês ('2026-10') vai do dia 1 ao último, ou até hoje no mês corrente."""
+    """Começo e fim do período, em ISO local. `semana` começa na segunda, e um
+    mês vai do dia 1 ao último, mesmo o corrente. `ano` e `sempre` vão até o fim
+    do mês corrente, para nunca somarem menos que ele."""
     inicio_do_dia = agora.replace(hour=0, minute=0, second=0, microsecond=0)
     fim = agora.replace(hour=23, minute=59, second=59)
+    fim_do_mes = momento_do_mes(agora.strftime("%Y-%m"), agora).replace(second=59)
 
     if periodo == "hoje":
         inicio = inicio_do_dia
@@ -324,11 +324,11 @@ def intervalo(periodo: str, agora: datetime) -> tuple[str, str]:
     elif periodo == "semana":
         inicio = inicio_do_dia - timedelta(days=inicio_do_dia.weekday())
     elif periodo == "mes":
-        inicio = inicio_do_dia.replace(day=1)
+        inicio, fim = inicio_do_dia.replace(day=1), fim_do_mes
     elif periodo == "ano":
-        inicio = inicio_do_dia.replace(month=1, day=1)
+        inicio, fim = inicio_do_dia.replace(month=1, day=1), fim_do_mes
     elif periodo == "sempre":
-        inicio = inicio_do_dia.replace(year=1970, month=1, day=1)
+        inicio, fim = inicio_do_dia.replace(year=1970, month=1, day=1), fim_do_mes
     elif _MES.fullmatch(periodo):
         fim = momento_do_mes(periodo, agora).replace(hour=23, minute=59, second=59)
         inicio = fim.replace(day=1, hour=0, minute=0, second=0)
@@ -543,30 +543,17 @@ def list_expenses(ctx: ToolContext, periodo: str = "mes", category: str | None =
     },
 )
 def summary(ctx: ToolContext, periodo: str = "mes", category: str | None = None) -> dict:
-    agora = now_in(ctx.config.timezone)
-    de, ate = intervalo(periodo, agora)
+    de, ate = intervalo(periodo, now_in(ctx.config.timezone))
     onde = ("WHERE deleted_at IS NULL AND spent_at BETWEEN ? AND ?"
             + _filtro_privado(ctx))
     params: list = [de, ate]
-    filtro_categoria = ""
     if category:
-        filtro_categoria = " AND category = ?"
-        onde += filtro_categoria
+        onde += " AND category = ?"
         params.append(category.strip().lower())
 
     total, quantos = ctx.conn.execute(
         f"SELECT COALESCE(SUM(cents), 0), COUNT(*) FROM expenses {onde}", params
     ).fetchone()
-
-    # o mês corrente para em hoje; o que já está marcado para depois sai à parte,
-    # senão o dia 4 diz R$ 0,00 com parcelas caindo no dia 5
-    a_cair = 0
-    if periodo in ("mes", agora.strftime("%Y-%m")):
-        a_cair = ctx.conn.execute(
-            "SELECT COALESCE(SUM(cents), 0) FROM expenses WHERE deleted_at IS NULL"
-            " AND spent_at > ? AND substr(spent_at, 1, 7) = ?"
-            + _filtro_privado(ctx) + filtro_categoria,
-            [ate, agora.strftime("%Y-%m"), *params[2:]]).fetchone()[0]
 
     por_tag: dict[str | None, list[dict]] = {}
     for r in ctx.conn.execute(
@@ -596,7 +583,6 @@ def summary(ctx: ToolContext, periodo: str = "mes", category: str | None = None)
     return {
         "periodo": periodo, "de": de, "ate": ate,
         "total_cents": total, "total": formatar(total), "quantos": quantos,
-        **({"a_cair": formatar(a_cair)} if a_cair else {}),
         "media": formatar(round(total / quantos)) if quantos else formatar(0),
         "por_categoria": por_categoria,
         "por_forma": [{"method": forma, "cents": cents, "valor": formatar(cents)}
@@ -610,8 +596,8 @@ def summary(ctx: ToolContext, periodo: str = "mes", category: str | None = None)
         "Os tetos de gasto por categoria que a pessoa declarou, com quanto já foi "
         "usado no mês e quanto sobra. É a tool para 'quais meus limites', 'quanto "
         "posso gastar de uber', 'estourei algum teto'. Com `month`, os tetos e o "
-        "gasto de outro mês. `a_cair` é o que já está marcado para depois de hoje, "
-        "como parcelas: não é gasto ainda, mas `sobra` já desconta."
+        "gasto de outro mês. O gasto do mês inclui o que está marcado até o fim "
+        "dele, como parcelas e gastos fixos."
     ),
     parameters={
         "type": "object",
@@ -635,10 +621,7 @@ def budgets(ctx: ToolContext, month: str | None = None) -> dict:
                 "aviso": "nenhum teto declarado; defina com expenses.set_budget"}
     return {"mes": mes, "tetos": [
         {"categoria": linha["categoria"], "teto": formatar(linha["teto"]),
-         "gasto": formatar(linha["gasto"]),
-         # só existe no mês corrente, quando há parcela marcada para depois de hoje
-         **({"a_cair": formatar(linha["a_cair"])} if linha["a_cair"] else {}),
-         "sobra": formatar(linha["teto"] - linha["gasto"] - linha["a_cair"]),
+         "gasto": formatar(linha["gasto"]), "sobra": formatar(linha["teto"] - linha["gasto"]),
          "usado": f'{linha["gasto"] / linha["teto"] * 100:.0f}%' if linha["teto"] else "—"}
         for linha in linhas
     ]}
