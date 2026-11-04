@@ -1279,6 +1279,50 @@ def test_teto_gasto_ate_o_fim_pinta_a_linha_inteira(cliente, app, registry, com_
                                          html.index("sobram R$ 17,00")]
 
 
+def _tetos_no_dia_4(app, registry, valor, categoria="cinema"):
+    """Parcela do dia 5 vista do dia 4: a tela recebe `agora` de quem chama."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from aide.web import telas
+
+    ctx = app.state.contexto()
+    registry.call("expenses.add", {"amount": valor, "description": "curso",
+                                   "category": categoria, "installments": 2,
+                                   "amount_is_installment": True,
+                                   "when": "2026-11-05T11:35-04:00"}, ctx)
+    agora = datetime(2026, 11, 4, 10, 0, tzinfo=ZoneInfo("America/Porto_Velho"))
+    return telas._cartao_tetos(ctx, agora, "2026-11")
+
+
+def test_parcela_que_ainda_nao_caiu_sai_a_parte_e_desconta_da_sobra(app, registry, com_tetos):
+    html = _tetos_no_dia_4(app, registry, "12")
+    assert "R$ 0,00 + R$ 12,00 a cair / R$ 42,00" in html
+    assert "sobram R$ 30,00" in html
+    assert 'title="a cair"' in html
+
+
+def test_parcela_que_vai_estourar_avisa_sem_dizer_que_passou(app, registry, com_tetos):
+    html = _tetos_no_dia_4(app, registry, "50")
+    assert "vai passar R$ 8,00" in html
+    assert "passou" not in html
+    assert "estourada" not in html
+
+
+def test_passou_conta_so_o_que_ja_caiu(app, registry, com_tetos):
+    registry.call("expenses.add", {"amount": "50", "description": "x", "category": "cinema",
+                                   "when": "2026-11-03T10:00-04:00"}, app.state.contexto())
+    html = _tetos_no_dia_4(app, registry, "12")
+    assert "R$ 50,00 + R$ 12,00 a cair / R$ 42,00" in html
+    assert "passou R$ 8,00" in html
+
+
+def test_parcela_em_categoria_sem_teto_tambem_aparece(app, registry, com_tetos):
+    html = _tetos_no_dia_4(app, registry, "12", categoria="viagem")
+    assert "R$ 0,00 + R$ 12,00 a cair · sem teto" in html
+    assert 'title="viagem"' in html
+
+
 def test_memoria_avisa_do_perfil_que_espera_confirmacao(cliente, app, registry):
     """Gravado por agente de fora: a página mostra, escapado, e diz como aceitar."""
     from aide.tools.registry import ToolContext

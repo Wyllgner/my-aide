@@ -310,12 +310,29 @@ def uso_por_finalidade(conn, limite: int = 6) -> list[tuple[str, int]]:
         " ORDER BY n DESC LIMIT ?", (limite,)).fetchall()]
 
 
+def a_cair_do_mes(conn, agora: datetime) -> dict[str, int]:
+    """Categoria -> o que já está marcado de `agora` até o fim do mês dele.
+
+    A soma do mês corrente para em agora, e a parcela que cai amanhã não existia
+    para ninguém até amanhã: o teto dizia que sobrava o que ela já comprometeu.
+    O privado entra pelo mesmo motivo de `tetos_do_mes`: aqui só há totais.
+    """
+    return {
+        (r["categoria"] or "sem categoria"): r["total"] for r in conn.execute(
+            "SELECT lower(COALESCE(category, '')) categoria, SUM(cents) total FROM expenses"
+            " WHERE deleted_at IS NULL AND spent_at > ? AND substr(spent_at, 1, 7) = ?"
+            " GROUP BY lower(COALESCE(category, ''))",
+            (agora.isoformat(timespec="minutes"), agora.strftime("%Y-%m"))).fetchall()
+    }
+
+
 def tetos_do_mes(conn, config, agora: datetime) -> list[dict]:
     """Gasto do mês contra o teto de cada categoria declarada.
 
     Mesma conta da regra `orcamento_categoria`, e de propósito: a página e a
     cobrança precisam dizer o mesmo número, senão você olha a tela, vê folga, e
-    recebe o aviso de estouro no minuto seguinte.
+    recebe o aviso de estouro no minuto seguinte. Por isso `gasto` é só o que já
+    caiu; o que está marcado para depois vem à parte, em `a_cair`.
 
     O gasto privado entra na soma e a descrição não aparece: aqui só há nome de
     categoria e total, então somar mantém o total verdadeiro sem contar o que a
@@ -340,7 +357,9 @@ def tetos_do_mes(conn, config, agora: datetime) -> list[dict]:
     # quem abrir o config.local.yaml vai ver outro valor e precisa saber qual vale
     mudados = {r["category"]: r["updated_at"][:10] for r in mudancas_em_vigor(conn, mes)
                if r["cents"] is not None}
-    return [{"categoria": categoria, "gasto": gasto.get(categoria, 0), "teto": teto,
+    a_cair = a_cair_do_mes(conn, agora)
+    return [{"categoria": categoria, "gasto": gasto.get(categoria, 0),
+             "a_cair": a_cair.get(categoria, 0), "teto": teto,
              "mudado_em": mudados.get(categoria)}
             for categoria, teto in sorted(tetos.items(), key=lambda kv: -kv[1])]
 
