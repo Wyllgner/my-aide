@@ -195,3 +195,75 @@ def cancel_recurring(ctx: ToolContext, id: int) -> dict:
         " AND deleted_at IS NULL AND spent_at > ?", (id, agora)).rowcount
     return {"id": id, "description": r["description"], "canceled": True,
             "meses_removidos": removidos}
+
+
+@registry.register(
+    name="expenses.update_recurring",
+    description=("Muda um gasto recorrente: 'o claude subiu pra 120', 'agora cai dia 10'. "
+                 "Vale para os meses que ainda não caíram; os que já caíram ficam como "
+                 "foram. Passe só o que muda."),
+    parameters={
+        "type": "object",
+        "properties": {
+            "id": {"type": "integer"},
+            "amount": {"type": "string", "description": "Novo valor, como a pessoa falou."},
+            "description": {"type": "string"},
+            "day": {"type": "integer", "description": "Novo dia da cobrança, de 1 a 31."},
+            "category": {"type": "string"},
+            "tag": {"type": "string", "description": "\"\" tira a tag."},
+            "method": {"type": "string", "enum": list(FORMAS)},
+        },
+        "required": ["id"],
+    },
+)
+def update_recurring(ctx: ToolContext, id: int, amount: str | None = None,
+                     description: str | None = None, day: int | None = None,
+                     category: str | None = None, tag: str | None = None,
+                     method: str | None = None) -> dict:
+    r = _ativa(ctx, id)
+    mudancas: dict = {}
+    if amount is not None:
+        mudancas["cents"] = parse_valor(amount)
+        if mudancas["cents"] == 0:
+            raise ValueError("gasto recorrente de R$ 0,00 não lança nada; para encerrar, cancele")
+    if description is not None:
+        if not description.strip():
+            raise ValueError("todo gasto recorrente precisa de uma descrição")
+        mudancas["description"] = description.strip()
+    if method is not None:
+        mudancas["method"] = normalizar_forma(method)
+    if category is not None or tag is not None:
+        if tag is not None and not tag.strip():
+            mudancas["category"] = (category.strip().lower() or None
+                                    if category is not None else r["category"])
+            mudancas["tag"] = None
+        else:
+            mudancas["category"], mudancas["tag"] = resolver_categoria(
+                ctx.conn, category if category is not None else r["category"],
+                tag if tag is not None else (None if category is not None else r["tag"]))
+    novo_dia = _dia(day) if day is not None else None
+    if not mudancas and novo_dia is None:
+        raise ValueError("nada para alterar")
+
+    agora = now_in(ctx.config.timezone)
+    agora_iso = agora.isoformat(timespec="minutes")
+    # os nomes vêm das chaves escritas acima, nunca de quem chamou
+    if mudancas:
+        trechos = ", ".join(f"{campo} = ?" for campo in mudancas)
+        ctx.conn.execute(f"UPDATE expense_recurring SET {trechos} WHERE id = ?",
+                         (*mudancas.values(), id))
+        ctx.conn.execute(
+            f"UPDATE expenses SET {trechos} WHERE recurring_id = ? AND deleted_at IS NULL"
+            " AND spent_at > ?", (*mudancas.values(), id, agora_iso))
+    if novo_dia is not None:
+        ctx.conn.execute("UPDATE expense_recurring SET day = ? WHERE id = ?", (novo_dia, id))
+        for linha in ctx.conn.execute(
+                "SELECT id, recurring_month FROM expenses WHERE recurring_id = ?"
+                " AND deleted_at IS NULL AND spent_at > ?", (id, agora_iso)).fetchall():
+            ctx.conn.execute(
+                "UPDATE expenses SET spent_at = ? WHERE id = ?",
+                (data_no_mes(linha["recurring_month"], novo_dia, agora)
+                 .isoformat(timespec="minutes"), linha["id"]))
+
+    atual = ctx.conn.execute("SELECT * FROM expense_recurring WHERE id = ?", (id,)).fetchone()
+    return _dados(ctx.conn, atual, agora)
