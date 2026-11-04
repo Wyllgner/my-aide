@@ -11,6 +11,7 @@ from aide.core import recorrencia
 from aide.web import consultas, graficos
 from aide.web.icones import icone
 from aide.web.paginas import cabecalho
+from aide.web.recorrentes_tela import cartao_recorrentes
 
 
 def _cartao(titulo: str, corpo: str, extra: str = "") -> str:
@@ -618,6 +619,10 @@ def _linha_gasto(g: dict, ano: int) -> str:
         etiqueta += (f'<span class="mono" style="font-size:11px;color:var(--muted);'
                      f'border:1px solid var(--line-soft);padding:1px 7px;'
                      f'border-radius:var(--r-pill)">{g["installment"]}/{g["installments"]}</span>')
+    if g.get("recurring_id"):
+        etiqueta += ('<span style="font-size:11px;color:var(--muted);'
+                     'border:1px solid var(--line-soft);padding:1px 7px;'
+                     'border-radius:var(--r-pill)">todo mês</span>')
     return (f'<div class="linha" style="padding:10px 18px">'
             f'<span class="mono" style="font-size:12px;color:var(--faint);width:62px;'
             f'flex-shrink:0">{escape(dia)}</span>'
@@ -870,6 +875,7 @@ def gastos(ctx, registry, agora: datetime, periodo: str = "mes",
 
     formas = " · ".join(f'{por_extenso(f["method"])} {f["valor"]}' for f in dados["por_forma"])
     tetos = _cartao_tetos(ctx, agora, mes)
+    fixos = cartao_recorrentes(ctx, registry)
     busca = _cartao_busca(ctx, agora, periodo, de, ate, filtros or {})
 
     return f"""
@@ -893,6 +899,8 @@ def gastos(ctx, registry, agora: datetime, periodo: str = "mes",
 </div>
 
 {tetos}
+
+{fixos}
 
 {f'<div class="card" style="padding:16px 20px;margin-top:16px">'
  f'<p class="eyebrow" style="margin-bottom:8px">Por dia, débito e crédito</p>{diario}</div>'

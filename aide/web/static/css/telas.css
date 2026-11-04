@@ -63,3 +63,35 @@
 .teto-erro {
   color: var(--accent);
 }
+
+/* gastos: os fixos do mes, um por linha, com valor e dia editaveis ali mesmo */
+.fixo-linha {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.fixo-nome {
+  flex: 1 1 200px;
+  min-width: 0;
+  align-self: center;
+  font-size: 13.5px;
+}
+
+.fixo-detalhe {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.fixo-valor {
+  width: 110px;
+}
+
+.fixo-dia {
+  width: 64px;
+}

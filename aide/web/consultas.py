@@ -486,7 +486,7 @@ def buscar_gastos(conn, *, de: str, ate: str, ver_privado: bool, texto: str = ""
 
     linhas = conn.execute(
         "SELECT id, cents, description, category, tag, spent_at,"
-        " COALESCE(method, 'debito') method, installment, installments FROM expenses"
+        " COALESCE(method, 'debito') method, installment, installments, recurring_id FROM expenses"
         f" WHERE {' AND '.join(onde)} ORDER BY {ORDENS_GASTO.get(ordem, ORDENS_GASTO['recentes'])}",
         params).fetchall()
     if texto.strip():
