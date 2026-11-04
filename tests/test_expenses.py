@@ -433,6 +433,54 @@ def test_tetos_de_um_mes_passado_contam_o_mes_inteiro(ctx, registry, monkeypatch
                                  "gasto": "R$ 30,00", "sobra": "R$ 50,00", "usado": "38%"}
 
 
+def test_parcela_marcada_para_depois_de_hoje_desconta_da_sobra(ctx, registry, monkeypatch):
+    object.__setattr__(ctx.config.gastos, "tetos_centavos", {"uber": 5000})
+    _no_mes(monkeypatch, 2026, 11)
+    registry.call("expenses.add", {"amount": "20", "description": "corrida", "category": "uber",
+                                   "when": "2026-11-01T08:00-04:00"}, ctx)
+    registry.call("expenses.add", {"amount": "10", "description": "curso", "category": "uber",
+                                   "installments": 2, "amount_is_installment": True,
+                                   "when": "2026-11-30T08:00-04:00"}, ctx)
+
+    agora = registry.call("expenses.budgets", {}, ctx).data["tetos"][0]
+    assert agora["gasto"] == "R$ 20,00"
+    assert agora["a_cair"] == "R$ 10,00"       # só a de novembro; a outra é de dezembro
+    assert agora["sobra"] == "R$ 20,00"
+    assert agora["usado"] == "40%"             # o usado segue sendo o que já caiu
+
+
+def test_resumo_do_mes_diz_o_que_falta_cair_sem_somar_no_total(ctx, registry, monkeypatch):
+    _no_mes(monkeypatch, 2026, 11)
+    registry.call("expenses.add", {"amount": "10", "description": "curso",
+                                   "installments": 2, "amount_is_installment": True,
+                                   "when": "2026-11-20T08:00-04:00"}, ctx)
+    resumo = registry.call("expenses.summary", {"periodo": "2026-11"}, ctx).data
+    assert resumo["total"] == "R$ 0,00"
+    assert resumo["a_cair"] == "R$ 10,00"
+    assert "a_cair" not in registry.call("expenses.summary", {"periodo": "semana"}, ctx).data
+
+
+def test_resumo_nao_conta_a_cair_privado_para_quem_nao_ve(ctx, registry, monkeypatch):
+    _no_mes(monkeypatch, 2026, 11)
+    registry.call("expenses.add", {"amount": "10", "description": "segredo", "private": True,
+                                   "when": "2026-11-20T08:00-04:00"}, ctx)
+    object.__setattr__(ctx, "ver_privado", False)
+    assert "a_cair" not in registry.call("expenses.summary", {"periodo": "mes"}, ctx).data
+
+
+def test_mes_fora_do_corrente_nao_tem_nada_a_cair(ctx, registry, monkeypatch):
+    object.__setattr__(ctx.config.gastos, "tetos_centavos", {"uber": 5000})
+    _no_mes(monkeypatch, 2026, 11)
+    registry.call("expenses.add", {"amount": "10", "description": "curso", "category": "uber",
+                                   "installments": 2, "amount_is_installment": True,
+                                   "when": "2026-12-05T08:00-04:00"}, ctx)
+
+    dezembro = registry.call("expenses.budgets", {"month": "2026-12"}, ctx).data["tetos"][0]
+    assert dezembro["gasto"] == "R$ 10,00"
+    assert "a_cair" not in dezembro
+    assert dezembro["sobra"] == "R$ 40,00"
+
+
 def test_momento_do_mes():
     from datetime import datetime
 

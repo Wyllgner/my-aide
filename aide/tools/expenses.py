@@ -541,17 +541,30 @@ def list_expenses(ctx: ToolContext, periodo: str = "mes", category: str | None =
     },
 )
 def summary(ctx: ToolContext, periodo: str = "mes", category: str | None = None) -> dict:
-    de, ate = intervalo(periodo, now_in(ctx.config.timezone))
+    agora = now_in(ctx.config.timezone)
+    de, ate = intervalo(periodo, agora)
     onde = ("WHERE deleted_at IS NULL AND spent_at BETWEEN ? AND ?"
             + _filtro_privado(ctx))
     params: list = [de, ate]
+    filtro_categoria = ""
     if category:
-        onde += " AND category = ?"
+        filtro_categoria = " AND category = ?"
+        onde += filtro_categoria
         params.append(category.strip().lower())
 
     total, quantos = ctx.conn.execute(
         f"SELECT COALESCE(SUM(cents), 0), COUNT(*) FROM expenses {onde}", params
     ).fetchone()
+
+    # o mês corrente para em hoje; o que já está marcado para depois sai à parte,
+    # senão o dia 4 diz R$ 0,00 com parcelas caindo no dia 5
+    a_cair = 0
+    if periodo in ("mes", agora.strftime("%Y-%m")):
+        a_cair = ctx.conn.execute(
+            "SELECT COALESCE(SUM(cents), 0) FROM expenses WHERE deleted_at IS NULL"
+            " AND spent_at > ? AND substr(spent_at, 1, 7) = ?"
+            + _filtro_privado(ctx) + filtro_categoria,
+            [ate, agora.strftime("%Y-%m"), *params[2:]]).fetchone()[0]
 
     por_tag: dict[str | None, list[dict]] = {}
     for r in ctx.conn.execute(
@@ -581,6 +594,7 @@ def summary(ctx: ToolContext, periodo: str = "mes", category: str | None = None)
     return {
         "periodo": periodo, "de": de, "ate": ate,
         "total_cents": total, "total": formatar(total), "quantos": quantos,
+        **({"a_cair": formatar(a_cair)} if a_cair else {}),
         "media": formatar(round(total / quantos)) if quantos else formatar(0),
         "por_categoria": por_categoria,
         "por_forma": [{"method": forma, "cents": cents, "valor": formatar(cents)}
@@ -594,7 +608,8 @@ def summary(ctx: ToolContext, periodo: str = "mes", category: str | None = None)
         "Os tetos de gasto por categoria que a pessoa declarou, com quanto já foi "
         "usado no mês e quanto sobra. É a tool para 'quais meus limites', 'quanto "
         "posso gastar de uber', 'estourei algum teto'. Com `month`, os tetos e o "
-        "gasto de outro mês."
+        "gasto de outro mês. `a_cair` é o que já está marcado para depois de hoje, "
+        "como parcelas: não é gasto ainda, mas `sobra` já desconta."
     ),
     parameters={
         "type": "object",
@@ -618,7 +633,10 @@ def budgets(ctx: ToolContext, month: str | None = None) -> dict:
                 "aviso": "nenhum teto declarado; defina com expenses.set_budget"}
     return {"mes": mes, "tetos": [
         {"categoria": linha["categoria"], "teto": formatar(linha["teto"]),
-         "gasto": formatar(linha["gasto"]), "sobra": formatar(linha["teto"] - linha["gasto"]),
+         "gasto": formatar(linha["gasto"]),
+         # só existe no mês corrente, quando há parcela marcada para depois de hoje
+         **({"a_cair": formatar(linha["a_cair"])} if linha["a_cair"] else {}),
+         "sobra": formatar(linha["teto"] - linha["gasto"] - linha["a_cair"]),
          "usado": f'{linha["gasto"] / linha["teto"] * 100:.0f}%' if linha["teto"] else "—"}
         for linha in linhas
     ]}
