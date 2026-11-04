@@ -67,9 +67,10 @@ ROTULO_DA_REGRA = {
 def _indicador_teto(ctx, agora: datetime) -> str:
     """Quanto do combinado do mês já foi. Sem teto declarado, convida a declarar
     em vez de mostrar um quadrado vazio sem explicação."""
-    from aide.tools.expenses import formatar
+    from aide.tools.expenses import formatar, momento_do_mes
 
-    linhas = consultas.tetos_do_mes(ctx.conn, ctx.config, agora)
+    linhas = consultas.tetos_do_mes(ctx.conn, ctx.config,
+                                    momento_do_mes(agora.strftime("%Y-%m"), agora))
     if not linhas:
         return _indicador("Tetos", "—", "nenhum declarado")
 
@@ -78,9 +79,6 @@ def _indicador_teto(ctx, agora: datetime) -> str:
     estourados = sum(1 for linha in linhas if linha["gasto"] > linha["teto"])
     nota = (formato.plural(estourados, "categoria estourada") if estourados
             else f'de {formatar(teto)} em tetos')
-    a_cair = sum(linha["a_cair"] for linha in linhas)
-    if a_cair:
-        nota += f' · {formatar(a_cair)} a cair'
     return _indicador("Gasto do combinado", f"{gasto / teto * 100:.0f}%", nota,
                       alerta=bool(estourados))
 
@@ -484,7 +482,7 @@ def _cartao_tetos(ctx, agora: datetime, mes: str) -> str:
 
     corrente = mes == agora.strftime("%Y-%m")
     titulo = "Tetos do mês" if corrente else f"Tetos de {MESES[int(mes[5:]) - 1]} de {mes[:4]}"
-    # fora do mes corrente as contas vao ate o fim dele
+    # as contas vao ate o fim do mes, mesmo no corrente: o marcado ja conta
     ate = momento_do_mes(mes, agora)
     linhas = consultas.tetos_do_mes(ctx.conn, ctx.config, ate)
     categorias = sorted({linha["categoria"] for linha in linhas}
@@ -504,9 +502,9 @@ def _cartao_tetos(ctx, agora: datetime, mes: str) -> str:
 
     dias_no_mes = calendar.monthrange(ate.year, ate.month)[1]
     # o traco do ritmo so diz algo no mes que esta passando
-    ritmo = ate.day / dias_no_mes if corrente else None
+    ritmo = agora.day / dias_no_mes if corrente else None
     if corrente:
-        nota = (f'o traço escuro é o ritmo do mês: dia {ate.day} de {dias_no_mes}. '
+        nota = (f'o traço escuro é o ritmo do mês: dia {agora.day} de {dias_no_mes}. '
                 f'Barra além dele é teto sendo gasto mais rápido que o mês passa.')
     elif ate < agora:
         nota = "mês fechado: o gasto inteiro contra o teto que valia nele"
@@ -516,36 +514,20 @@ def _cartao_tetos(ctx, agora: datetime, mes: str) -> str:
     # abaixo dos tetos: é justamente o que ninguém está vigiando, e numa linha de
     # rodapé o mês podia estourar inteiro sem a tela chamar atenção.
     fora = consultas.gasto_fora_dos_tetos(ctx.conn, ctx.config, ate)
-    a_cair = consultas.a_cair_do_mes(ctx.conn, ate)
-    # categoria sem teto que só tem parcela por cair não tem gasto para aparecer
-    com_teto = {linha["categoria"] for linha in linhas}
-    ja_listadas = {categoria for categoria, _ in fora}
-    fora += [(categoria, 0) for categoria in sorted(a_cair)
-             if categoria not in com_teto and categoria not in ja_listadas]
-
-    def por_cair(cents: int) -> str:
-        return f' + {formatar(cents)} a cair' if cents else ""
-
-    def medidor_com_teto(linha: dict) -> dict:
-        # a sobra desconta o que já está marcado, mas o gasto continua sendo o que
-        # caiu: "passou" é fato, "vai passar" ainda pode mudar
-        depois = linha["gasto"] + linha["a_cair"]
-        if linha["gasto"] > linha["teto"]:
-            diferenca = (f'passou {formatar(linha["gasto"] - linha["teto"])}', True)
-        elif depois > linha["teto"]:
-            diferenca = (f'vai passar {formatar(depois - linha["teto"])}', True)
-        else:
-            diferenca = (f'sobram {formatar(linha["teto"] - depois)}', False)
-        return {"rotulo": linha["categoria"], "valor": linha["gasto"], "meta": linha["teto"],
-                "a_cair": linha["a_cair"],
-                "texto": (f'{formatar(linha["gasto"])}{por_cair(linha["a_cair"])}'
-                          f' / {formatar(linha["teto"])}'),
-                "diferenca": diferenca}
-
-    medidores = graficos.medidores([medidor_com_teto(linha) for linha in linhas] + [
-        {"rotulo": categoria, "valor": valor + a_cair.get(categoria, 0), "meta": None,
-         "texto": f'{formatar(valor)}{por_cair(a_cair.get(categoria, 0))} · sem teto',
-         "diferenca": None}
+    medidores = graficos.medidores([
+        {"rotulo": linha["categoria"],
+         "valor": linha["gasto"],
+         "meta": linha["teto"],
+         "texto": f'{formatar(linha["gasto"])} / {formatar(linha["teto"])}',
+         # o que falta para o teto, ou quanto passou dele: a conta que a
+         # barra só sugere
+         "diferenca": (f'passou {formatar(linha["gasto"] - linha["teto"])}', True)
+         if linha["gasto"] > linha["teto"]
+         else (f'sobram {formatar(linha["teto"] - linha["gasto"])}', False)}
+        for linha in linhas
+    ] + [
+        {"rotulo": categoria, "valor": valor, "meta": None,
+         "texto": f'{formatar(valor)} · sem teto', "diferenca": None}
         for categoria, valor in fora
     ], ritmo=ritmo) + (
         f'<p style="margin:8px 0 0;font-size:12px;color:var(--faint)">{nota}</p>')
@@ -553,9 +535,8 @@ def _cartao_tetos(ctx, agora: datetime, mes: str) -> str:
     gasto_total = sum(linha["gasto"] for linha in linhas)
     teto_total = sum(linha["teto"] for linha in linhas)
     estourados = [linha for linha in linhas if linha["gasto"] > linha["teto"]]
-    a_cair_total = sum(linha["a_cair"] for linha in linhas)
-    resumo = f'{formatar(gasto_total)}{por_cair(a_cair_total)} de {formatar(teto_total)} em tetos'
-    sobra = sum(max(linha["teto"] - linha["gasto"] - linha["a_cair"], 0) for linha in linhas)
+    resumo = f'{formatar(gasto_total)} de {formatar(teto_total)} em tetos'
+    sobra = sum(max(linha["teto"] - linha["gasto"], 0) for linha in linhas)
     resumo += f' · sobram {formatar(sobra)}'
     if estourados:
         resumo += f' · {formato.plural(len(estourados), "categoria estourada")}'
@@ -563,10 +544,9 @@ def _cartao_tetos(ctx, agora: datetime, mes: str) -> str:
     rodape = ""
     if fora:
         total_fora = sum(v for _, v in fora)
-        cair_fora = sum(a_cair.get(categoria, 0) for categoria, _ in fora)
         rodape = (f'<p style="margin:12px 0 0;font-size:12px;color:var(--faint);'
-                  f'line-height:1.5">sem teto: {escape(formatar(total_fora))}'
-                  f'{escape(por_cair(cair_fora))} no mês, fora da conta dos tetos</p>')
+                  f'line-height:1.5">sem teto: {escape(formatar(total_fora))} no mês, '
+                  f'fora da conta dos tetos</p>')
 
     por_tag = consultas.tags_do_mes(ctx.conn, ate)
     abertos = [
@@ -682,8 +662,8 @@ def _cartao_busca(ctx, agora: datetime, periodo: str, de: str, ate: str,
         # o dia inteiro, de 00:00 até o fim
         return f[chave] + ("T99" if fim else "")
 
-    # "tudo" na busca vai até a última parcela marcada: o período da página
-    # para hoje, e as parcelas dos meses que vêm ficariam de fora justo quando
+    # "tudo" na busca vai até a última parcela marcada: o período da página para
+    # no fim deste mês, e as parcelas dos meses que vêm ficariam de fora justo quando
     # se procura por "parcelado"
     inicio = dia("de", False) or de
     fim = dia("ate", True) or ("9999" if periodo == "sempre" else ate)
@@ -887,8 +867,6 @@ def gastos(ctx, registry, agora: datetime, periodo: str = "mes",
     <p class="eyebrow" style="margin-bottom:6px">Acumulado</p>
     <p class="mono" style="margin:0 0 6px;font-size:26px;letter-spacing:-.01em">
       {escape(dados["total"])}</p>
-    {f'<p style="margin:0 0 6px;font-size:12px;color:var(--muted)">+ {escape(dados["a_cair"])} a cair até o fim do mês</p>'
-     if dados.get("a_cair") else ""}
     <p style="margin:0 0 6px;font-size:12px;color:var(--muted)">{escape(formas)}</p>
     {acum}
   </div>

@@ -1295,32 +1295,26 @@ def _tetos_no_dia_4(app, registry, valor, categoria="cinema"):
     return telas._cartao_tetos(ctx, agora, "2026-11")
 
 
-def test_parcela_que_ainda_nao_caiu_sai_a_parte_e_desconta_da_sobra(app, registry, com_tetos):
+def test_parcela_marcada_no_mes_ja_conta_como_gasto_no_teto(app, registry, com_tetos):
     html = _tetos_no_dia_4(app, registry, "12")
-    assert "R$ 0,00 + R$ 12,00 a cair / R$ 42,00" in html
+    assert "R$ 12,00 / R$ 42,00" in html
     assert "sobram R$ 30,00" in html
-    assert 'title="a cair"' in html
+    assert "a cair" not in html
 
 
-def test_parcela_que_vai_estourar_avisa_sem_dizer_que_passou(app, registry, com_tetos):
+def test_parcela_marcada_que_estoura_ja_diz_que_passou(app, registry, com_tetos):
     html = _tetos_no_dia_4(app, registry, "50")
-    assert "vai passar R$ 8,00" in html
-    assert "passou" not in html
-    assert "estourada" not in html
-
-
-def test_passou_conta_so_o_que_ja_caiu(app, registry, com_tetos):
-    registry.call("expenses.add", {"amount": "50", "description": "x", "category": "cinema",
-                                   "when": "2026-11-03T10:00-04:00"}, app.state.contexto())
-    html = _tetos_no_dia_4(app, registry, "12")
-    assert "R$ 50,00 + R$ 12,00 a cair / R$ 42,00" in html
     assert "passou R$ 8,00" in html
+    assert "categoria estourada" in html
 
 
-def test_parcela_em_categoria_sem_teto_tambem_aparece(app, registry, com_tetos):
+def test_parcela_marcada_em_categoria_sem_teto_aparece(app, registry, com_tetos):
     html = _tetos_no_dia_4(app, registry, "12", categoria="viagem")
-    assert "R$ 0,00 + R$ 12,00 a cair · sem teto" in html
-    assert 'title="viagem"' in html
+    assert "R$ 12,00 · sem teto" in html
+
+
+def test_ritmo_segue_o_dia_de_hoje_e_nao_o_fim_do_mes(app, registry, com_tetos):
+    assert "dia 4 de 30" in _tetos_no_dia_4(app, registry, "12")
 
 
 def test_memoria_avisa_do_perfil_que_espera_confirmacao(cliente, app, registry):
@@ -1485,7 +1479,7 @@ def test_fixo_privado_aparece_ao_dono(cliente, app, registry):
 def test_coluna_do_medidor_segue_a_maior_linha_para_as_barras_alinharem():
     from aide.web import graficos
 
-    longa = "R$ 0,00 + R$ 461,62 a cair / R$ 750,00"
+    longa = "R$ 1.234,56 / R$ 7.500,00"
     html = graficos.medidores([
         {"rotulo": "a", "valor": 0, "meta": 100, "texto": longa},
         {"rotulo": "b", "valor": 0, "meta": 100, "texto": "R$ 0,00 / R$ 1,00"},
