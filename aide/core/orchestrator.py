@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import sqlite3
 import uuid
 from collections.abc import Callable
@@ -17,6 +18,27 @@ from aide.tools.registry import ToolContext
 log = logging.getLogger(__name__)
 
 MAX_ITERATIONS = 8
+
+# As tools que gravam um gasto: só uma delas dá direito de dizer "anotei".
+GRAVAM_GASTO = frozenset({"expenses.add", "expenses.update", "expenses.add_recurring",
+                          "expenses.update_recurring"})
+
+# "Anotei, R$ 73,99 em alimentação (#95)" no começo da resposta. Só no começo: "o
+# #94 foi lançado ontem" é conversa sobre o passado, e cobrá-la como lançamento
+# novo faria o assessor negar um gasto que existe.
+_ANUNCIO = re.compile(r"^\W*(?:(?:pronto|ok|certo|feito|beleza)\W+)?"
+                      r"(?:anotei|anotado|lancei|lançado|registrei|registrado)\b",
+                      re.IGNORECASE)
+_VALOR_OU_ID = re.compile(r"R\$|#\d+")
+
+COBRANCA = ("Você disse que registrou o gasto, mas nenhuma tool rodou nesta volta: nada foi "
+            "gravado. Chame a tool agora. Se não era para registrar nada, responda sem "
+            "dizer que registrou.")
+NAO_LANCOU = "Não lancei esse gasto: nada foi gravado. Pode mandar de novo?"
+
+
+def anuncia_gasto(texto: str) -> bool:
+    return bool(_ANUNCIO.search(texto) and _VALOR_OU_ID.search(texto))
 
 
 class Orchestrator:
@@ -103,6 +125,12 @@ class Orchestrator:
         log.info("[%s] mensagem recebida (%s caracteres)", self.actor, len(text))
         log.debug("[%s] pergunta: %s", self.actor, text)
 
+        # O modelo já respondeu "Anotei (#95)" sem chamar nada, e o gasto sumiu com
+        # a pessoa achando que estava lançado. O número e o texto vêm da imitação
+        # das falas anteriores, então só a tool que rodou prova que gravou.
+        gravou_gasto = False
+        cobrado = False
+
         for _ in range(MAX_ITERATIONS):
             self._avisar(passos.PENSANDO)
             response = self.llm.complete(messages, tools=schemas, purpose="chat",
@@ -110,6 +138,14 @@ class Orchestrator:
 
             if not response.tool_calls:
                 reply = response.text.strip()
+                if anuncia_gasto(reply) and not gravou_gasto:
+                    log.warning("[%s] anunciou um gasto sem gravar", self.actor)
+                    if not cobrado:
+                        # a fala falsa não vai para o histórico: seria imitada
+                        cobrado = True
+                        messages.append(Message(role="system", content=COBRANCA))
+                        continue
+                    reply = NAO_LANCOU
                 log.info("[%s] respondido (%s caracteres)", self.actor, len(reply))
                 log.debug("[%s] resposta: %s", self.actor, reply)
                 self._save(Message(role="assistant", content=reply))
@@ -124,10 +160,20 @@ class Orchestrator:
                 result_msg = self._run_call(call, ctx)
                 messages.append(result_msg)
                 self._save(result_msg)
+                gravou_gasto = gravou_gasto or self._gravou_gasto(call, result_msg)
 
         fallback = "Me embananei e dei voltas demais nessa. Pode reformular?"
         self._save(Message(role="assistant", content=fallback))
         return fallback
+
+    def _gravou_gasto(self, call: dict, resultado: Message) -> bool:
+        tool = self.registry.get(call.get("function", {}).get("name", ""))
+        if tool is None or tool.name not in GRAVAM_GASTO:
+            return False
+        try:
+            return bool(json.loads(resultado.content).get("ok"))
+        except (TypeError, ValueError):
+            return False
 
     def _avisar(self, frase: str) -> None:
         """Um passo nunca pode derrubar a conversa: se quem escuta falhar, o
