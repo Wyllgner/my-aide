@@ -116,6 +116,61 @@ def test_cancelar_de_verdade_pede_confirmacao(registry):
     assert registry.get("expenses.cancel_recurring").safety == "confirm"
 
 
+def _por_mes(ctx):
+    return {r["recurring_month"]: r for r in ctx.conn.execute(
+        "SELECT * FROM expenses WHERE deleted_at IS NULL AND recurring_id IS NOT NULL")}
+
+
+def test_mudar_o_valor_nao_mexe_no_que_ja_caiu(ctx, registry, em_novembro):
+    feito = _claude(ctx, registry).data
+    em_novembro(2026, 12, 20)
+    mudou = registry.call("expenses.update_recurring", {"id": feito["id"], "amount": "120"}, ctx)
+    assert mudou.data["valor"] == "R$ 120,00"
+    meses = _por_mes(ctx)
+    assert meses["2026-12"]["cents"] == 11000
+    assert meses["2027-01"]["cents"] == 12000
+
+
+def test_mudar_o_dia_move_so_o_futuro_e_vale_para_os_proximos(ctx, registry, em_novembro):
+    feito = _claude(ctx, registry).data
+    em_novembro(2026, 12, 20)
+    registry.call("expenses.update_recurring", {"id": feito["id"], "day": 31}, ctx)
+    meses = _por_mes(ctx)
+    assert meses["2026-12"]["spent_at"].startswith("2026-12-05")
+    assert meses["2027-02"]["spent_at"].startswith("2027-02-28")
+    recorrentes.lancar_recorrentes(ctx.conn, em_novembro(2027, 1, 1))
+    assert _por_mes(ctx)["2027-12"]["spent_at"].startswith("2027-12-31")
+
+
+def test_mudar_a_categoria_tira_a_tag_antiga_e_vale_nos_lancamentos(ctx, registry, em_novembro):
+    feito = _claude(ctx, registry, tag="claude").data
+    mudou = registry.call("expenses.update_recurring", {"id": feito["id"], "category": "lazer"},
+                          ctx).data
+    assert (mudou["category"], mudou["tag"]) == ("lazer", None)
+    dezembro = _por_mes(ctx)["2026-12"]
+    assert (dezembro["category"], dezembro["tag"]) == ("lazer", None)
+
+
+def test_mudar_sem_dizer_o_que_recusa(ctx, registry, em_novembro):
+    feito = _claude(ctx, registry).data
+    assert "nada" in registry.call("expenses.update_recurring", {"id": feito["id"]}, ctx).error
+
+
+def test_mes_apagado_continua_apagado_depois_de_mudar_o_valor(ctx, registry, em_novembro):
+    feito = _claude(ctx, registry).data
+    dezembro = _por_mes(ctx)["2026-12"]["id"]
+    registry.call("expenses.delete", {"id": dezembro}, ctx)
+    registry.call("expenses.update_recurring", {"id": feito["id"], "amount": "120"}, ctx)
+    assert "2026-12" not in _por_mes(ctx)
+
+
+def test_cancelada_nao_se_muda(ctx, registry, em_novembro):
+    feito = _claude(ctx, registry).data
+    registry.call("expenses.cancel_recurring", {"id": feito["id"]}, ctx)
+    assert "não existe" in registry.call("expenses.update_recurring",
+                                         {"id": feito["id"], "amount": "120"}, ctx).error
+
+
 @pytest.mark.parametrize("dia", [0, 32, "x"])
 def test_recusa_dia_que_nao_existe(ctx, registry, em_novembro, dia):
     assert "dia" in _claude(ctx, registry, day=dia).error
@@ -156,3 +211,5 @@ def test_privado_nao_aparece_para_quem_nao_ve(ctx, registry, config, em_novembro
     assert "privado" in registry.call("expenses.cancel_recurring",
                                       {"id": feito["id"]}, outro).error
     assert registry.call("expenses.list", {"periodo": "2026-12"}, outro).data == []
+    assert "privado" in registry.call("expenses.update_recurring",
+                                      {"id": feito["id"], "amount": "1"}, outro).error

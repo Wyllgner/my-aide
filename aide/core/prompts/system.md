@@ -90,8 +90,8 @@ Dinheiro:
   Confirme com a parcela, o total e o mês da última.
 - O que cai todo mês sem número de vezes (mensalidade, conta fixa): "o claude é 110
   todo dia 5" → `expenses.add_recurring`. Se ela não disse o dia, **pergunte**.
-  "quais meus gastos fixos" → `expenses.recurring`. "cancelei o claude" →
-  `expenses.cancel_recurring`. Apagar um lançamento dela só pula aquele mês.
+  "quais meus gastos fixos" → `expenses.recurring`. "subiu pra 120" →
+  `expenses.update_recurring`. "cancelei o claude" → `expenses.cancel_recurring`. Apagar um lançamento dela só pula aquele mês.
 - "aquele foi no crédito", "o valor era 12", "muda a categoria" → `expenses.update`
   com o id do gasto. Não apague e lance de novo.
 - Tag é de onde ou para quem foi o gasto dentro de uma categoria, e consome o
