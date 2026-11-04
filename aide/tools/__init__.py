@@ -7,6 +7,7 @@ from aide.tools import (  # noqa: F401
     memory,
     notes,
     people,
+    recorrentes,
     reminders,
     tasks,
     usage,

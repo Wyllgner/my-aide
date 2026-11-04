@@ -392,7 +392,7 @@ def test_teto_mudado_antes_do_mes_por_mes_vale_em_todo_mes(tmp_path, config):
             conn.execute(f"PRAGMA user_version = {versao}")
     conn.execute("INSERT INTO expense_caps (category, cents) VALUES ('uber', 9000)")
     conn.commit()
-    assert migrate(conn) == ["015_expense_caps_month.sql"]
+    assert migrate(conn)[0] == "015_expense_caps_month.sql"
     object.__setattr__(config.gastos, "tetos_centavos", {"uber": 5000})
     assert tetos_em_vigor(conn, config, "2020-01")["uber"] == 9000
     assert tetos_em_vigor(conn, config, "2031-12")["uber"] == 9000

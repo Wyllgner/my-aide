@@ -19,7 +19,7 @@ from aide.core.context import now_in
 from aide.tools.registry import ToolContext, registry
 
 CAMPOS = ("id, cents, description, category, tag, spent_at, method,"
-          " installment_group, installment, installments")
+          " installment_group, installment, installments, recurring_id")
 
 # "10,50 almoço com a KA" — valor na frente, resto é descrição.
 _LANCAMENTO = re.compile(r"^\s*(?:R\$\s*)?([\d.,]+)\s+(.*\S)\s*$", re.IGNORECASE)
@@ -349,6 +349,8 @@ def _linha(r) -> dict:
     else:
         for chave in ("installment_group", "installment", "installments"):
             dados.pop(chave, None)
+    if not dados.get("recurring_id"):
+        dados.pop("recurring_id", None)
     return dados
 
 
@@ -875,5 +877,11 @@ def delete(ctx: ToolContext, id: int) -> dict:
     # devolve o que era: com {"id": 8, "deleted": true} a única coisa que o
     # modelo podia repetir de volta era o número, e "apaguei o 8" não confirma
     # nada para quem pediu
-    return {"id": id, "deleted": True, "description": row["description"],
-            "valor": formatar(row["cents"]), "category": row["category"]}
+    apagado = {"id": id, "deleted": True, "description": row["description"],
+               "valor": formatar(row["cents"]), "category": row["category"]}
+    if row["recurring_id"]:
+        # sem isto "apaguei a assinatura" soaria como cancelada, e ela volta mês que vem
+        apagado["aviso"] = ("só este mês saiu; a recorrência continua. "
+                            "Para encerrar, expenses.cancel_recurring com o id "
+                            f'{row["recurring_id"]}')
+    return apagado
