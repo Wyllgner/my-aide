@@ -1,5 +1,15 @@
+import json
+
+import pytest
+
 from aide.config import load_config
-from aide.core.orchestrator import Orchestrator, record_usage
+from aide.core.orchestrator import (
+    COBRANCA,
+    NAO_LANCOU,
+    Orchestrator,
+    anuncia_gasto,
+    record_usage,
+)
 from aide.llm.base import LLMProvider, LLMResponse
 from aide.storage import connect, migrate
 
@@ -185,3 +195,102 @@ def test_prompt_ensina_a_seguir_e_a_criar_links(ctx):
     assert "`notes.links`" in texto
     assert "`relacionadas`" in texto
     assert "nao_encontradas" in texto
+
+
+# ---------- dizer que anotou sem ter anotado ----------
+
+class _LLMRoteirizado:
+    """Responde na ordem dada; um dict vira chamada de tool."""
+
+    def __init__(self, *falas):
+        self.falas = list(falas)
+        self.vistas = []
+
+    def complete(self, messages, tools=None, purpose="chat", **kwargs):
+        self.vistas.append(list(messages))
+        fala = self.falas.pop(0)
+        if isinstance(fala, dict):
+            chamada = {"id": "c1", "function": {"name": fala["tool"],
+                                                "arguments": json.dumps(fala["args"])}}
+            return LLMResponse(text="", model="m", input_tokens=1, output_tokens=1,
+                               tool_calls=[chamada])
+        return LLMResponse(text=fala, model="m", input_tokens=1, output_tokens=1)
+
+
+_GASTO = {"tool": "expenses_add", "args": {"amount": "73,99", "description": "alimentação"}}
+_FALSA = "Anotei, R$ 73,99 em alimentação · casal (#95)."
+_CERTA = "Anotei, R$ 73,99 em alimentação (#1)."
+
+
+def _gastos(ctx):
+    return ctx.conn.execute("SELECT COUNT(*) FROM expenses").fetchone()[0]
+
+
+def test_anunciar_sem_gravar_cobra_a_tool_e_o_gasto_entra(ctx, registry):
+    llm = _LLMRoteirizado(_FALSA, _GASTO, _CERTA)
+    agente = Orchestrator(ctx.config, ctx.conn, llm, registry=registry)
+    assert agente.ask("73,99 alimentação") == _CERTA
+    assert _gastos(ctx) == 1
+    assert llm.vistas[1][-1].content == COBRANCA
+
+
+def test_a_fala_falsa_nao_fica_no_historico(ctx, registry):
+    agente = Orchestrator(ctx.config, ctx.conn, _LLMRoteirizado(_FALSA, _GASTO, _CERTA),
+                          registry=registry)
+    agente.ask("73,99 alimentação")
+    falas = [r[0] for r in ctx.conn.execute("SELECT content FROM messages")]
+    assert _FALSA not in falas and COBRANCA not in falas
+
+
+def test_insistir_em_anunciar_vira_aviso_de_que_nao_lancou(ctx, registry):
+    agente = Orchestrator(ctx.config, ctx.conn, _LLMRoteirizado(_FALSA, _FALSA),
+                          registry=registry)
+    assert agente.ask("73,99 alimentação") == NAO_LANCOU
+    assert _gastos(ctx) == 0
+    falas = [r[0] for r in ctx.conn.execute("SELECT content FROM messages")]
+    assert _FALSA not in falas and NAO_LANCOU in falas
+
+
+def test_lancamento_de_verdade_passa_sem_cobranca(ctx, registry):
+    llm = _LLMRoteirizado(_GASTO, _CERTA)
+    agente = Orchestrator(ctx.config, ctx.conn, llm, registry=registry)
+    assert agente.ask("73,99 alimentação") == _CERTA
+    assert len(llm.vistas) == 2
+
+
+def test_tool_que_falhou_nao_autoriza_dizer_que_anotou(ctx, registry):
+    ruim = {"tool": "expenses_add", "args": {"amount": "abc", "description": "x"}}
+    llm = _LLMRoteirizado(ruim, _FALSA, "Não consegui ler o valor.")
+    agente = Orchestrator(ctx.config, ctx.conn, llm, registry=registry)
+    assert agente.ask("abc de alimentação") == "Não consegui ler o valor."
+    assert llm.vistas[2][-1].content == COBRANCA
+
+
+def test_tool_de_leitura_nao_autoriza_dizer_que_anotou(ctx, registry):
+    leitura = {"tool": "expenses_list", "args": {}}
+    agente = Orchestrator(ctx.config, ctx.conn, _LLMRoteirizado(leitura, _FALSA, _FALSA),
+                          registry=registry)
+    assert agente.ask("73,99 alimentação") == NAO_LANCOU
+
+
+@pytest.mark.parametrize("texto", [
+    "Anotei, R$ 73,99 em alimentação (#95).", "Pronto, lancei R$ 10 no mercado.",
+    "Registrado: #95.", "ok, anotado: R$ 5,00", "**Anotei** R$ 5,00",
+])
+def test_reconhece_anuncio_de_gasto(texto):
+    assert anuncia_gasto(texto)
+
+
+@pytest.mark.parametrize("texto", [
+    "Não anotei o gasto de R$ 5,00.", "Sim, o #94 foi lançado hoje.",
+    "Seus últimos gastos:\n#94 Casa (R$ 8,16)", "Anotei isso sobre você.",
+    "Quer que eu lance os R$ 73,99?", "O #95 não aparece nos lançamentos.",
+])
+def test_nao_confunde_conversa_com_anuncio(texto):
+    assert not anuncia_gasto(texto)
+
+
+def test_prompt_proibe_confirmar_sem_a_tool(ctx):
+    from aide.core.context import system_prompt
+
+    assert "sem a tool ter devolvido" in system_prompt(ctx.config).content
