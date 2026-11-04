@@ -50,6 +50,7 @@ FRASES = {
     "expenses.delete": ("apagando o gasto", "apaguei o gasto"),
     "expenses.add_recurring": ("cadastrando o gasto do mês", "cadastrei o gasto do mês"),
     "expenses.recurring": ("vendo seus gastos fixos", "vi seus gastos fixos"),
+    "expenses.update_recurring": ("mudando o gasto fixo", "mudei o gasto fixo"),
     "expenses.cancel_recurring": ("encerrando o gasto fixo", "encerrei o gasto fixo"),
     "events.list": ("vendo seus compromissos", "vi seus compromissos"),
     "events.conflicts": ("procurando choque de horário", "procurei choque de horário"),

@@ -154,8 +154,8 @@ lançar. Parcelado sem forma dita é crédito, e apagar uma parcela apaga a comp
 
 **Recorrentes**: "o claude é 110 todo dia 5" vira um lançamento por mês, com doze
 meses marcados à frente, e cada um consome o teto do mês em que cai. Apagar um
-lançamento só pula aquele mês; cancelar tira os meses futuros e guarda os que já
-caíram.
+lançamento só pula aquele mês; mudar o valor ou o dia vale para os meses que
+ainda não caíram; cancelar tira os meses futuros e guarda os que já caíram.
 
 Pelo Telegram dá para ver e mudar sem abrir o arquivo: "quais meus limites",
 "aumenta o uber pra 80", "tira o teto de dates". O que muda pela conversa fica
