@@ -213,14 +213,15 @@ def orcamento_categoria(conn, now: datetime, config=None, ver_privado: bool = Fa
     O gasto privado entra na soma e nunca no texto. Somar é o que mantém o total
     verdadeiro; nomear entregaria pelo aviso o que a listagem esconde.
     """
-    from aide.tools.expenses import tetos_em_vigor
+    from aide.tools.expenses import momento_do_mes, tetos_em_vigor
 
     tetos = tetos_em_vigor(conn, config, now.strftime("%Y-%m"))
     if not tetos:
         return []
 
     inicio = now.replace(day=1, hour=0, minute=0).isoformat(timespec="minutes")
-    fim = now.isoformat(timespec="minutes")
+    # o mês inteiro, como a página: o que está marcado já conta como gasto
+    fim = momento_do_mes(now.strftime("%Y-%m"), now).isoformat(timespec="minutes")
     gasto = {
         (r["category"] or "").lower(): r["total"]
         for r in _rows(conn,

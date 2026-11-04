@@ -1,8 +1,8 @@
 """Gasto recorrente: o que cai todo mês sem ninguém comprar de novo.
 
 O cadastro gera lançamentos comuns em `expenses`, um por mês, com
-`HORIZONTE_MESES` de antecedência. Assim o teto, o que está a cair e a tela de
-um mês futuro contam a assinatura sem saber que ela existe. Ver a migration 016.
+`HORIZONTE_MESES` de antecedência. Assim o teto e a tela de um mês futuro contam
+a assinatura sem saber que ela existe. Ver a migration 016.
 """
 
 from __future__ import annotations
