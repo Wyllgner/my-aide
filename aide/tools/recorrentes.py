@@ -69,7 +69,8 @@ def _proxima(conn, recorrente_id: int, agora: datetime) -> str | None:
 
 
 def _dados(conn, r, agora: datetime) -> dict:
-    return {"id": r["id"], "description": r["description"], "valor": formatar(r["cents"]),
+    return {"id": r["id"], "description": r["description"], "cents": r["cents"],
+            "valor": formatar(r["cents"]),
             "dia": r["day"], "category": r["category"], "tag": r["tag"],
             "method": r["method"], "desde": r["start_month"],
             "proxima": _proxima(conn, r["id"], agora)}
