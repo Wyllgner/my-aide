@@ -195,10 +195,13 @@ def medidores(linhas: list[dict], rotulo_px: int = 104,
 
     maior_solto = max((linha["valor"] for linha in linhas if linha["meta"] is None),
                       default=0) or 1
+    # a coluna do texto na largura da maior linha, em `ch` porque a fonte é mono:
+    # sem isto cada barra termina num lugar e a marca de 100% não se alinha
+    coluna = max(len(linha["texto"]) for linha in linhas)
     html = ""
     for linha in linhas:
         if linha["meta"] is None:
-            html += _barra_sem_meta(linha, linha["valor"] / maior_solto, rotulo_px)
+            html += _barra_sem_meta(linha, linha["valor"] / maior_solto, rotulo_px, coluna)
             continue
         meta = linha["meta"] or 1
         fracao = linha["valor"] / meta
@@ -231,13 +234,14 @@ def medidores(linhas: list[dict], rotulo_px: int = 104,
             f'border-radius:5px"></div>{trecho_a_cair}'
             f'<span style="position:absolute;right:0;top:0;bottom:0;width:2px;'
             f'background:{TINTA};opacity:.16"></span>{marca_ritmo}</div>'
-            f'<span class="mono" style="white-space:nowrap;text-align:right;font-size:12.5px;'
+            f'<span class="mono" style="min-width:{coluna}ch;white-space:nowrap;'
+            f'text-align:right;font-size:12.5px;'
             f'color:{cor if fracao >= 0.8 else "var(--ink)"}">'
             f'{escape(linha["texto"])}</span>{_diferenca(linha, cor if completo else None)}</div>')
     return f'<div style="display:flex;flex-direction:column;gap:7px">{html}</div>'
 
 
-def _barra_sem_meta(linha: dict, fracao: float, rotulo_px: int) -> str:
+def _barra_sem_meta(linha: dict, fracao: float, rotulo_px: int, coluna: int) -> str:
     return (
         f'<div style="display:flex;align-items:center;gap:10px">'
         f'<span style="width:{rotulo_px}px;flex-shrink:0;font-size:12.5px;'
@@ -246,8 +250,9 @@ def _barra_sem_meta(linha: dict, fracao: float, rotulo_px: int) -> str:
         f'<div style="flex:1;height:16px;background:{TRILHO};border-radius:5px;overflow:hidden">'
         f'<div style="width:{min(fracao, 1.0) * 100:.1f}%;height:100%;background:{RESTO};'
         f'border-radius:5px"></div></div>'
-        f'<span class="mono" style="white-space:nowrap;text-align:right;font-size:12.5px;'
-        f'color:var(--muted)">{escape(linha["texto"])}</span>{_diferenca(linha)}</div>')
+        f'<span class="mono" style="min-width:{coluna}ch;white-space:nowrap;text-align:right;'
+        f'font-size:12.5px;color:var(--muted)">{escape(linha["texto"])}</span>'
+        f'{_diferenca(linha)}</div>')
 
 
 def _diferenca(linha: dict, cor_da_linha: str | None = None) -> str:

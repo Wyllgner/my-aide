@@ -1516,3 +1516,14 @@ def test_fixo_privado_aparece_ao_dono_e_ele_consegue_mudar(cliente, app, registr
     rota = f'/api/gastos/recorrentes/{feito["id"]}'
     assert cliente.put(rota, headers=ESCRITA, json={"valor": "10"}).status_code == 200
     assert cliente.delete(rota, headers=ESCRITA).status_code == 200
+
+
+def test_coluna_do_medidor_segue_a_maior_linha_para_as_barras_alinharem():
+    from aide.web import graficos
+
+    longa = "R$ 0,00 + R$ 461,62 a cair / R$ 750,00"
+    html = graficos.medidores([
+        {"rotulo": "a", "valor": 0, "meta": 100, "texto": longa},
+        {"rotulo": "b", "valor": 0, "meta": 100, "texto": "R$ 0,00 / R$ 1,00"},
+        {"rotulo": "c", "valor": 1, "meta": None, "texto": "R$ 1,00 · sem teto"}])
+    assert html.count(f"min-width:{len(longa)}ch") == 3
